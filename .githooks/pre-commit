@@ -1,0 +1,13 @@
+﻿#!/usr/bin/env sh
+set -eu
+
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$(dirname "$0")/pre-commit.py"
+fi
+
+if command -v python >/dev/null 2>&1; then
+  exec python "$(dirname "$0")/pre-commit.py"
+fi
+
+echo "未找到 python 或 python3，请先安装 Python 后重试。"
+exit 1
