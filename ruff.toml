@@ -1,0 +1,2 @@
+[lint]
+ignore = ["UP035", "UP006", "UP045"]
