@@ -5,25 +5,25 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 try:
-    from agent.tools.tool_registry import ToolRegistry
+    from agent.tool_registry import ToolRegistry
 except ModuleNotFoundError:
-    from tools.tool_registry import ToolRegistry
+    from tool_registry import ToolRegistry
 
 try:
-    from agent.provider.provider import (
+    from agent.provider import (
         build_provider,
         canonicalize_provider,
         resolve_tool_provider_for_schemas,
     )
 except ModuleNotFoundError:
-    from provider.provider import (
+    from provider import (
         build_provider,
         canonicalize_provider,
         resolve_tool_provider_for_schemas,
     )
 
 try:
-    from agent.monitor.models import (
+    from agent.models import (
         EventCategory,
         EventSink,
         LLMRequestData,
@@ -33,7 +33,7 @@ try:
         ToolResultData,
     )
 except ModuleNotFoundError:
-    from monitor.models import (
+    from models import (
         EventCategory,
         EventSink,
         LLMRequestData,

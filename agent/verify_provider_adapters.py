@@ -9,9 +9,9 @@ from typing import Any, Optional
 import requests
 
 HERE = Path(__file__).resolve().parent
-AGENT_ROOT = HERE.parent
+AGENT_ROOT = HERE
 PROVIDER_FILE = HERE / "provider.py"
-REGISTRY_FILE = AGENT_ROOT / "tools" / "tool_registry.py"
+REGISTRY_FILE = AGENT_ROOT / "tool_registry.py"
 ENV_PATH = AGENT_ROOT.parent / ".env"
 
 
@@ -49,8 +49,8 @@ def _load_module(module_name: str, file_path: Path):
 
 def _load_runtime_modules():
     try:
-        from agent.provider.provider import build_provider
-        from agent.tools.tool_registry import ToolRegistry
+        from agent.provider import build_provider
+        from agent.tool_registry import ToolRegistry
         return ToolRegistry, build_provider
     except Exception:
         provider_mod = _load_module("provider_module", PROVIDER_FILE)
