@@ -23,14 +23,14 @@ from uvicorn import run as uvicorn_run
 from agent.agent_loop import DEFAULT_USER_QUERY, run_react_loop
 
 try:
-    from agent.monitor.models import (
+    from agent.models import (
         EventCategory,
         EventSink,
         TaskEvent,
         TaskStatus,
     )
 except ModuleNotFoundError:
-    from monitor.models import (
+    from models import (
         EventCategory,
         EventSink,
         TaskEvent,
