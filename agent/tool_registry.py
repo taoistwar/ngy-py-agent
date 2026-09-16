@@ -8,7 +8,7 @@ import random
 import io
 import contextlib
 import copy
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 from datetime import datetime
 import requests
 from io import BytesIO
@@ -40,12 +40,12 @@ class ToolRegistry:
         key = (provider or "openai").strip().lower()
         return cls._ADAPTERS.get(key, key)
 
-    def __init__(self):
+    def __init__(self, enabled_tools: list[str] | None = None):
         self.tools = {}
-        self._register_default_tools()
+        self._register_default_tools(enabled_tools)
 
-    def _register_default_tools(self):
-        """Register default tools"""
+    def _register_default_tools(self, enabled_tools: list[str] | None = None):
+        """Register default tools. Pass enabled_tools to restrict the set."""
         self.register_tool(
             name="get_current_temperature",
             function=self.get_current_temperature,
@@ -121,8 +121,14 @@ class ToolRegistry:
             },
         )
 
+        if enabled_tools is not None:
+            allowed = set(enabled_tools)
+            for name in list(self.tools.keys()):
+                if name not in allowed:
+                    self.tools.pop(name, None)
+
     def register_tool(
-        self, name: str, function: callable, description: str, parameters: Dict
+        self, name: str, function: Callable[..., Any], description: str, parameters: Dict
     ):
         """Register a new tool"""
         self.tools[name] = {
