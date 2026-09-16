@@ -22,7 +22,7 @@ cd ..
 
 - `NGY_PY_AGENT_MODE=dev`
 - `NGY_PY_AGNET_QUERY=...`
-- `REACT_MAX_STEPS=8`
+- `REACT_MAX_STEPS=8`（ReAct 全局最大步数的环境变量默认值；Web Admin「全局配置」页可在前端修改并落库到 `settings` 表，`agent_max_steps` 优先于环境变量）
 - `WEB_MONITOR_HOST=127.0.0.1`
 - `WEB_MONITOR_PORT=8001`
 - `TASK_RETENTION_DAYS=36600`（默认 36600 天，约 100 年）
@@ -50,6 +50,7 @@ uv run python main.py --web --reload
 - 后端优先读取：
   - `web-admin/dist/index.html`
   - 如果 `dist` 不存在则读取 `web-admin/index.html`
+- 全局配置（最大步数、任务保留天数）存于 `settings` 表（`agent_max_steps`、`task_retention_days` 两键），可在 Web Admin「全局配置」页修改；DB 值优先于同名环境变量。
 
 ### 构建前端
 

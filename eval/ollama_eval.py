@@ -17,6 +17,7 @@ def _normalize_ollama_host() -> str:
 def ollama_models():
     host = _normalize_ollama_host()
     print("ollama host:", host)
+    print(host)
     client = ollama.Client(host=host)
     try:
         response = client.list()

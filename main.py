@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import sqlite3
+import asyncio
 import json
 import os
-import asyncio
+import sqlite3
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 from uuid import uuid4
@@ -20,30 +20,26 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from uvicorn import run as uvicorn_run
 
-from agent.agent_loop import DEFAULT_USER_QUERY, run_react_loop
-
-try:
-    from agent.models import (
-        EventCategory,
-        EventSink,
-        TaskEvent,
-        TaskStatus,
-    )
-except ModuleNotFoundError:
-    from models import (
-        EventCategory,
-        EventSink,
-        TaskEvent,
-        TaskStatus,
-    )
-
+from agent.agent_loop import DEFAULT_MAX_STEPS, DEFAULT_USER_QUERY, run_react_loop
+from agent.models import (
+    EventCategory,
+    EventSink,
+    TaskEvent,
+    TaskStatus,
+)
+from agent.provider import ProviderConfig, canonicalize_provider
+from task_store import TASK_RETENTION_DEFAULT_DAYS, monitor_store
+from agent.modes import (
+    DEFAULT_MODE,
+    MODE_CONFIGS,
+    SKILLS,
+    VALID_MODES,
+)
 
 ROOT_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = ROOT_DIR / "web-admin"
 FRONTEND_DIST_DIR = FRONTEND_DIR / "dist"
 FRONTEND_DIST_INDEX = FRONTEND_DIST_DIR / "index.html"
-TASK_DB_PATH = ROOT_DIR / "monitor_tasks.db"
-TASK_RETENTION_DEFAULT_DAYS = 36600
 
 
 def _resolve_frontend_dir() -> Path:
@@ -56,358 +52,33 @@ def _resolve_frontend_index() -> Path:
     frontend_dir = _resolve_frontend_dir()
     index_file = frontend_dir / "index.html"
     if not index_file.exists():
-        raise FileNotFoundError(
-            "Neither web-admin/index.html nor web-admin/dist/index.html exists."
-        )
+        raise FileNotFoundError("Neither web-admin/index.html nor web-admin/dist/index.html exists.")
     return index_file
 
 
-class _SqliteTaskStore:
-    """SQLite-based task and event persistence."""
-
-    def __init__(self, db_path: Path = TASK_DB_PATH) -> None:
-        self._db_path = Path(db_path)
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._lock = threading.Lock()
-        self._init_schema()
-
-    @staticmethod
-    def _parse_datetime(value: str | None) -> datetime:
-        if not value:
-            return datetime.now(timezone.utc)
-        return datetime.fromisoformat(value)
-
-    @staticmethod
-    def _event_to_dict(row: sqlite3.Row) -> dict[str, Any]:
-        return {
-            "event_id": row["event_id"],
-            "task_id": row["task_id"],
-            "timestamp": _SqliteTaskStore._parse_datetime(row["timestamp"]),
-            "category": row["category"],
-            "title": row["title"],
-            "source": row["source"],
-            "data": json.loads(row["data"] or "{}"),
-            "collapsed": bool(row["collapsed"]),
-        }
-
-    def _init_schema(self) -> None:
-        with self._lock:
-            self._conn.execute("PRAGMA foreign_keys = ON")
-            self._conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS tasks (
-                    task_id TEXT PRIMARY KEY,
-                    query TEXT NOT NULL,
-                    provider TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-                """
-            )
-            self._conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    event_id TEXT UNIQUE NOT NULL,
-                    task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
-                    timestamp TEXT NOT NULL,
-                    category TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    source TEXT NOT NULL,
-                    data TEXT NOT NULL,
-                    collapsed INTEGER NOT NULL DEFAULT 1
-                )
-                """
-            )
-            self._conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS settings (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-                """
-            )
-            self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_events_task_id_id ON events(task_id, id)"
-            )
-            self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at)"
-            )
-            self._conn.commit()
-
-    def create_task(self, query: str, provider: str) -> str:
-        task_id = str(uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-        with self._lock:
-            self._conn.execute(
-                """
-                INSERT INTO tasks (task_id, query, provider, status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (task_id, query, provider, TaskStatus.RUNNING, now, now),
-            )
-            self._conn.commit()
-        return task_id
-
-    def delete_task(self, task_id: str) -> bool:
-        with self._lock:
-            cursor = self._conn.execute("DELETE FROM tasks WHERE task_id = ?", (task_id,))
-            self._conn.commit()
-            return (cursor.rowcount or 0) > 0
-
-    def get_task_retention_days(self) -> int | None:
-        row = self._conn.execute(
-            "SELECT value FROM settings WHERE key = ?",
-            ("task_retention_days",),
-        ).fetchone()
-        if row is None:
-            return None
-        try:
-            return int(row["value"])
-        except (TypeError, ValueError):
-            return None
-
-    def set_task_retention_days(self, retention_days: int) -> None:
-        now = datetime.now(timezone.utc).isoformat()
-        with self._lock:
-            self._conn.execute(
-                """
-                INSERT INTO settings (key, value, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-                """
-                ,
-                ("task_retention_days", str(retention_days), now),
-            )
-            self._conn.commit()
-
-    def purge_expired_tasks(self, retention_days: int) -> int:
-        if retention_days <= 0:
-            return 0
-        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-        with self._lock:
-            cursor = self._conn.execute(
-                "DELETE FROM tasks WHERE created_at < ?",
-                (cutoff.isoformat(),),
-            )
-            self._conn.commit()
-            return int(cursor.rowcount or 0)
-
-    def set_provider(self, task_id: str, provider: str) -> None:
-        with self._lock:
-            self._conn.execute(
-                "UPDATE tasks SET provider = ?, updated_at = ? WHERE task_id = ?",
-                (provider, datetime.now(timezone.utc).isoformat(), task_id),
-            )
-            self._conn.commit()
-
-    def get_task(self, task_id: str) -> dict[str, Any] | None:
-        with self._lock:
-            task = self._conn.execute(
-                """
-                SELECT task_id, query, provider, status, created_at, updated_at
-                FROM tasks
-                WHERE task_id = ?
-                """,
-                (task_id,),
-            ).fetchone()
-            if task is None:
-                return None
-
-            events = self._conn.execute(
-                """
-                SELECT event_id, task_id, timestamp, category, title, source, data, collapsed
-                FROM events
-                WHERE task_id = ?
-                ORDER BY id ASC
-                """,
-                (task_id,),
-            ).fetchall()
-
-            return {
-                "task_id": task["task_id"],
-                "query": task["query"],
-                "provider": task["provider"],
-                "status": task["status"],
-                "created_at": self._parse_datetime(task["created_at"]),
-                "updated_at": self._parse_datetime(task["updated_at"]),
-                "events": [_SqliteTaskStore._event_to_dict(row) for row in events],
-            }
-
-    def list_tasks(self) -> list[dict[str, Any]]:
-        with self._lock:
-            rows = self._conn.execute(
-                """
-                SELECT t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at,
-                       COUNT(e.event_id) AS event_count
-                FROM tasks t
-                LEFT JOIN events e ON t.task_id = e.task_id
-                GROUP BY t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at
-                ORDER BY t.created_at DESC
-                """
-            ).fetchall()
-            return [
-                {
-                    "task_id": row["task_id"],
-                    "query": row["query"],
-                    "status": row["status"],
-                    "provider": row["provider"],
-                    "created_at": self._parse_datetime(row["created_at"]),
-                    "updated_at": self._parse_datetime(row["updated_at"]),
-                    "event_count": int(row["event_count"]),
-                }
-                for row in rows
-            ]
-
-    def get_events(self, task_id: str) -> list[dict[str, Any]]:
-        with self._lock:
-            rows = self._conn.execute(
-                """
-                SELECT event_id, task_id, timestamp, category, title, source, data, collapsed
-                FROM events
-                WHERE task_id = ?
-                ORDER BY id ASC
-                """,
-                (task_id,),
-            ).fetchall()
-            return [_SqliteTaskStore._event_to_dict(row) for row in rows]
-
-    def get_events_since(
-        self,
-        task_id: str,
-        since_event_id: str | None,
-    ) -> list[dict[str, Any]]:
-        with self._lock:
-            if not since_event_id:
-                rows = self._conn.execute(
-                    """
-                    SELECT event_id, task_id, timestamp, category, title, source, data, collapsed
-                    FROM events
-                    WHERE task_id = ?
-                    ORDER BY id ASC
-                    """,
-                    (task_id,),
-                ).fetchall()
-                return [_SqliteTaskStore._event_to_dict(row) for row in rows]
-
-            row = self._conn.execute(
-                "SELECT id FROM events WHERE task_id = ? AND event_id = ?",
-                (task_id, since_event_id),
-            ).fetchone()
-            since_id = row["id"] if row else 0
-
-            rows = self._conn.execute(
-                """
-                SELECT event_id, task_id, timestamp, category, title, source, data, collapsed
-                FROM events
-                WHERE task_id = ? AND id > ?
-                ORDER BY id ASC
-                """,
-                (task_id, since_id),
-            ).fetchall()
-            return [_SqliteTaskStore._event_to_dict(row) for row in rows]
-
-    def list_events_paginated(
-        self,
-        task_id: str,
-        offset: int,
-        limit: int,
-    ) -> tuple[list[dict[str, Any]], int]:
-        with self._lock:
-            total_row = self._conn.execute(
-                "SELECT COUNT(*) AS total FROM events WHERE task_id = ?",
-                (task_id,),
-            ).fetchone()
-            if total_row is None:
-                return [], 0
-            total = int(total_row["total"])
-
-            if offset < 0:
-                offset = 0
-
-            rows = self._conn.execute(
-                """
-                SELECT event_id, task_id, timestamp, category, title, source, data, collapsed
-                FROM events
-                WHERE task_id = ?
-                ORDER BY id ASC
-                LIMIT ? OFFSET ?
-                """,
-                (task_id, limit, offset),
-            ).fetchall()
-
-            start = offset
-            if start >= total:
-                return [], total
-
-            return (
-                [_SqliteTaskStore._event_to_dict(row) for row in rows],
-                total,
-            )
-
-    def append_event(self, task_id: str, event: TaskEvent) -> None:
-        with self._lock:
-            task_exists = self._conn.execute(
-                "SELECT 1 FROM tasks WHERE task_id = ?",
-                (task_id,),
-            ).fetchone()
-            if task_exists is None:
-                return
-
-            self._conn.execute(
-                """
-                INSERT INTO events (
-                    event_id, task_id, timestamp, category, title, source, data, collapsed
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    event.event_id,
-                    event.task_id,
-                    event.timestamp.isoformat(),
-                    event.category.value,
-                    event.title,
-                    event.source,
-                    json.dumps(event.data, default=str, ensure_ascii=False),
-                    int(event.collapsed),
-                ),
-            )
-            self._conn.execute(
-                "UPDATE tasks SET updated_at = ? WHERE task_id = ?",
-                (event.timestamp.isoformat(), task_id),
-            )
-            self._conn.commit()
-
-    def finish_task(self, task_id: str, success: bool) -> None:
-        with self._lock:
-            self._conn.execute(
-                """
-                UPDATE tasks
-                SET status = ?, updated_at = ?
-                WHERE task_id = ?
-                """,
-                (
-                    TaskStatus.SUCCESS if success else TaskStatus.FAILED,
-                    datetime.now(timezone.utc).isoformat(),
-                    task_id,
-                ),
-            )
-            self._conn.commit()
-
-
-monitor_store = _SqliteTaskStore()
 _task_retention_days = TASK_RETENTION_DEFAULT_DAYS
 _task_retention_source = "env"
+_agent_max_steps = DEFAULT_MAX_STEPS
+_agent_max_steps_source = "env"
+
 
 class RunTaskRequest(BaseModel):
     """Create task request."""
 
     query: str = Field(min_length=1, description="User input")
     provider: str | None = None
-    max_steps: int = Field(default=8, ge=1, le=40)
+    model_id: str | None = Field(default=None, description="Configured model id.")
+    session_id: str | None = Field(default=None, description="Owning session id.")
+    max_steps: int | None = Field(
+        default=None,
+        ge=1,
+        le=40,
+        description="Optional override; omit to use the global REACT_MAX_STEPS config.",
+    )
+    mode: str = Field(
+        default=DEFAULT_MODE,
+        description="Agent mode: build / ask / plan. Each mode has its own prompt, tools and skills.",
+    )
     stream: bool = False
 
 
@@ -416,6 +87,7 @@ class RunTaskResponse(BaseModel):
 
     task_id: str
     status: str
+    mode: str
     created_at: datetime
 
 
@@ -426,6 +98,10 @@ class TaskListItemResponse(BaseModel):
     query: str
     status: str
     provider: str
+    session_id: str | None = None
+    model_id: str | None = None
+    model_name: str | None = None
+    mode: str = DEFAULT_MODE
     created_at: datetime
     updated_at: datetime
     event_count: int
@@ -438,6 +114,10 @@ class TaskDetailResponse(BaseModel):
     query: str
     status: str
     provider: str
+    session_id: str | None = None
+    model_id: str | None = None
+    model_name: str | None = None
+    mode: str = DEFAULT_MODE
     created_at: datetime
     updated_at: datetime
     result: str | None = None
@@ -473,6 +153,19 @@ class RetentionConfigRequest(BaseModel):
     retention_days: int = Field(ge=0, description="Keep task detail data for this many days. 0 means keep all.")
 
 
+class MaxStepsConfigRequest(BaseModel):
+    """Global ReAct max steps config request."""
+
+    max_steps: int = Field(ge=1, le=40, description="Global limit of ReAct steps applied to new tasks.")
+
+
+class MaxStepsConfigResponse(BaseModel):
+    """Global ReAct max steps config response."""
+
+    max_steps: int
+    source: str
+
+
 class RetentionConfigResponse(BaseModel):
     """Retention config response."""
 
@@ -481,9 +174,91 @@ class RetentionConfigResponse(BaseModel):
     removed_tasks: int
 
 
+class SessionCreateRequest(BaseModel):
+    """Create session request."""
+
+    name: str = Field(min_length=1, max_length=120, description="Session name.")
+
+
+class SessionUpdateRequest(BaseModel):
+    """Rename session request."""
+
+    name: str = Field(min_length=1, max_length=120, description="Session name.")
+
+
+class SessionItemResponse(BaseModel):
+    """Session list item."""
+
+    session_id: str
+    name: str
+    created_at: datetime
+    updated_at: datetime
+    task_count: int = 0
+
+
+class SessionListResponse(BaseModel):
+    """Session list response."""
+
+    sessions: list[SessionItemResponse]
+
+
+class ModelUpsertRequest(BaseModel):
+    """Create or update a model configuration."""
+
+    name: str = Field(min_length=1, max_length=200, description="Model name.")
+    provider: str = Field(
+        default="openai-compatible",
+        description="Provider protocol: openai-compatible / openai / anthropic / anthropic-compatible / gemini.",
+    )
+    base_url: str = Field(default="", description="Provider base url.")
+    api_key: str = Field(default="", description="Provider api key.")
+    supports_tool_calls: bool = Field(default=True, description="Whether tools are enabled.")
+    supports_image_input: bool = Field(default=False, description="Whether image input is supported.")
+    thinking_mode: bool = Field(default=False, description="Whether thinking mode is enabled.")
+    max_input_tokens: int = Field(default=0, ge=0, description="Input token limit, 0 means unset.")
+    max_output_tokens: int = Field(default=0, ge=0, description="Output token limit, 0 means unset.")
+
+
+class ModelUpdateRequest(BaseModel):
+    """Partial update of a model configuration."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    provider: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    supports_tool_calls: bool | None = None
+    supports_image_input: bool | None = None
+    thinking_mode: bool | None = None
+    max_input_tokens: int | None = Field(default=None, ge=0)
+    max_output_tokens: int | None = Field(default=None, ge=0)
+
+
+class ModelItemResponse(BaseModel):
+    """Model configuration item."""
+
+    model_id: str
+    name: str
+    provider: str
+    base_url: str = ""
+    api_key: str = ""
+    supports_tool_calls: bool = True
+    supports_image_input: bool = False
+    thinking_mode: bool = False
+    max_input_tokens: int = 0
+    max_output_tokens: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class ModelListResponse(BaseModel):
+    """Model list response."""
+
+    models: list[ModelItemResponse]
+
+
 app = FastAPI(
     title="NGY Agent Web Admin",
-    description="A lightweight ReAct task API plus management frontend for creating and tracking long-running tasks."
+    description="A lightweight ReAct task API plus management frontend for creating and tracking long-running tasks.",
 )
 app.add_middleware(
     CORSMiddleware,
@@ -544,8 +319,39 @@ def _extract_task_result(events: list[dict[str, Any]] | None) -> str | None:
     return None
 
 
-def _run_task(task_id: str, request: RunTaskRequest) -> None:
-    provider = request.provider or "openai-compatible"
+def _build_provider_config(
+    model: dict[str, Any] | None,
+) -> ProviderConfig | None:
+    if not model:
+        return None
+    return ProviderConfig(
+        provider=canonicalize_provider(str(model.get("provider") or "openai-compatible")),
+        model=str(model.get("name") or ""),
+        api_key=str(model.get("api_key") or ""),
+        base_url=(str(model.get("base_url")).strip() or None) if model.get("base_url") else None,
+    )
+
+
+def _get_global_max_steps() -> int:
+    """Global ReAct step limit, loaded at startup and editable via the admin API."""
+    return _agent_max_steps or DEFAULT_MAX_STEPS
+
+
+def _resolve_max_steps(request: RunTaskRequest) -> int:
+    """Resolve the step limit for one task: explicit override, else global config."""
+    if request.max_steps is not None:
+        return request.max_steps
+    return _get_global_max_steps()
+
+
+def _run_task(
+    task_id: str,
+    request: RunTaskRequest,
+    model: dict[str, Any] | None = None,
+) -> None:
+    provider = str((model or {}).get("provider") or request.provider or "openai-compatible")
+    provider_config = _build_provider_config(model)
+    max_steps = _resolve_max_steps(request)
 
     def _sink(_: str, event: TaskEvent) -> None:
         monitor_store.append_event(task_id, event)
@@ -556,9 +362,16 @@ def _run_task(task_id: str, request: RunTaskRequest) -> None:
         "Start task execution",
         {
             "provider": provider,
-            "max_steps": request.max_steps,
+            "model": (model or {}).get("name"),
+            "model_id": (model or {}).get("model_id"),
+            "session_id": request.session_id,
+            "max_steps": max_steps,
             "query": request.query,
+            "mode": request.mode,
             "stream": request.stream,
+            "supports_tool_calls": (model or {}).get("supports_tool_calls", True),
+            "thinking_mode": (model or {}).get("thinking_mode", False),
+            "max_output_tokens": (model or {}).get("max_output_tokens", 0),
         },
     )
 
@@ -566,10 +379,15 @@ def _run_task(task_id: str, request: RunTaskRequest) -> None:
         result = run_react_loop(
             user_query=request.query,
             provider_name=provider,
-            max_steps=request.max_steps,
+            provider_config=provider_config,
+            enable_tools=bool((model or {}).get("supports_tool_calls", True)),
+            max_output_tokens=int((model or {}).get("max_output_tokens") or 0) or None,
+            thinking_mode=bool((model or {}).get("thinking_mode", False)),
+            max_steps=max_steps,
             verbose=False,
             task_id=task_id,
             event_sink=_sink,
+            mode=request.mode,
         )
         _emit_debug(_sink, task_id, "Task finished", {"result": result})
         monitor_store.finish_task(task_id, success=True)
@@ -581,6 +399,157 @@ def _run_task(task_id: str, request: RunTaskRequest) -> None:
             {"error": str(exc), "type": exc.__class__.__name__},
         )
         monitor_store.finish_task(task_id, success=False)
+
+
+@app.get("/api/sessions", response_model=SessionListResponse)
+async def list_sessions() -> SessionListResponse:
+    sessions = monitor_store.list_sessions()
+    return SessionListResponse(sessions=[SessionItemResponse(**item) for item in sessions])
+
+
+@app.post("/api/sessions", response_model=SessionItemResponse)
+async def create_session(payload: SessionCreateRequest) -> SessionItemResponse:
+    session_id = monitor_store.create_session(payload.name.strip())
+    session = monitor_store.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=500, detail="Failed to read created session.")
+    return SessionItemResponse(**session)
+
+
+@app.put("/api/sessions/{session_id}", response_model=SessionItemResponse)
+async def rename_session(session_id: str, payload: SessionUpdateRequest) -> SessionItemResponse:
+    if not monitor_store.rename_session(session_id, payload.name.strip()):
+        raise HTTPException(status_code=404, detail="Session not found.")
+    session = monitor_store.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    return SessionItemResponse(**session)
+
+
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: str) -> dict[str, Any]:
+    existing = monitor_store.list_sessions()
+    if len(existing) <= 1:
+        raise HTTPException(status_code=400, detail="At least one session must be kept.")
+    if not monitor_store.delete_session(session_id):
+        raise HTTPException(status_code=404, detail="Session not found.")
+    return {"session_id": session_id, "deleted": True}
+
+
+@app.get("/api/models", response_model=ModelListResponse)
+async def list_models() -> ModelListResponse:
+    models = monitor_store.list_models()
+    return ModelListResponse(models=[ModelItemResponse(**item) for item in models])
+
+
+@app.post("/api/models", response_model=ModelItemResponse)
+async def create_model(payload: ModelUpsertRequest) -> ModelItemResponse:
+    created = monitor_store.create_model(payload.model_dump())
+    return ModelItemResponse(**created)
+
+
+@app.put("/api/models/{model_id}", response_model=ModelItemResponse)
+async def update_model(model_id: str, payload: ModelUpdateRequest) -> ModelItemResponse:
+    updated = monitor_store.update_model(model_id, payload.model_dump(exclude_unset=True))
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Model not found.")
+    return ModelItemResponse(**updated)
+
+
+@app.delete("/api/models/{model_id}")
+async def delete_model(model_id: str) -> dict[str, Any]:
+    if not monitor_store.delete_model(model_id):
+        raise HTTPException(status_code=404, detail="Model not found.")
+    return {"model_id": model_id, "deleted": True}
+
+
+@app.post("/api/tasks", response_model=RunTaskResponse)
+async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
+    _purge_expired_tasks_with_log("Creating new API task")
+    mode = payload.mode if payload.mode in VALID_MODES else DEFAULT_MODE
+    model = monitor_store.get_model(payload.model_id) if payload.model_id else None
+    if payload.model_id and model is None:
+        raise HTTPException(status_code=404, detail="Model not found.")
+    session_id = payload.session_id
+    if session_id and monitor_store.get_session(session_id) is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    if not session_id:
+        session_id = monitor_store.ensure_default_session()
+
+    provider = str((model or {}).get("provider") or payload.provider or "openai-compatible")
+    task_id = monitor_store.create_task(
+        query=payload.query,
+        provider=provider,
+        session_id=session_id,
+        model_id=payload.model_id,
+        mode=mode,
+    )
+
+    request = payload.model_copy(update={"session_id": session_id, "mode": mode})
+    threading.Thread(target=_run_task, args=(task_id, request, model), daemon=True).start()
+
+    trace = monitor_store.get_task(task_id)
+    if trace is None:
+        raise HTTPException(status_code=500, detail="Failed to read created task record.")
+    return RunTaskResponse(
+        task_id=task_id,
+        status=str(trace["status"]),
+        mode=trace["mode"],
+        created_at=trace["created_at"],
+    )
+
+
+@app.get("/api/modes")
+async def list_modes() -> dict[str, Any]:
+    """List available agent modes with their prompt/tool/skill configuration."""
+    modes = []
+    for name in VALID_MODES:
+        config = MODE_CONFIGS[name]
+        modes.append(
+            {
+                "mode": name,
+                "label": config.get("label", name),
+                "description": config.get("description", ""),
+                "is_default": name == DEFAULT_MODE,
+                "tool_names": config.get("tool_names"),
+                "skills": [
+                    {"name": skill, "label": SKILLS.get(skill, {}).get("label", skill)}
+                    for skill in config.get("skills", [])
+                    if skill in SKILLS
+                ],
+            }
+        )
+    return {"modes": modes, "default_mode": DEFAULT_MODE}
+
+
+@app.get("/api/tasks", response_model=TaskListResponse)
+async def list_tasks(
+    session_id: str | None = Query(None, description="Only return tasks that belong to this session."),
+) -> TaskListResponse:
+    tasks = monitor_store.list_tasks(session_id=session_id)
+    return TaskListResponse(tasks=[TaskListItemResponse(**item) for item in tasks])
+
+
+@app.get("/api/tasks/{task_id}", response_model=TaskDetailResponse)
+async def get_task(task_id: str) -> TaskDetailResponse:
+    trace = monitor_store.get_task(task_id)
+    if trace is None:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    result = _extract_task_result(trace.get("events"))
+    return TaskDetailResponse(
+        task_id=trace["task_id"],
+        query=trace["query"],
+        status=trace["status"],
+        provider=trace["provider"],
+        session_id=trace.get("session_id"),
+        model_id=trace.get("model_id"),
+        model_name=trace.get("model_name"),
+        mode=trace.get("mode", DEFAULT_MODE),
+        created_at=trace["created_at"],
+        updated_at=trace["updated_at"],
+        result=result,
+        events=trace["events"],
+    )
 
 
 async def _iter_task_events(task_id: str):
@@ -601,44 +570,6 @@ async def _iter_task_events(task_id: str):
         await asyncio.sleep(0.6)
 
 
-@app.post("/api/tasks", response_model=RunTaskResponse)
-async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
-    _purge_expired_tasks_with_log("Creating new API task")
-    provider = payload.provider or "openai-compatible"
-    task_id = monitor_store.create_task(query=payload.query, provider=provider)
-
-    threading.Thread(target=_run_task, args=(task_id, payload), daemon=True).start()
-
-    trace = monitor_store.get_task(task_id)
-    if trace is None:
-        raise HTTPException(status_code=500, detail="Failed to read created task record.")
-    return RunTaskResponse(task_id=task_id, status=str(trace["status"]), created_at=trace["created_at"])
-
-
-@app.get("/api/tasks", response_model=TaskListResponse)
-async def list_tasks() -> TaskListResponse:
-    tasks = monitor_store.list_tasks()
-    return TaskListResponse(tasks=[TaskListItemResponse(**item) for item in tasks])
-
-
-@app.get("/api/tasks/{task_id}", response_model=TaskDetailResponse)
-async def get_task(task_id: str) -> TaskDetailResponse:
-    trace = monitor_store.get_task(task_id)
-    if trace is None:
-        raise HTTPException(status_code=404, detail="Task not found.")
-    result = _extract_task_result(trace.get("events"))
-    return TaskDetailResponse(
-        task_id=trace["task_id"],
-        query=trace["query"],
-        status=trace["status"],
-        provider=trace["provider"],
-        created_at=trace["created_at"],
-        updated_at=trace["updated_at"],
-        result=result,
-        events=trace["events"],
-    )
-
-
 @app.delete("/api/tasks/{task_id}")
 async def delete_task(task_id: str) -> dict[str, Any]:
     removed = monitor_store.delete_task(task_id)
@@ -652,7 +583,7 @@ async def get_task_events(
     task_id: str,
     offset: int = Query(0, ge=0, description="Start position in the event list."),
     limit: int = Query(30, ge=1, le=100, description="Number of events to return, 1-100."),
-    since: int | None = Query(None, ge=0, description="Start at this offset instead of the default offset.")
+    since: int | None = Query(None, ge=0, description="Start at this offset instead of the default offset."),
 ) -> EventPageResponse:
     if monitor_store.get_task(task_id) is None:
         raise HTTPException(status_code=404, detail="Task not found.")
@@ -735,7 +666,7 @@ async def stream_task_events_ws(
                         {
                             "type": "heartbeat",
                             "task_id": task_id,
-                            "ts": datetime.now(timezone.utc).isoformat(),
+                            "ts": datetime.now(UTC).isoformat(),
                         }
                     )
                 )
@@ -763,6 +694,21 @@ def _serve_frontend_file(relative_path: str) -> FileResponse:
         return FileResponse(_resolve_frontend_index())
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Frontend index not found") from exc
+
+
+def _load_agent_max_steps_config() -> tuple[int, str]:
+    env_raw = os.getenv("REACT_MAX_STEPS", str(DEFAULT_MAX_STEPS)).strip()
+    try:
+        env_steps = int(env_raw)
+    except ValueError:
+        env_steps = DEFAULT_MAX_STEPS
+    env_steps = max(1, min(env_steps, 40))
+
+    db_steps = monitor_store.get_agent_max_steps()
+    if db_steps is None:
+        return env_steps, "env"
+    return max(1, min(db_steps, 40)), "database"
+
 
 def _load_env_file() -> None:
     root_env = ROOT_DIR / ".env"
@@ -801,9 +747,7 @@ def _purge_expired_tasks_with_log(scope: str) -> int:
     removed = _purge_expired_tasks()
     if removed > 0:
         retention_days = _get_task_retention_days()
-        print(
-            f"[Task cleanup] {scope}: TASK_RETENTION_DAYS={retention_days}, removed={removed} expired tasks."
-        )
+        print(f"[Task cleanup] {scope}: TASK_RETENTION_DAYS={retention_days}, removed={removed} expired tasks.")
     return removed
 
 
@@ -817,7 +761,9 @@ async def get_retention_config() -> RetentionConfigResponse:
 
 
 @app.put("/api/admin/retention", response_model=RetentionConfigResponse)
-async def set_retention_config(payload: RetentionConfigRequest) -> RetentionConfigResponse:
+async def set_retention_config(
+    payload: RetentionConfigRequest,
+) -> RetentionConfigResponse:
     monitor_store.set_task_retention_days(payload.retention_days)
     global _task_retention_days
     global _task_retention_source
@@ -828,6 +774,30 @@ async def set_retention_config(payload: RetentionConfigRequest) -> RetentionConf
         retention_days=_task_retention_days,
         retention_source=_task_retention_source,
         removed_tasks=removed,
+    )
+
+
+@app.get("/api/admin/max-steps", response_model=MaxStepsConfigResponse)
+async def get_max_steps_config() -> MaxStepsConfigResponse:
+    return MaxStepsConfigResponse(
+        max_steps=_agent_max_steps,
+        source=_agent_max_steps_source,
+    )
+
+
+@app.put("/api/admin/max-steps", response_model=MaxStepsConfigResponse)
+async def set_max_steps_config(
+    payload: MaxStepsConfigRequest,
+) -> MaxStepsConfigResponse:
+    steps = max(1, min(payload.max_steps, 40))
+    monitor_store.set_agent_max_steps(steps)
+    global _agent_max_steps
+    global _agent_max_steps_source
+    _agent_max_steps = steps
+    _agent_max_steps_source = "database"
+    return MaxStepsConfigResponse(
+        max_steps=_agent_max_steps,
+        source=_agent_max_steps_source,
     )
 
 
@@ -887,6 +857,9 @@ def main() -> None:
     global _task_retention_days
     global _task_retention_source
     _task_retention_days, _task_retention_source = _load_task_retention_config()
+    global _agent_max_steps
+    global _agent_max_steps_source
+    _agent_max_steps, _agent_max_steps_source = _load_agent_max_steps_config()
     parser = argparse.ArgumentParser(
         description="Run ReAct tasks with optional Web Admin mode.",
     )

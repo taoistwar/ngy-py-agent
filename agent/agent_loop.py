@@ -2,47 +2,25 @@
 
 import json
 import os
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-try:
-    from agent.tool_registry import ToolRegistry
-except ModuleNotFoundError:
-    from tool_registry import ToolRegistry
-
-try:
-    from agent.provider import (
-        build_provider,
-        canonicalize_provider,
-        resolve_tool_provider_for_schemas,
-    )
-except ModuleNotFoundError:
-    from provider import (
-        build_provider,
-        canonicalize_provider,
-        resolve_tool_provider_for_schemas,
-    )
-
-try:
-    from agent.models import (
-        EventCategory,
-        EventSink,
-        LLMRequestData,
-        LLMResponseData,
-        TaskEvent,
-        ToolCallData,
-        ToolResultData,
-    )
-except ModuleNotFoundError:
-    from models import (
-        EventCategory,
-        EventSink,
-        LLMRequestData,
-        LLMResponseData,
-        TaskEvent,
-        ToolCallData,
-        ToolResultData,
-    )
-
+from agent.models import (
+    EventCategory,
+    EventSink,
+    LLMRequestData,
+    LLMResponseData,
+    TaskEvent,
+    ToolCallData,
+    ToolResultData,
+)
+from agent.modes import build_system_prompt, build_tool_registry
+from agent.provider import (
+    ProviderConfig,
+    build_provider,
+    canonicalize_provider,
+    resolve_tool_provider_for_schemas,
+)
+from agent.tool_registry import ToolRegistry
 
 DEFAULT_PROVIDER = os.getenv("TOOL_SCHEMA_PROVIDER", "openai")
 DEFAULT_USER_QUERY = "What's the current time and weather in Vancouver?"
@@ -66,7 +44,7 @@ def _to_dict(message: Any) -> Dict[str, Any]:
 
     tool_calls_obj = getattr(message, "tool_calls", None)
     tool_calls = []
-    for tool_call in (tool_calls_obj or []):
+    for tool_call in tool_calls_obj or []:
         function = getattr(tool_call, "function", None)
         if function is None and isinstance(tool_call, dict):
             function = tool_call.get("function")
@@ -113,7 +91,7 @@ def _parse_tool_calls(message: Any) -> List[Tuple[str, Dict[str, Any], str]]:
     if raw_tool_calls is None and isinstance(message, dict):
         raw_tool_calls = message.get("tool_calls", [])
 
-    for call in (raw_tool_calls or []):
+    for call in raw_tool_calls or []:
         function = getattr(call, "function", None)
         if function is None and isinstance(call, dict):
             function = call.get("function")
@@ -131,7 +109,9 @@ def _parse_tool_calls(message: Any) -> List[Tuple[str, Dict[str, Any], str]]:
             raw_args = function.get("arguments")
 
         try:
-            args = json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+            args = (
+                json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+            )
             if not isinstance(args, dict):
                 args = {}
         except json.JSONDecodeError:
@@ -177,6 +157,7 @@ def _emit(
         # Event emission failures should not interrupt main flow.
         return
 
+
 def _execute_tool(registry: ToolRegistry, name: str, arguments: Any) -> str:
     if isinstance(arguments, str):
         try:
@@ -190,18 +171,28 @@ def _execute_tool(registry: ToolRegistry, name: str, arguments: Any) -> str:
 
 def _build_runtime(
     provider_name: Optional[str] = None,
-) -> tuple[str, ToolRegistry, Any, List[Dict[str, Any]]]:
+    provider_config: Optional[ProviderConfig] = None,
+    enable_tools: bool = True,
+    mode: str = "build",
+) -> tuple[str, ToolRegistry, Any, Optional[List[Dict[str, Any]]]]:
     provider_name = canonicalize_provider(provider_name or DEFAULT_PROVIDER)
-    registry = ToolRegistry()
-    try:
-        request_provider = resolve_tool_provider_for_schemas(provider_name)
-        tool_schemas = registry.get_tool_schemas(request_provider)
-    except ValueError:
-        print(f"Unsupported TOOL_SCHEMA_PROVIDER='{provider_name}', fallback to openai schema")
-        provider_name = "openai"
-        tool_schemas = registry.get_tool_schemas("openai")
+    if enable_tools:
+        registry = build_tool_registry(mode)
+    else:
+        registry = ToolRegistry(enabled_tools=[])
+    tool_schemas: Optional[List[Dict[str, Any]]] = None
+    if enable_tools:
+        try:
+            request_provider = resolve_tool_provider_for_schemas(provider_name)
+            tool_schemas = registry.get_tool_schemas(request_provider)
+        except ValueError:
+            print(
+                f"Unsupported TOOL_SCHEMA_PROVIDER='{provider_name}', fallback to openai schema"
+            )
+            provider_name = "openai"
+            tool_schemas = registry.get_tool_schemas("openai")
 
-    provider = build_provider(provider_name)
+    provider = build_provider(provider_name, provider_config)
     return provider_name, registry, provider, tool_schemas
 
 
@@ -213,20 +204,36 @@ def run_react_loop(
     initial_messages: Optional[List[Dict[str, Any]]] = None,
     task_id: str | None = None,
     event_sink: EventSink | None = None,
+    provider_config: Optional[ProviderConfig] = None,
+    enable_tools: bool = True,
+    max_output_tokens: Optional[int] = None,
+    thinking_mode: bool = False,
+    mode: str = "build",
 ) -> str:
-    _, registry, provider, request_tools = _build_runtime(provider_name)
+    _, registry, provider, request_tools = _build_runtime(
+        provider_name=provider_name,
+        provider_config=provider_config,
+        enable_tools=enable_tools,
+        mode=mode,
+    )
 
     if verbose:
         print(f"Provider: {provider.config.provider}")
-        print(f"Provider tool schemas: {request_tools[:1]}")
+        print(f"Provider model: {provider.config.model}")
+        print(f"Provider tool schemas: {(request_tools or [])[:1]}")
 
     if initial_messages is not None:
         messages = initial_messages
     else:
+        system_prompt = (
+            build_system_prompt(mode, enable_tools=enable_tools)
+            if enable_tools
+            else "You are a helpful assistant. Answer the user request directly and clearly."
+        )
         messages = [
             {
                 "role": "system",
-                "content": "You are a ReAct-style assistant: reason briefly, then choose a tool if needed, then observe tool outputs, and answer when complete.",
+                "content": system_prompt,
             },
         ]
 
@@ -245,6 +252,10 @@ def run_react_loop(
                 "max_steps": max_steps,
                 "query": effective_query,
                 "model": provider.config.model,
+                "mode": mode,
+                "tools_enabled": enable_tools,
+                "thinking_mode": thinking_mode,
+                "max_output_tokens": max_output_tokens,
             },
             collapsed=True,
         ),
@@ -256,18 +267,26 @@ def run_react_loop(
         if verbose:
             print(f"\n=== ReAct Step {step}/{max_steps} ===")
 
+        request_kwargs: Dict[str, Any] = {"tool_choice": "auto"}
+        if max_output_tokens:
+            request_kwargs["max_tokens"] = int(max_output_tokens)
+        if thinking_mode and getattr(provider, "wire_compatible_with_openai", False):
+            request_kwargs["extra_body"] = {
+                "chat_template_kwargs": {"enable_thinking": True}
+            }
+
         request_data = LLMRequestData(
             step=step,
             model=provider.config.model,
             provider=provider.config.provider,
-            tool_count=len(request_tools),
+            tool_count=len(request_tools or []),
             message_count=len(messages),
             tool_choice="auto",
         )
         raw_request_payload = provider.build_request_payload(
             messages=messages,
             tools=request_tools,
-            tool_choice="auto",
+            **request_kwargs,
         )
         request_data_dict = request_data.model_dump()
         request_data_dict["raw_request"] = raw_request_payload
@@ -342,7 +361,11 @@ def run_react_loop(
                     task_id=task_id or "",
                     category=EventCategory.DEBUG,
                     title="ReAct finished",
-                    data={"reason": "No tool call, returning direct result.", "step": step, "result": final_output},
+                    data={
+                        "reason": "No tool call, returning direct result.",
+                        "step": step,
+                        "result": final_output,
+                    },
                     collapsed=True,
                 ),
             )

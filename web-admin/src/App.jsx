@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { default as MonacoEditor } from "@monaco-editor/react"
 import {
+  createModel,
+  createSession,
   createTask,
+  deleteModel,
+  deleteSession,
   deleteTask,
   fetchHealth,
+  fetchModels,
   fetchRetentionConfig,
+  fetchMaxStepsConfig,
+  updateMaxStepsConfig,
+  fetchSessions,
   fetchTask,
   fetchTaskEvents,
   fetchTasks,
+  renameSession,
+  updateModel,
   updateRetentionConfig,
 } from "./api"
 import {
@@ -25,15 +35,10 @@ import "./App.css"
 const EVENT_PAGE_SIZE = 30
 const TASK_PAGE_SIZE = 12
 
-const MENU_GROUPS = [
-  {
-    key: "operations",
-    labelKey: "menuGroupOperations",
-    items: [
-      { key: "tasks", labelKey: "menuTasks" },
-      { key: "backup", labelKey: "menuBackup" },
-    ],
-  },
+const MENU_ITEMS = [
+  { key: "tasks", labelKey: "menuTasks" },
+  { key: "models", labelKey: "menuModels" },
+  { key: "config", labelKey: "menuConfig" },
 ]
 
 const PROVIDER_OPTIONS = [
@@ -45,67 +50,29 @@ const PROVIDER_OPTIONS = [
   "gemini",
 ]
 
-const TASK_COLUMNS = [
-  {
-    key: "task_id",
-    labelKey: "taskListColumnId",
-    width: "120px",
-    align: "left",
-    sortable: true,
-  },
-  {
-    key: "query",
-    labelKey: "taskListColumnQuery",
-    width: "1.8fr",
-    align: "left",
-    sortable: true,
-  },
-  {
-    key: "status",
-    labelKey: "taskListColumnStatus",
-    width: "120px",
-    align: "left",
-    sortable: true,
-  },
-  {
-    key: "provider",
-    labelKey: "taskListColumnProvider",
-    width: "130px",
-    align: "left",
-    sortable: true,
-  },
-  {
-    key: "created_at",
-    labelKey: "taskListColumnCreated",
-    width: "155px",
-    align: "left",
-    sortable: true,
-  },
+const MODE_OPTIONS = [
+  { value: "build", labelKey: "modeBuild" },
+  { value: "ask", labelKey: "modeAsk" },
+  { value: "plan", labelKey: "modePlan" },
 ]
 
-const TASK_SORT_DEFAULT = "created_at"
-const TASK_SORT_DEFAULT_DIR = "desc"
-
-function getTaskListValue(task, key) {
-  if (key === "status") {
-    return String(task.status || "").toLowerCase()
-  }
-  if (key === "created_at") {
-    return task[key] ? new Date(task[key]).getTime() : 0
-  }
-  return task[key] ?? ""
+const MODE_LABEL_KEYS = {
+  build: "modeBuild",
+  ask: "modeAsk",
+  plan: "modePlan",
 }
 
-function compareTaskValues(a, b) {
-  if (a === b) return 0
-  if (typeof a === "number" && typeof b === "number") {
-    return a - b
-  }
-  return String(a).localeCompare(String(b))
-}
+const modeLabelKey = (mode) => MODE_LABEL_KEYS[mode] || "modeBuild"
 
-function createTaskGridTemplate(columns) {
-  return `34px ${columns.map((column) => column.width || "1fr").join(" ")} 84px`
+const INPUT_TOKEN_PRESETS = [32768, 65536, 131072, 262144]
+const OUTPUT_TOKEN_PRESETS = [8192, 16384, 32768, 65536]
+
+function formatTokenCount(value) {
+  const num = Number(value)
+  if (!Number.isFinite(num) || num <= 0) return ""
+  if (num % 1024 === 0) return `${num / 1024}K`
+  if (num % 1000 === 0) return `${num / 1000}K`
+  return String(num)
 }
 
 function formatTime(value) {
@@ -222,191 +189,293 @@ function getHealthText(healthStatus, translate) {
   return translate("unknown")
 }
 
+function TopBar({ activeMenu, onChangeMenu, health, tasks, locale, localeOptions, setLocale, systemTime, translate }) {
+  return (
+    <header className="admin-topbar">
+      <div className="topbar-brand">
+        <h1>{translate("appTitle")}</h1>
+        <span className="topbar-subtitle">{translate("appSubtitle")}</span>
+      </div>
+      <nav className="topbar-nav">
+        {MENU_ITEMS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={`nav-item ${activeMenu === item.key ? "active" : ""}`}
+            onClick={() => onChangeMenu(item.key)}
+          >
+            {translate(item.labelKey)}
+          </button>
+        ))}
+      </nav>
+      <div className="topbar-right">
+        <div className="metric-item">
+          <em>{translate("healthLabel")}:</em>
+          <strong className={`status ${getHealthClass(health)}`}>{getHealthText(health, translate)}</strong>
+        </div>
+        <div className="metric-item">
+          <em>{translate("headerTaskCount")}:</em>
+          <strong>{tasks.length}</strong>
+        </div>
+        <label className="lang-switch">
+          <span>{translate("languageLabel")}</span>
+          <select
+            value={locale}
+            className="lang-select"
+            onChange={(event) => setLocale(event.target.value)}
+          >
+            {localeOptions.map((item) => (
+              <option value={item.value} key={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="metric-item">
+          <em>{translate("sidebarSystemTime")}:</em>
+          <strong>{formatTime(systemTime)}</strong>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+function SessionTabs({ sessions, activeSessionId, onSelect, onCreate, onRename, onDelete, translate }) {
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState("")
+  const [renaming, setRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState("")
+  const addInputRef = useRef(null)
+
+  useEffect(() => {
+    if (adding) addInputRef.current?.focus()
+  }, [adding])
+
+  const beginRename = () => {
+    const current = sessions.find((item) => item.session_id === activeSessionId)
+    setRenameValue(current?.name || "")
+    setRenaming(true)
+  }
+
+  const submitNew = () => {
+    const value = newName.trim()
+    if (!value) return
+    onCreate(value)
+    setNewName("")
+    setAdding(false)
+  }
+
+  const submitRename = () => {
+    const value = renameValue.trim()
+    if (!value) return
+    onRename(activeSessionId, value)
+    setRenaming(false)
+  }
+
+  return (
+    <section className="panel session-tabs-panel">
+      <div className="panel-titlebar session-tabs-titlebar">
+        <h2>{translate("sessionTitle")}</h2>
+        <div className="task-toolbar-actions">
+          {!adding && (
+            <button type="button" className="btn btn-compact" onClick={() => setAdding(true)}>
+              {translate("sessionAdd")}
+            </button>
+          )}
+          {activeSessionId && !renaming && (
+            <>
+              <button type="button" className="btn btn-compact" onClick={beginRename}>
+                {translate("sessionRename")}
+              </button>
+              <button
+                type="button"
+                className="btn btn-compact btn-danger"
+                onClick={() => onDelete(activeSessionId)}
+              >
+                {translate("sessionDelete")}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="panel-body session-tabs-body">
+        <div className="session-tabs">
+          {sessions.map((item) => (
+            <button
+              key={item.session_id}
+              type="button"
+              className={`session-tab ${item.session_id === activeSessionId ? "active" : ""}`}
+              onClick={() => onSelect(item.session_id)}
+            >
+              <span className="session-tab-name">{item.name}</span>
+              {item.task_count > 0 && <span className="session-tab-count">{item.task_count}</span>}
+            </button>
+          ))}
+        </div>
+        {adding && (
+          <div className="session-add-row">
+            <input
+              ref={addInputRef}
+              className="session-add-input"
+              value={newName}
+              placeholder={translate("sessionNamePlaceholder")}
+              onChange={(event) => setNewName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitNew()
+                if (event.key === "Escape") {
+                  setAdding(false)
+                  setNewName("")
+                }
+              }}
+            />
+            <button type="button" className="btn btn-compact" onClick={submitNew}>
+              {translate("sessionAddConfirm")}
+            </button>
+            <button
+              type="button"
+              className="btn btn-compact"
+              onClick={() => {
+                setAdding(false)
+                setNewName("")
+              }}
+            >
+              {translate("dialogClose")}
+            </button>
+          </div>
+        )}
+        {renaming && (
+          <div className="session-add-row">
+            <input
+              className="session-add-input"
+              autoFocus
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitRename()
+                if (event.key === "Escape") setRenaming(false)
+              }}
+            />
+            <button type="button" className="btn btn-compact" onClick={submitRename}>
+              {translate("sessionAddConfirm")}
+            </button>
+            <button type="button" className="btn btn-compact" onClick={() => setRenaming(false)}>
+              {translate("dialogClose")}
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function TaskList({
   tasks,
   selectedId,
-  columns,
-  sortBy,
-  sortDirection,
-  draggingColumn,
-  dragTargetColumn,
+  onSelect,
+  onDelete,
   selectedTaskIds,
   isAllPageSelected,
-  onSelect,
-  onAddTask,
   onSelectOne,
   onSelectAllPage,
-  onSort,
-  onColumnDragStart,
-  onColumnDragOver,
-  onColumnDrop,
-  onColumnDragEnd,
+  onBatchDelete,
   onRefresh,
   taskSearchQuery,
   onTaskSearch,
-  onDelete,
-  onBatchDelete,
   page,
   totalPages,
   onPageChange,
   translate,
 }) {
   const selectedCount = selectedTaskIds.size
-  const gridTemplateColumns = createTaskGridTemplate(columns)
-
-  const renderColumnCell = (item, column) => {
-    if (column.key === "task_id") {
-      return <span className="task-id">{shortenText(item.task_id, 14)}</span>
-    }
-    if (column.key === "query") {
-      return (
-        <span className="task-query" title={item.query}>
-          {shortenText(item.query, 90)}
-        </span>
-      )
-    }
-    if (column.key === "status") {
-      return (
-        <span className={`status ${getTaskStatusClass(item.status)}`}>
-          {getTaskStatusText(translate, item.status)}
-        </span>
-      )
-    }
-    if (column.key === "created_at") {
-      return <span>{formatTime(item.created_at)}</span>
-    }
-    return <span>{item[column.key]}</span>
-  }
-
-  const headerSortedClass = (columnKey) =>
-    `${columnKey === sortBy ? "sorted" : ""} ${draggingColumn === columnKey ? "dragging" : ""} ${
-      dragTargetColumn === columnKey ? "drop-target" : ""
-    }`.trim()
-
-  const onDropColumn = (columnKey) => {
-    onColumnDrop(columnKey)
-  }
 
   return (
-    <section className="panel">
+    <section className="panel session-task-panel">
       <div className="panel-titlebar">
-        <div>
-          <h2>{translate("taskListTitle")}</h2>
-          <div className="hint">
-            {selectedCount > 0
-              ? `${translate("taskListSelected")}: ${selectedCount}`
-              : `${translate("taskListHint")}`}
-          </div>
-        </div>
+        <h2>{translate("taskListTitle")}</h2>
         <div className="task-toolbar-actions">
-          <button type="button" className="btn" onClick={onAddTask}>
-            {translate("taskListAdd")}
+          <button type="button" className="btn btn-compact" onClick={onRefresh}>
+            {translate("taskListRefresh")}
           </button>
           <button
             type="button"
-            className="btn btn-danger"
+            className="btn btn-compact btn-danger"
             onClick={onBatchDelete}
             disabled={selectedCount === 0}
           >
             {translate("taskListBatchDelete")}
           </button>
-          <button type="button" className="btn" onClick={onRefresh}>
-            {translate("taskListRefresh")}
-          </button>
         </div>
       </div>
-      <div className="panel-body">
+      <div className="panel-body session-task-body">
         <div className="task-search-bar">
-          <label className="task-search-label">
-            {translate("sidebarTaskSearch")}
-            <input
-              type="text"
-              className="task-search-input"
-              value={taskSearchQuery}
-              placeholder={translate("taskSearchPlaceholder")}
-              onChange={(event) => onTaskSearch(event.target.value)}
-              aria-label={translate("sidebarTaskSearch")}
-            />
-          </label>
+          <input
+            type="text"
+            className="task-search-input"
+            value={taskSearchQuery}
+            placeholder={translate("taskSearchPlaceholder")}
+            onChange={(event) => onTaskSearch(event.target.value)}
+          />
         </div>
         {tasks.length === 0 ? (
           <div className="empty">{translate("taskNoTasks")}</div>
         ) : (
           <>
-            <div className="task-list-head" style={{ gridTemplateColumns }}>
-              <span className="task-col task-select-col">
-                <label className="task-select-label">
-                  <input
-                    type="checkbox"
-                    checked={isAllPageSelected}
-                    onChange={onSelectAllPage}
-                  />
-                  {translate("taskListColumnSelect")}
-                </label>
+            <div className="session-task-head">
+              <label className="task-select-label">
+                <input type="checkbox" checked={isAllPageSelected} onChange={onSelectAllPage} />
+                {translate("taskListColumnSelect")}
+              </label>
+              <span className="hint">
+                {translate("taskListSelected")}: {selectedCount}
               </span>
-              {columns.map((column) => (
-                <span
-                  key={column.key}
-                  className={`task-col ${headerSortedClass(column.key)} ${column.align === "right" ? "task-col-right" : ""}`}
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.effectAllowed = "move"
-                    onColumnDragStart(column.key)
-                  }}
-                  onDragOver={(event) => {
-                    event.preventDefault()
-                    onColumnDragOver(column.key)
-                  }}
-                  onDrop={() => onDropColumn(column.key)}
-                  onDragEnd={onColumnDragEnd}
-                  onClick={() => onSort(column.key)}
-                  role="button"
-                  aria-label={translate(column.labelKey)}
-                >
-                  <span>{translate(column.labelKey)}</span>
-                  <span className="task-sort-icon">
-                    {sortBy === column.key ? (sortDirection === "asc" ? "\u25B2" : "\u25BC") : ""}
-                  </span>
-                </span>
-              ))}
-              <span className="task-col task-action-col">{translate("taskListColumnActions")}</span>
             </div>
-            <div className="task-list-body" style={{ gridTemplateColumns }}>
+            <div className="session-task-rows">
               {tasks.map((item) => (
                 <div
                   key={item.task_id}
-                  className={`task-row ${item.task_id === selectedId ? "active" : ""}`}
+                  className={`session-task-row ${item.task_id === selectedId ? "active" : ""}`}
                   onClick={() => onSelect(item.task_id)}
                   role="button"
-                  style={{ gridTemplateColumns }}
                 >
-                  <label
-                    className="task-select-label"
-                    onClick={(event) => event.stopPropagation()}
-                  >
+                  <label className="task-select-label" onClick={(event) => event.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedTaskIds.has(item.task_id)}
                       onChange={() => onSelectOne(item.task_id)}
                     />
                   </label>
-                  {columns.map((column) => (
-                    <div className={`task-col task-body-col`} key={`${item.task_id}-${column.key}`}>
-                      {renderColumnCell(item, column)}
+                  <div className="session-task-info">
+                    <div className="session-task-query" title={item.query}>
+                      {shortenText(item.query, 90)}
                     </div>
-                  ))}
-                  <span>
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-xs"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onDelete(item.task_id)
-                      }}
-                    >
-                      {translate("taskDelete")}
-                    </button>
-                  </span>
+                    <div className="session-task-meta">
+                      <span className={`status ${getTaskStatusClass(item.status)}`}>
+                        {getTaskStatusText(translate, item.status)}
+                      </span>
+                      <span className="hint">{formatTime(item.created_at)}</span>
+                      {item.model_name ? (
+                        <span className="hint">{item.model_name}</span>
+                      ) : (
+                        <span className="hint">{item.provider}</span>
+                      )}
+                      <span className={`badge badge-mode badge-mode-${item.mode || "build"}`}>
+                        {translate(modeLabelKey(item.mode))}
+                      </span>
+                      <span className="hint">
+                        {translate("taskEventCountPrefix")}: {item.event_count}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-xs"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onDelete(item.task_id)
+                    }}
+                  >
+                    {translate("taskDelete")}
+                  </button>
                 </div>
               ))}
             </div>
@@ -438,6 +507,107 @@ function TaskList({
   )
 }
 
+function TaskComposer({ models, onCreate, translate }) {
+  const [query, setQuery] = useState("")
+  const [modelId, setModelId] = useState("")
+  const [provider, setProvider] = useState("openai-compatible")
+  const [mode, setMode] = useState("build")
+  const [busy, setBusy] = useState(false)
+
+  const effectiveModelId = modelId || (models && models.length ? models[0].model_id : "")
+
+  const submit = async (event) => {
+    event.preventDefault()
+    if (!query.trim()) return
+    setBusy(true)
+    try {
+      const payload = { query, stream: false, mode }
+      if (models && models.length) {
+        payload.model_id = effectiveModelId
+      } else {
+        payload.provider = provider
+      }
+      await onCreate(payload)
+      setQuery("")
+    } catch {
+      // surface errors through the global error banner
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onQueryKeyDown = (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      submit(event)
+    }
+  }
+
+  return (
+    <section className="panel task-composer-panel">
+      <div className="panel-titlebar">
+        <h2>{translate("taskComposerTitle")}</h2>
+      </div>
+      <div className="panel-body">
+        <form className="task-composer" onSubmit={submit}>
+          <label className="composer-field">
+            <span>{translate("taskFormPrompt")}</span>
+            <textarea
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={onQueryKeyDown}
+              placeholder={translate("taskFormPlaceholder")}
+            />
+          </label>
+          <div className="composer-fields">
+            {models && models.length > 0 ? (
+              <label className="composer-field">
+                <span>{translate("taskFormModel")}</span>
+                <select value={effectiveModelId} onChange={(event) => setModelId(event.target.value)}>
+                  {models.map((item) => (
+                    <option value={item.model_id} key={item.model_id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label className="composer-field">
+                <span>{translate("taskFormProvider")}</span>
+                <select value={provider} onChange={(event) => setProvider(event.target.value)}>
+                  {PROVIDER_OPTIONS.map((item) => (
+                    <option value={item} key={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+          <div className="composer-mode">
+            <span className="composer-mode-label">{translate("modeLabel")}</span>
+            <div className="segmented">
+              {MODE_OPTIONS.map((option) => (
+                <button
+                  type="button"
+                  key={option.value}
+                  className={`segmented-item ${mode === option.value ? "active" : ""}`}
+                  onClick={() => setMode(option.value)}
+                >
+                  {translate(option.labelKey)}
+                </button>
+              ))}
+            </div>
+            <span className="hint">{translate("modeHint")}</span>
+          </div>
+          <button className="btn" type="submit" disabled={busy || !query.trim()}>
+            {busy ? translate("taskFormCreating") : translate("taskFormCreate")}
+          </button>
+        </form>
+      </div>
+    </section>
+  )
+}
+
 function TaskDetail({ task, result, translate }) {
   if (!task) {
     return <div className="empty">{translate("taskSelectHint")}</div>
@@ -461,6 +631,14 @@ function TaskDetail({ task, result, translate }) {
           <strong>{task.provider}</strong>
         </div>
         <div className="detail-item">
+          <span>{translate("modeLabel")}</span>
+          <strong>{translate(modeLabelKey(task.mode))}</strong>
+        </div>
+        <div className="detail-item">
+          <span>{translate("detailModel")}</span>
+          <strong>{task.model_name || task.provider || "-"}</strong>
+        </div>
+        <div className="detail-item">
           <span>{translate("detailStatus")}</span>
           <strong className={`status ${getTaskStatusClass(task.status)}`}>
             {getTaskStatusText(translate, task.status)}
@@ -469,6 +647,10 @@ function TaskDetail({ task, result, translate }) {
       </section>
       <section className="detail-section">
         <p className="detail-section-title">{translate("taskDetailRuntime")}</p>
+        <div className="detail-item">
+          <span>{translate("detailSession")}</span>
+          <strong>{task.session_id || "-"}</strong>
+        </div>
         <div className="detail-item">
           <span>{translate("detailCreated")}</span>
           <strong>{formatTime(task.created_at)}</strong>
@@ -533,24 +715,10 @@ function TaskDetail({ task, result, translate }) {
   )
 }
 
-function TaskDetailPage({
-  task,
-  taskResult,
-  taskTab,
-  setTaskTab,
-  events,
-  hasMoreEvents,
-  isLoadingEvents,
-  onLoadMore,
-  onBack,
-  translate,
-}) {
+function TaskDetailPage({ task, taskResult, taskTab, setTaskTab, events, hasMoreEvents, isLoadingEvents, onLoadMore, translate }) {
   return (
     <section className="panel">
       <div className="task-page-titlebar">
-        <button type="button" className="btn btn-compact" onClick={onBack}>
-          {translate("taskListBack")}
-        </button>
         <div className="tab-strip" role="tablist" aria-label={translate("tabAria")}>
           <button
             type="button"
@@ -572,14 +740,7 @@ function TaskDetailPage({
         {taskTab === "detail" ? (
           <TaskDetail task={task} result={taskResult} translate={translate} />
         ) : (
-          <EventTimeline
-            task={task}
-            events={events}
-            hasMore={hasMoreEvents}
-            loadingMore={isLoadingEvents}
-            onLoadMore={onLoadMore}
-            translate={translate}
-          />
+          <EventTimeline task={task} events={events} hasMore={hasMoreEvents} loadingMore={isLoadingEvents} onLoadMore={onLoadMore} translate={translate} />
         )}
       </div>
     </section>
@@ -691,104 +852,347 @@ function EventTimeline({ task, events, hasMore, loadingMore, onLoadMore, transla
   )
 }
 
-function CreateTaskForm({ onCreate, focusSignal, translate }) {
-  const [query, setQuery] = useState("")
-  const [provider, setProvider] = useState("openai-compatible")
-  const [maxSteps, setMaxSteps] = useState("8")
-  const [busy, setBusy] = useState(false)
-  const textAreaRef = useRef(null)
+function TokenLimitField({ label, value, presets, onChange, translate }) {
+  const current = String(value ?? "").trim()
 
-  useEffect(() => {
-    if (!textAreaRef.current) return
-    textAreaRef.current.focus()
-  }, [focusSignal])
+  return (
+    <div className="token-field">
+      <span className="token-field-label">{label}</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={current}
+        placeholder={translate("modelFormTokensDefault")}
+        onChange={(event) => onChange(event.target.value.replace(/[^\d]/g, ""))}
+      />
+      <div className="token-presets">
+        {presets.map((preset) => {
+          const isActive = current === String(preset)
+          return (
+            <button
+              key={preset}
+              type="button"
+              className={`token-preset ${isActive ? "active" : ""}`}
+              onClick={() => onChange(isActive ? "" : String(preset))}
+            >
+              {formatTokenCount(preset)}
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          className="token-preset token-preset-clear"
+          disabled={!current}
+          onClick={() => onChange("")}
+        >
+          {translate("modelFormTokensClear")}
+        </button>
+      </div>
+      <span className="token-field-hint">
+        {current ? `${current} tokens` : translate("modelFormTokensDefaultHint")}
+      </span>
+    </div>
+  )
+}
+
+function ModelManager({ models, onCreate, onUpdate, onDelete, onRefresh, translate }) {
+  const [form, setForm] = useState({
+    model_id: "",
+    name: "",
+    provider: "openai-compatible",
+    base_url: "",
+    api_key: "",
+    supports_tool_calls: true,
+    supports_image_input: false,
+    thinking_mode: false,
+    max_input_tokens: "",
+    max_output_tokens: "",
+  })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+
+  const editingId = form.model_id
+
+  const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
+
+  const startEdit = (model) => {
+    setError("")
+    setForm({
+      model_id: model.model_id,
+      name: model.name || "",
+      provider: model.provider || "openai-compatible",
+      base_url: model.base_url || "",
+      api_key: model.api_key || "",
+      supports_tool_calls: model.supports_tool_calls !== false,
+      supports_image_input: model.supports_image_input === true,
+      thinking_mode: model.thinking_mode === true,
+      max_input_tokens: model.max_input_tokens ? String(model.max_input_tokens) : "",
+      max_output_tokens: model.max_output_tokens ? String(model.max_output_tokens) : "",
+    })
+  }
+
+  const resetForm = () => {
+    setForm({
+      model_id: "",
+      name: "",
+      provider: "openai-compatible",
+      base_url: "",
+      api_key: "",
+      supports_tool_calls: true,
+      supports_image_input: false,
+      thinking_mode: false,
+      max_input_tokens: "",
+      max_output_tokens: "",
+    })
+    setError("")
+  }
 
   const submit = async (event) => {
     event.preventDefault()
-    if (!query.trim()) return
+    setError("")
+    if (!form.name.trim()) {
+      setError(translate("modelNameRequired"))
+      return
+    }
+    setBusy(true)
+    const payload = {
+      name: form.name.trim(),
+      provider: form.provider,
+      base_url: form.base_url.trim(),
+      api_key: form.api_key,
+      supports_tool_calls: form.supports_tool_calls,
+      supports_image_input: form.supports_image_input,
+      thinking_mode: form.thinking_mode,
+      max_input_tokens: Number(form.max_input_tokens) || 0,
+      max_output_tokens: Number(form.max_output_tokens) || 0,
+    }
+    try {
+      if (editingId) {
+        await onUpdate(editingId, payload)
+      } else {
+        await onCreate(payload)
+      }
+      resetForm()
+    } catch {
+      // error surfaced through the global banner
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDelete = async (model) => {
+    if (!window.confirm(`${translate("modelDeleteConfirm")} (${model.name})`)) return
+    try {
+      await onDelete(model.model_id)
+    } catch {
+      // error surfaced through the global banner
+    }
+  }
+
+  return (
+    <section className="panel model-manager">
+      <div className="panel-titlebar">
+        <div>
+          <h2>{translate("modelManagerTitle")}</h2>
+          <span className="hint">{translate("modelManagerHint")}</span>
+        </div>
+        <button type="button" className="btn btn-compact" onClick={onRefresh}>
+          {translate("modelListRefresh")}
+        </button>
+      </div>
+      <div className="panel-body">
+        <form className="model-form form-grid" onSubmit={submit}>
+          <p className="model-form-heading">
+            {editingId ? translate("modelFormEdit") : translate("modelFormCreate")}
+          </p>
+          <label>
+            <span>{translate("modelFormName")}</span>
+            <input value={form.name} onChange={(event) => setField("name", event.target.value)} placeholder={translate("modelFormNamePlaceholder")} />
+          </label>
+          <label>
+            <span>{translate("modelFormProvider")}</span>
+            <select value={form.provider} onChange={(event) => setField("provider", event.target.value)}>
+              {PROVIDER_OPTIONS.map((item) => (
+                <option value={item} key={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>{translate("modelFormBaseUrl")}</span>
+            <input value={form.base_url} onChange={(event) => setField("base_url", event.target.value)} placeholder={translate("modelFormBaseUrlPlaceholder")} />
+          </label>
+          <label>
+            <span>{translate("modelFormApiKey")}</span>
+            <input type="password" value={form.api_key} onChange={(event) => setField("api_key", event.target.value)} placeholder={translate("modelFormApiKeyPlaceholder")} />
+          </label>
+          <div className="model-form-checks">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.supports_tool_calls}
+                onChange={(event) => setField("supports_tool_calls", event.target.checked)}
+              />
+              {translate("modelFormToolCalls")}
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.supports_image_input}
+                onChange={(event) => setField("supports_image_input", event.target.checked)}
+              />
+              {translate("modelFormImageInput")}
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.thinking_mode}
+                onChange={(event) => setField("thinking_mode", event.target.checked)}
+              />
+              {translate("modelFormThinking")}
+            </label>
+          </div>
+          <div className="model-form-tokens">
+            <TokenLimitField
+              label={translate("modelFormMaxInput")}
+              value={form.max_input_tokens}
+              presets={INPUT_TOKEN_PRESETS}
+              onChange={(value) => setField("max_input_tokens", value)}
+              translate={translate}
+            />
+            <TokenLimitField
+              label={translate("modelFormMaxOutput")}
+              value={form.max_output_tokens}
+              presets={OUTPUT_TOKEN_PRESETS}
+              onChange={(value) => setField("max_output_tokens", value)}
+              translate={translate}
+            />
+          </div>
+          {error && <div className="form-error">{error}</div>}
+          <div className="model-form-actions">
+            <button type="submit" className="btn" disabled={busy}>
+              {busy ? translate("modelFormSaving") : editingId ? translate("modelFormUpdate") : translate("modelFormSave")}
+            </button>
+            {editingId && (
+              <button type="button" className="btn btn-compact" onClick={resetForm}>
+                {translate("modelFormCancel")}
+              </button>
+            )}
+          </div>
+        </form>
+
+        <div className="model-list">
+          {models.length === 0 ? (
+            <div className="empty">{translate("modelListEmpty")}</div>
+          ) : (
+            <table className="model-table">
+              <thead>
+                <tr>
+                  <th>{translate("modelListName")}</th>
+                  <th>{translate("modelListProvider")}</th>
+                  <th>{translate("modelListBaseUrl")}</th>
+                  <th>{translate("modelListToolCalls")}</th>
+                  <th>{translate("modelListImageInput")}</th>
+                  <th>{translate("modelListThinking")}</th>
+                  <th>{translate("modelListTokens")}</th>
+                  <th>{translate("modelListActions")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {models.map((model) => (
+                  <tr key={model.model_id}>
+                    <td className="model-name">{model.name}</td>
+                    <td>
+                      <code>{model.provider}</code>
+                    </td>
+                    <td className="mono">{model.base_url || "-"}</td>
+                    <td className={model.supports_tool_calls ? "flag-on" : "flag-off"}>
+                      {model.supports_tool_calls ? translate("yes") : translate("no")}
+                    </td>
+                    <td className={model.supports_image_input ? "flag-on" : "flag-off"}>
+                      {model.supports_image_input ? translate("yes") : translate("no")}
+                    </td>
+                    <td className={model.thinking_mode ? "flag-on" : "flag-off"}>
+                      {model.thinking_mode ? translate("yes") : translate("no")}
+                    </td>
+                    <td className="mono">
+                      {model.max_input_tokens ? formatTokenCount(model.max_input_tokens) : "-"}/
+                      {model.max_output_tokens ? formatTokenCount(model.max_output_tokens) : "-"}
+                    </td>
+                    <td className="model-actions">
+                      <button type="button" className="btn btn-xs" onClick={() => startEdit(model)}>
+                        {translate("modelEdit")}
+                      </button>
+                      <button type="button" className="btn btn-danger btn-xs" onClick={() => handleDelete(model)}>
+                        {translate("modelDelete")}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }) {
+  const [value, setValue] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!maxStepsConfig) return
+    setValue(String(maxStepsConfig.max_steps ?? 8))
+  }, [maxStepsConfig])
+
+  const submit = async (event) => {
+    event.preventDefault()
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed) || parsed < 1) return
     setBusy(true)
     try {
-      await onCreate({
-        query,
-        provider,
-        max_steps: Number(maxSteps || 8),
-        stream: false,
-      })
-      setQuery("")
+      await onSave(Math.max(1, Math.min(parsed, 40)))
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <form className="form-grid" onSubmit={submit}>
-      <label>
-        <span>{translate("taskFormPrompt")}</span>
-        <textarea
-          ref={textAreaRef}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={translate("taskFormPlaceholder")}
-        />
-      </label>
-      <div className="form-row">
-        <label>
-          <span>{translate("taskFormProvider")}</span>
-          <select value={provider} onChange={(event) => setProvider(event.target.value)}>
-            {PROVIDER_OPTIONS.map((item) => (
-              <option value={item} key={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>{translate("taskFormMaxSteps")}</span>
-          <input
-            type="number"
-            min="1"
-            max="40"
-            value={maxSteps}
-            onChange={(event) => setMaxSteps(event.target.value)}
-            aria-label={translate("taskFormMaxSteps")}
-          />
-        </label>
+    <section className="panel">
+      <div className="panel-titlebar">
+        <div>
+          <h2>{translate("maxStepsTitle")}</h2>
+          <span className="hint">
+            {translate("maxStepsCurrentSource")}:{" "}
+            {maxStepsConfig?.source === "database"
+              ? translate("maxStepsSourceDb")
+              : translate("maxStepsSourceEnv")}
+          </span>
+        </div>
+        <button type="button" className="btn btn-compact" onClick={onRefresh}>
+          {translate("sidebarQuickRefreshMaxSteps")}
+        </button>
       </div>
-      <button className="btn" type="submit" disabled={busy || !query.trim()}>
-        {busy ? translate("taskFormCreating") : translate("taskFormCreate")}
-      </button>
-    </form>
-  )
-}
-
-function CreateTaskDialog({ open, onClose, onCreate, focusSignal, translate }) {
-  if (!open) return null
-
-  return (
-    <div
-      className="task-create-overlay"
-      role="dialog"
-      aria-modal="true"
-      tabIndex={-1}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          onClose()
-        }
-      }}
-      onClick={onClose}
-    >
-      <section className="panel task-create-dialog" onClick={(event) => event.stopPropagation()}>
-        <div className="panel-titlebar">
-          <h2>{translate("taskFormTitle")}</h2>
-          <button type="button" className="btn btn-compact" onClick={onClose}>
-            {translate("dialogClose")}
+      <div className="panel-body">
+        <form className="form-grid" onSubmit={submit}>
+          <label>
+            <span>{translate("maxStepsCurrent")}</span>
+            <input type="text" readOnly value={maxStepsConfig ? maxStepsConfig.max_steps : ""} />
+          </label>
+          <label>
+            <span>{translate("maxStepsSet")}</span>
+            <input type="number" min="1" max="40" value={value} onChange={(event) => setValue(event.target.value)} />
+          </label>
+          <button type="submit" className="btn" disabled={busy || !value}>
+            {busy ? translate("maxStepsSaving") : translate("maxStepsSave")}
           </button>
-        </div>
-        <div className="panel-body">
-          <CreateTaskForm onCreate={onCreate} focusSignal={focusSignal} translate={translate} />
-        </div>
-      </section>
-    </div>
+        </form>
+        <div className="hint">{translate("maxStepsHint")}</div>
+      </div>
+    </section>
   )
 }
 
@@ -837,12 +1241,7 @@ function RetentionManager({ retentionConfig, onSave, onRefresh, translate }) {
           </label>
           <label>
             <span>{translate("retentionSetDays")}</span>
-            <input
-              type="number"
-              min="0"
-              value={days}
-              onChange={(event) => setDays(event.target.value)}
-            />
+            <input type="number" min="0" value={days} onChange={(event) => setDays(event.target.value)} />
           </label>
           <button type="submit" className="btn" disabled={busy || !days}>
             {busy ? translate("retentionSaving") : translate("retentionSave")}
@@ -854,118 +1253,9 @@ function RetentionManager({ retentionConfig, onSave, onRefresh, translate }) {
   )
 }
 
-function AdminSidebar({
-  activeMenu,
-  onChangeMenu,
-  systemTime,
-  translate,
-}) {
-  return (
-    <aside className="admin-sidebar">
-      <div className="sidebar-brand">
-        <h1>{translate("appTitle")}</h1>
-        <p>{translate("appSubtitle")}</p>
-      </div>
-      <div className="sidebar-groups" aria-label={translate("menuAriaLabel")}>
-        {MENU_GROUPS.map((group) => (
-          <section className="sidebar-group" key={group.key}>
-            <p className="sidebar-group-title">{translate(group.labelKey)}</p>
-            <nav className="sidebar-menu">
-              {group.items.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`sidebar-menu-item ${activeMenu === item.key ? "active" : ""}`}
-                  onClick={() => onChangeMenu(item.key)}
-                >
-                  {translate(item.labelKey)}
-                </button>
-              ))}
-            </nav>
-          </section>
-        ))}
-      </div>
-      <div className="sidebar-system">
-        <p className="sidebar-system-title">{translate("sidebarSystemTitle")}</p>
-        <p>
-          {translate("sidebarSystemTime")}:
-          <strong>{systemTime ? formatTime(systemTime) : "-"}</strong>
-        </p>
-        <p className="sidebar-system-hint">{translate("apiHint")}</p>
-      </div>
-    </aside>
-  )
-}
-
-function HeaderStats({
-  health,
-  activeMenu,
-  tasks,
-  locale,
-  localeOptions,
-  setLocale,
-  translate,
-}) {
-  return (
-    <header className="admin-header">
-      <div className="header-left">
-        <p className="breadcrumb">
-          {activeMenu === "tasks" ? translate("menuTasks") : translate("menuBackup")}
-        </p>
-        <h2>{activeMenu === "tasks" ? translate("taskSectionTitle") : translate("backupSectionTitle")}</h2>
-      </div>
-      <div className="header-right">
-        <div className="metric-item">
-          <em>{translate("healthLabel")}:</em>
-          <strong className={`status ${getHealthClass(health)}`}>{getHealthText(health, translate)}</strong>
-        </div>
-        <div className="metric-item">
-          <em>{translate("headerTaskCount")}:</em>
-          <strong>{tasks.length}</strong>
-        </div>
-        <label className="lang-switch">
-          <span>{translate("languageLabel")}</span>
-          <select
-            value={locale}
-            className="lang-select"
-            onChange={(event) => setLocale(event.target.value)}
-          >
-            {localeOptions.map((item) => (
-              <option value={item.value} key={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-    </header>
-  )
-}
-
-function StatsBar({ stats, translate }) {
-  return (
-    <section className="stats-grid">
-      <article className="stat-card">
-        <p>{translate("metricTotal")}</p>
-        <strong>{stats.total}</strong>
-      </article>
-      <article className="stat-card">
-        <p>{translate("metricRunning")}</p>
-        <strong>{stats.running}</strong>
-      </article>
-      <article className="stat-card">
-        <p>{translate("metricSuccess")}</p>
-        <strong>{stats.success}</strong>
-      </article>
-      <article className="stat-card">
-        <p>{translate("metricFailed")}</p>
-        <strong>{stats.failed}</strong>
-      </article>
-    </section>
-  )
-}
-
 export default function App() {
+  const [sessions, setSessions] = useState([])
+  const [activeSessionId, setActiveSessionId] = useState("")
   const [tasks, setTasks] = useState([])
   const [selectedId, setSelectedId] = useState("")
   const [selectedTask, setSelectedTask] = useState(null)
@@ -974,101 +1264,56 @@ export default function App() {
   const [isLoadingEvents, setIsLoadingEvents] = useState(false)
   const [error, setError] = useState("")
   const [retentionConfig, setRetentionConfig] = useState(null)
+  const [maxStepsConfig, setMaxStepsConfig] = useState(null)
   const [health, setHealth] = useState("unknown")
+  const [models, setModels] = useState([])
   const [activeMenu, setActiveMenu] = useState("tasks")
   const [taskTab, setTaskTab] = useState("detail")
-  const [taskPageMode, setTaskPageMode] = useState("list")
   const [locale, setLocale] = useState(getDefaultLocale())
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set())
   const [taskPage, setTaskPage] = useState(1)
   const [systemTime, setSystemTime] = useState(() => new Date())
   const [taskSearchQuery, setTaskSearchQuery] = useState("")
-  const [isTaskCreateOpen, setIsTaskCreateOpen] = useState(false)
-  const [createFormFocusSignal, setCreateFormFocusSignal] = useState(0)
-  const [taskColumns, setTaskColumns] = useState(TASK_COLUMNS)
-  const [taskSortBy, setTaskSortBy] = useState(TASK_SORT_DEFAULT)
-  const [taskSortDirection, setTaskSortDirection] = useState(TASK_SORT_DEFAULT_DIR)
-  const [draggingTaskColumn, setDraggingTaskColumn] = useState("")
-  const [taskColumnDragTarget, setTaskColumnDragTarget] = useState("")
 
   const translate = useCallback((key) => t(locale, key), [locale])
   const localeOptions = useMemo(() => getLocaleOptions(locale), [locale])
 
-  const taskStats = useMemo(() => {
-    let running = 0
-    let success = 0
-    let failed = 0
-
-    tasks.forEach((task) => {
-      const statusClass = getTaskStatusClass(task.status)
-      if (statusClass === "running") {
-        running += 1
-      } else if (statusClass === "success") {
-        success += 1
-      } else if (statusClass === "failed") {
-        failed += 1
-      }
-    })
-
-    return {
-      total: tasks.length,
-      running,
-      success,
-      failed,
-    }
-  }, [tasks])
+  const activeSessionRef = useRef(activeSessionId)
+  const selectedIdRef = useRef(selectedId)
+  activeSessionRef.current = activeSessionId
+  selectedIdRef.current = selectedId
+  const nextOffsetRef = useRef(0)
+  const isRunningRef = useRef(false)
 
   const taskResult = useMemo(() => getTaskResult(selectedTask, events), [selectedTask, events])
-  const taskSearchValue = taskSearchQuery.trim().toLowerCase()
 
+  const taskSearchValue = taskSearchQuery.trim().toLowerCase()
   const filteredTasks = useMemo(() => {
     if (!taskSearchValue) return tasks
     return tasks.filter((task) => {
-      const matchText = [
-        task.task_id,
-        task.provider,
-        task.status,
-        task.query,
-      ].join(" ").toLowerCase()
+      const matchText = [task.task_id, task.provider, task.status, task.query, task.model_name]
+        .join(" ")
+        .toLowerCase()
       return matchText.includes(taskSearchValue)
     })
   }, [tasks, taskSearchValue])
 
-  const sortedTasks = useMemo(() => {
-    const rows = [...filteredTasks]
-    const directionMultiplier = taskSortDirection === "asc" ? 1 : -1
-
-    rows.sort((left, right) => {
-      const leftValue = getTaskListValue(left, taskSortBy)
-      const rightValue = getTaskListValue(right, taskSortBy)
-      return compareTaskValues(leftValue, rightValue) * directionMultiplier
-    })
-
-    return rows
-  }, [filteredTasks, taskSortBy, taskSortDirection])
-
   const totalTaskPages = useMemo(
-    () => Math.max(1, Math.ceil(sortedTasks.length / TASK_PAGE_SIZE)),
-    [sortedTasks.length]
+    () => Math.max(1, Math.ceil(filteredTasks.length / TASK_PAGE_SIZE)),
+    [filteredTasks.length]
   )
   const currentTaskPage = Math.min(Math.max(taskPage, 1), totalTaskPages)
 
   const pagedTasks = useMemo(
     () =>
-      sortedTasks.slice(
-        (currentTaskPage - 1) * TASK_PAGE_SIZE,
-        currentTaskPage * TASK_PAGE_SIZE
-      ),
-    [sortedTasks, currentTaskPage]
+      filteredTasks.slice((currentTaskPage - 1) * TASK_PAGE_SIZE, currentTaskPage * TASK_PAGE_SIZE),
+    [filteredTasks, currentTaskPage]
   )
 
   const isAllPageSelected = useMemo(
     () => pagedTasks.length > 0 && pagedTasks.every((item) => selectedTaskIds.has(item.task_id)),
     [pagedTasks, selectedTaskIds]
   )
-
-  const nextOffsetRef = useRef(0)
-  const isRunningRef = useRef(false)
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -1085,60 +1330,55 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    setTaskPage(currentTaskPage)
-  }, [currentTaskPage, totalTaskPages])
-
-  useEffect(() => {
     setTaskPage(1)
-  }, [taskSearchValue, taskSortBy, taskSortDirection, taskColumns, totalTaskPages])
+  }, [taskSearchValue, totalTaskPages, activeSessionId])
 
   useEffect(() => {
-    if (activeMenu !== "tasks") return
-    const taskIdSet = new Set(tasks.map((task) => task.task_id))
+    const idSet = new Set(tasks.map((task) => task.task_id))
     setSelectedTaskIds((prev) => {
       const next = new Set()
+      let changed = false
       prev.forEach((id) => {
-        if (taskIdSet.has(id)) {
-          next.add(id)
-        }
+        if (idSet.has(id)) next.add(id)
+        else changed = true
       })
-      if (next.size === prev.size) {
-        let unchanged = true
-        prev.forEach((id) => {
-          if (!next.has(id)) {
-            unchanged = false
-          }
-        })
-        if (unchanged) {
-          return prev
-        }
-      }
+      if (!changed && next.size === prev.size) return prev
       return next
     })
-  }, [activeMenu, tasks])
+  }, [tasks])
 
   const refreshTasks = useCallback(async () => {
-    const list = await fetchTasks()
+    const sid = activeSessionRef.current
+    if (!sid) return
+    const list = await fetchTasks(sid)
     setTasks(list)
-
+    const current = selectedIdRef.current
     if (list.length === 0) {
       setSelectedId("")
-      setTaskPageMode("list")
-      return
-    }
-
-    if (!selectedId || !list.some((item) => item.task_id === selectedId)) {
+    } else if (!current || !list.some((item) => item.task_id === current)) {
       setSelectedId(list[0].task_id)
     }
-  }, [selectedId])
+  }, [])
 
   const refreshTask = useCallback(async (taskId) => {
-    const target = taskId || selectedId
-    if (!target) return
+    const target = taskId || selectedIdRef.current
+    if (!target) return null
     const task = await fetchTask(target)
     setSelectedTask(task)
     return task
-  }, [selectedId])
+  }, [])
+
+  const refreshModels = useCallback(async () => {
+    const list = await fetchModels()
+    setModels(list)
+    return list
+  }, [])
+
+  const refreshSessions = useCallback(async () => {
+    const list = await fetchSessions()
+    setSessions(list)
+    return list
+  }, [])
 
   const refreshRetention = useCallback(async () => {
     const config = await fetchRetentionConfig()
@@ -1155,7 +1395,7 @@ export default function App() {
   }, [])
 
   const loadEvents = useCallback(async (taskId, reset = false, taskStatus = null, force = false) => {
-    const target = taskId || selectedId
+    const target = taskId || selectedIdRef.current
     const status = taskStatus ?? selectedTask?.status
 
     if (!force && status && !isTaskRunningStatus(status)) {
@@ -1188,7 +1428,7 @@ export default function App() {
       setIsLoadingEvents(false)
       isRunningRef.current = false
     }
-  }, [selectedId, selectedTask?.status, translate])
+  }, [selectedTask?.status, translate])
 
   const selectTask = useCallback(
     (taskId) => {
@@ -1199,11 +1439,117 @@ export default function App() {
       setHasMoreEvents(false)
       setError("")
       setTaskTab("detail")
-      setTaskPageMode("detail")
       refreshTask(taskId)
       loadEvents(taskId, true, null, true)
     },
     [loadEvents, refreshTask]
+  )
+
+  const selectSession = useCallback(
+    async (sessionId) => {
+      setActiveSessionId(sessionId)
+      setSelectedId("")
+      setSelectedTask(null)
+      setEvents([])
+      nextOffsetRef.current = 0
+      setHasMoreEvents(false)
+      setTaskPage(1)
+      setError("")
+      try {
+        const list = await fetchTasks(sessionId)
+        setTasks(list)
+        if (list.length > 0) {
+          setSelectedId(list[0].task_id)
+        } else {
+          setSelectedId("")
+        }
+      } catch (sessionError) {
+        setError(sessionError?.message || translate("errorLoadFailed"))
+      }
+    },
+    [translate]
+  )
+
+  const changeTaskPage = useCallback(
+    (nextPage) => {
+      if (nextPage < 1 || nextPage > totalTaskPages) return
+      setTaskPage(nextPage)
+    },
+    [totalTaskPages]
+  )
+
+  const createNewSession = useCallback(
+    async (name) => {
+      try {
+        const created = await createSession(name)
+        await refreshSessions()
+        if (created?.session_id) {
+          await selectSession(created.session_id)
+        }
+      } catch (sessionError) {
+        setError(sessionError?.message || translate("errorLoadFailed"))
+      }
+    },
+    [refreshSessions, selectSession, translate]
+  )
+
+  const renameSessionHandler = useCallback(
+    async (sessionId, name) => {
+      try {
+        await renameSession(sessionId, name)
+        await refreshSessions()
+      } catch (sessionError) {
+        setError(sessionError?.message || translate("errorLoadFailed"))
+      }
+    },
+    [refreshSessions, translate]
+  )
+
+  const deleteSessionHandler = useCallback(
+    async (sessionId) => {
+      if (!window.confirm(translate("sessionDeleteConfirm"))) return
+      try {
+        const list = await fetchSessions()
+        if (list.length <= 1) {
+          setError(translate("sessionDeleteLast"))
+          return
+        }
+        await deleteSession(sessionId)
+        const nextList = await fetchSessions()
+        setSessions(nextList)
+        if (sessionId === activeSessionRef.current) {
+          const nextId = nextList[0]?.session_id || ""
+          await selectSession(nextId)
+        }
+      } catch (sessionError) {
+        setError(sessionError?.message || translate("errorLoadFailed"))
+      }
+    },
+    [selectSession, translate]
+  )
+
+  const createNewTask = useCallback(
+    async (payload) => {
+      try {
+        setError("")
+        const result = await createTask({ ...payload, session_id: activeSessionRef.current })
+        if (result?.task_id) {
+          setSelectedId(result.task_id)
+          setEvents([])
+          nextOffsetRef.current = 0
+          setHasMoreEvents(false)
+          setTaskTab("detail")
+          const task = await refreshTask(result.task_id)
+          await loadEvents(result.task_id, true, task?.status, true)
+          await refreshTasks()
+          await refreshSessions()
+        }
+      } catch (createError) {
+        setError(createError?.message || translate("errorUnknown"))
+        throw createError
+      }
+    },
+    [loadEvents, refreshTask, refreshTasks, refreshSessions, translate]
   )
 
   const selectTaskForBatch = useCallback((taskId) => {
@@ -1222,166 +1568,77 @@ export default function App() {
     setSelectedTaskIds((prev) => {
       const next = new Set(prev)
       if (isAllPageSelected) {
-        pagedTasks.forEach((task) => {
-          next.delete(task.task_id)
-        })
+        pagedTasks.forEach((task) => next.delete(task.task_id))
       } else {
-        pagedTasks.forEach((task) => {
-          next.add(task.task_id)
-        })
+        pagedTasks.forEach((task) => next.add(task.task_id))
       }
       return next
     })
   }, [isAllPageSelected, pagedTasks])
 
-  const changeTaskSort = useCallback((columnKey) => {
-    setTaskSortBy((prevBy) => {
-      if (prevBy === columnKey) {
-        setTaskSortDirection((prevDirection) => (prevDirection === "asc" ? "desc" : "asc"))
-        return prevBy
-      }
-      setTaskSortDirection(TASK_SORT_DEFAULT_DIR)
-      return columnKey
-    })
-  }, [])
+  const deleteTaskItem = useCallback(
+    async (taskId) => {
+      if (!taskId) return
+      if (!window.confirm(translate("taskDeleteConfirm"))) return
 
-  const startTaskColumnDrag = useCallback((columnKey) => {
-    setDraggingTaskColumn(columnKey)
-  }, [])
+      try {
+        setError("")
+        await deleteTask(taskId)
+        setSelectedTaskIds((prev) => {
+          const next = new Set(prev)
+          next.delete(taskId)
+          return next
+        })
 
-  const updateTaskColumnDragTarget = useCallback((columnKey) => {
-    if (draggingTaskColumn !== columnKey) {
-      setTaskColumnDragTarget(columnKey)
-    }
-  }, [draggingTaskColumn])
+        const taskDeleted = selectedIdRef.current === taskId
+        const nextTasks = tasks.filter((item) => item.task_id !== taskId)
 
-  const endTaskColumnDrag = useCallback(() => {
-    setDraggingTaskColumn("")
-    setTaskColumnDragTarget("")
-  }, [])
-
-  const dropTaskColumn = useCallback(
-    (columnKey) => {
-      if (!draggingTaskColumn || draggingTaskColumn === columnKey) {
-        endTaskColumnDrag()
-        return
-      }
-
-      setTaskColumns((prev) => {
-        const next = [...prev]
-        const sourceIndex = next.findIndex((item) => item.key === draggingTaskColumn)
-        const targetIndex = next.findIndex((item) => item.key === columnKey)
-        if (sourceIndex < 0 || targetIndex < 0) {
-          return prev
+        if (taskDeleted) {
+          setSelectedTask(null)
+          setEvents([])
+          nextOffsetRef.current = 0
+          setHasMoreEvents(false)
+          if (nextTasks.length > 0) {
+            const nextId = nextTasks[0].task_id
+            setSelectedId(nextId)
+            const task = await refreshTask(nextId)
+            await loadEvents(nextId, true, task?.status, true)
+          } else {
+            setSelectedId("")
+          }
         }
-        const [movedItem] = next.splice(sourceIndex, 1)
-        next.splice(targetIndex, 0, movedItem)
-        return next
-      })
-      endTaskColumnDrag()
+
+        await refreshTasks()
+      } catch (deleteError) {
+        setError(deleteError?.message || translate("errorUnknown"))
+      }
     },
-    [draggingTaskColumn, endTaskColumnDrag]
+    [loadEvents, refreshTask, refreshTasks, tasks, translate]
   )
-
-  const openCreateDialog = useCallback(() => {
-    setCreateFormFocusSignal((count) => count + 1)
-    setIsTaskCreateOpen(true)
-  }, [])
-
-  const closeCreateDialog = useCallback(() => {
-    setIsTaskCreateOpen(false)
-  }, [])
-
-  const createNewTask = useCallback(async (payload) => {
-    try {
-      setError("")
-      const result = await createTask(payload)
-      if (result?.task_id) {
-        setSelectedId(result.task_id)
-        setEvents([])
-        nextOffsetRef.current = 0
-        setHasMoreEvents(false)
-        setTaskTab("detail")
-        setTaskPageMode("detail")
-        closeCreateDialog()
-        const task = await refreshTask(result.task_id)
-        await loadEvents(result.task_id, true, task?.status, true)
-      }
-      await refreshTasks()
-    } catch (createError) {
-      setError(createError?.message || translate("errorUnknown"))
-    }
-  }, [closeCreateDialog, loadEvents, refreshTask, refreshTasks, translate])
-
-  const deleteTaskItem = useCallback(async (taskId) => {
-    if (!taskId) return
-    if (!window.confirm(translate("taskDeleteConfirm"))) return
-
-    try {
-      setError("")
-      await deleteTask(taskId)
-      setSelectedTaskIds((prev) => {
-        const next = new Set(prev)
-        next.delete(taskId)
-        return next
-      })
-
-      const taskDeleted = selectedId === taskId
-      const nextTasks = tasks.filter((item) => item.task_id !== taskId)
-
-      if (taskDeleted) {
-        setSelectedTask(null)
-        setEvents([])
-        nextOffsetRef.current = 0
-        setHasMoreEvents(false)
-        setTaskTab("detail")
-
-        if (nextTasks.length > 0) {
-          const nextId = nextTasks[0].task_id
-          setTaskPageMode("detail")
-          setSelectedId(nextId)
-          const task = await refreshTask(nextId)
-          await loadEvents(nextId, true, task?.status, true)
-        } else {
-          setSelectedId("")
-          setTaskPageMode("list")
-        }
-      }
-
-      await refreshTasks()
-    } catch (deleteError) {
-      setError(deleteError?.message || translate("errorUnknown"))
-    }
-  }, [refreshTask, refreshTasks, selectedId, tasks, translate, loadEvents, selectedTaskIds])
 
   const deleteTaskSelection = useCallback(async () => {
     const ids = Array.from(selectedTaskIds)
     if (ids.length === 0) return
-
     if (!window.confirm(`${translate("taskListBatchDeleteConfirm")} (${ids.length})`)) return
 
     try {
       setError("")
-      const idSet = new Set(ids)
       await Promise.all(ids.map((taskId) => deleteTask(taskId)))
       setSelectedTaskIds(new Set())
 
-      if (selectedId && idSet.has(selectedId)) {
-        const remaining = tasks.filter((task) => !idSet.has(task.task_id))
+      if (selectedIdRef.current && ids.includes(selectedIdRef.current)) {
+        const remaining = tasks.filter((task) => !ids.includes(task.task_id))
         setSelectedTask(null)
         setEvents([])
         nextOffsetRef.current = 0
         setHasMoreEvents(false)
-
         if (remaining.length > 0) {
           const nextId = remaining[0].task_id
-          setTaskPageMode("detail")
           setSelectedId(nextId)
           const task = await fetchTask(nextId)
           await loadEvents(nextId, true, task?.status, true)
         } else {
           setSelectedId("")
-          setTaskPageMode("list")
         }
       }
 
@@ -1389,42 +1646,150 @@ export default function App() {
     } catch (deleteError) {
       setError(deleteError?.message || translate("errorUnknown"))
     }
-  }, [loadEvents, refreshTasks, selectedId, selectedTaskIds, tasks, translate])
+  }, [loadEvents, refreshTasks, selectedTaskIds, tasks, translate])
 
-  const changeTaskPage = useCallback((nextPage) => {
-    if (nextPage < 1 || nextPage > totalTaskPages) return
-    setTaskPage(nextPage)
-  }, [totalTaskPages])
+  const createModelHandler = useCallback(
+    async (payload) => {
+      try {
+        await createModel(payload)
+        await refreshModels()
+      } catch (modelError) {
+        setError(modelError?.message || translate("errorUnknown"))
+        throw modelError
+      }
+    },
+    [refreshModels, translate]
+  )
 
-  const updateRetention = useCallback(async (daysValue) => {
-    try {
-      const config = await updateRetentionConfig(daysValue)
-      setRetentionConfig(config)
-    } catch (retentionError) {
-      setError(retentionError?.message || translate("errorUnknown"))
-    }
-  }, [translate])
+  const updateModelHandler = useCallback(
+    async (modelId, payload) => {
+      try {
+        await updateModel(modelId, payload)
+        await refreshModels()
+      } catch (modelError) {
+        setError(modelError?.message || translate("errorUnknown"))
+        throw modelError
+      }
+    },
+    [refreshModels, translate]
+  )
+
+  const deleteModelHandler = useCallback(
+    async (modelId) => {
+      try {
+        await deleteModel(modelId)
+        await refreshModels()
+      } catch (modelError) {
+        setError(modelError?.message || translate("errorUnknown"))
+      }
+    },
+    [refreshModels, translate]
+  )
+
+  const updateRetention = useCallback(
+    async (daysValue) => {
+      try {
+        const config = await updateRetentionConfig(daysValue)
+        setRetentionConfig(config)
+      } catch (retentionError) {
+        setError(retentionError?.message || translate("errorUnknown"))
+      }
+    },
+    [translate]
+  )
+
+  const refreshMaxSteps = useCallback(async () => {
+    const config = await fetchMaxStepsConfig()
+    setMaxStepsConfig(config)
+    return config
+  }, [])
+
+  const updateMaxSteps = useCallback(
+    async (stepsValue) => {
+      try {
+        const config = await updateMaxStepsConfig(stepsValue)
+        setMaxStepsConfig(config)
+      } catch (maxStepsError) {
+        setError(maxStepsError?.message || translate("errorUnknown"))
+      }
+    },
+    [translate]
+  )
 
   useEffect(() => {
-    if (activeMenu === "tasks") {
-      refreshTasks().catch((err) => setError(err?.message || translate("errorLoadFailed")))
+    let cancelled = false
+    const loadAll = async () => {
+      try {
+        const sessionList = await fetchSessions()
+        if (cancelled) return
+        setSessions(sessionList)
+        const modelList = await fetchModels()
+        if (cancelled) return
+        setModels(modelList)
+
+        const sid = activeSessionRef.current || (sessionList[0]?.session_id ?? "")
+        if (sid) {
+          if (sid !== activeSessionRef.current) setActiveSessionId(sid)
+          const taskList = await fetchTasks(sid)
+          if (cancelled) return
+          setTasks(taskList)
+          if (taskList.length > 0) {
+            const current = selectedIdRef.current
+            if (!current || !taskList.some((item) => item.task_id === current)) {
+              setSelectedId(taskList[0].task_id)
+            }
+          } else {
+            setSelectedId("")
+          }
+        }
+      } catch (loadError) {
+        if (!cancelled) setError(loadError?.message || translate("errorLoadFailed"))
+      }
     }
-    refreshRetention().catch((err) => setError(err?.message || translate("errorLoadFailed")))
+
+    loadAll().catch((loadError) => setError(loadError?.message || translate("errorLoadFailed")))
+    refreshRetention().catch((retentionError) =>
+      setError(retentionError?.message || translate("errorLoadFailed"))
+    )
+    refreshMaxSteps().catch((maxStepsError) =>
+      setError(maxStepsError?.message || translate("errorLoadFailed"))
+    )
     refreshHealth().catch(() => {})
 
     const timer = setInterval(() => {
-      refreshRetention().catch((err) => setError(err?.message || translate("errorLoadFailed")))
       refreshHealth().catch(() => {})
+      refreshRetention().catch((retentionError) =>
+        setError(retentionError?.message || translate("errorLoadFailed"))
+      )
       if (activeMenu === "tasks") {
-        refreshTasks().catch((err) => setError(err?.message || translate("errorLoadFailed")))
+        refreshTasks().catch((tasksError) => setError(tasksError?.message || translate("errorLoadFailed")))
+      }
+      if (activeMenu === "models") {
+        refreshModels().catch(() => {})
+      }
+      if (activeMenu === "config") {
+        refreshMaxSteps().catch(() => {})
       }
     }, 5000)
 
-    return () => clearInterval(timer)
-  }, [activeMenu, refreshRetention, refreshHealth, refreshTasks, translate])
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [activeMenu, refreshHealth, refreshMaxSteps, refreshModels, refreshRetention, refreshTasks, translate])
 
   useEffect(() => {
-    if (taskPageMode !== "detail" || !selectedId || activeMenu !== "tasks") return
+    if (!selectedId || activeMenu !== "tasks") return
+
+    const init = async () => {
+      const task = await refreshTask(selectedId)
+      await loadEvents(selectedId, true, task?.status, true)
+    }
+    init().catch((loadError) => setError(loadError?.message || translate("errorLoadFailed")))
+  }, [activeMenu, selectedId, loadEvents, refreshTask, translate])
+
+  useEffect(() => {
+    if (!selectedId || activeMenu !== "tasks") return
 
     const timer = setInterval(() => {
       refreshTask(selectedId)
@@ -1440,115 +1805,111 @@ export default function App() {
     return () => clearInterval(timer)
   }, [activeMenu, selectedId, loadEvents, refreshTask])
 
-  useEffect(() => {
-    if (taskPageMode !== "detail" || !selectedId || activeMenu !== "tasks") return
-
-    const init = async () => {
-      const task = await refreshTask(selectedId)
-      await loadEvents(selectedId, true, task?.status, true)
-    }
-    init().catch((err) => setError(err?.message || translate("errorLoadFailed")))
-  }, [activeMenu, selectedId, loadEvents, refreshTask, taskPageMode, translate])
-
   return (
     <div className="admin-root">
-      <AdminSidebar
+      <TopBar
         activeMenu={activeMenu}
         onChangeMenu={(menu) => {
           setActiveMenu(menu)
           setTaskTab("detail")
-          setTaskPageMode("list")
-          if (menu !== "tasks") {
-            setIsTaskCreateOpen(false)
-          }
         }}
+        health={health}
+        tasks={tasks}
+        locale={locale}
+        localeOptions={localeOptions}
+        setLocale={setLocale}
         systemTime={systemTime}
         translate={translate}
       />
-      <section className="admin-workspace">
-        <HeaderStats
-          health={health}
-          activeMenu={activeMenu}
-          tasks={tasks}
-          locale={locale}
-          localeOptions={localeOptions}
-          setLocale={setLocale}
-          translate={translate}
-        />
-        {error && <div className="global-error">{error}</div>}
-        <main className="admin-content">
-          {activeMenu === "tasks" ? (
-            <>
-              {taskPageMode === "list" ? (
-                <>
-                  <StatsBar stats={taskStats} translate={translate} />
-                  <TaskList
-                    columns={taskColumns}
-                    sortBy={taskSortBy}
-                    sortDirection={taskSortDirection}
-                    draggingColumn={draggingTaskColumn}
-                    tasks={pagedTasks}
-                    selectedId={selectedId}
-                    selectedTaskIds={selectedTaskIds}
-                    isAllPageSelected={isAllPageSelected}
-                    onSelect={selectTask}
-                    onSelectOne={selectTaskForBatch}
-                    onSelectAllPage={selectAllPageForBatch}
-                    onSort={changeTaskSort}
-                    onAddTask={openCreateDialog}
-                    onColumnDragStart={startTaskColumnDrag}
-                    onColumnDragOver={updateTaskColumnDragTarget}
-                    onColumnDrop={dropTaskColumn}
-                    onColumnDragEnd={endTaskColumnDrag}
-                    dragTargetColumn={taskColumnDragTarget}
-                    onRefresh={refreshTasks}
-                    taskSearchQuery={taskSearchQuery}
-                    onTaskSearch={setTaskSearchQuery}
-                    onDelete={deleteTaskItem}
-                    onBatchDelete={deleteTaskSelection}
-                    page={currentTaskPage}
-                    totalPages={totalTaskPages}
-                    onPageChange={changeTaskPage}
-                    translate={translate}
-                  />
-                </>
-              ) : (
-                <TaskDetailPage
-                  task={selectedTask}
-                  taskResult={taskResult}
-                  taskTab={taskTab}
-                  setTaskTab={setTaskTab}
-                  events={events}
-                  hasMoreEvents={hasMoreEvents}
-                  isLoadingEvents={isLoadingEvents}
-                  onLoadMore={() => loadEvents(selectedId, false, null, true)}
-                  onBack={() => setTaskPageMode("list")}
-                  translate={translate}
-                />
-              )}
-            </>
-          ) : (
+      {error && <div className="global-error">{error}</div>}
+      <main className="admin-content">
+        {activeMenu === "tasks" ? (
+          <div className="task-workspace">
+            <aside className="task-column">
+              <SessionTabs
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                onSelect={selectSession}
+                onCreate={createNewSession}
+                onRename={renameSessionHandler}
+                onDelete={deleteSessionHandler}
+                translate={translate}
+              />
+              <TaskList
+                tasks={pagedTasks}
+                selectedId={selectedId}
+                onSelect={selectTask}
+                onDelete={deleteTaskItem}
+                selectedTaskIds={selectedTaskIds}
+                isAllPageSelected={isAllPageSelected}
+                onSelectOne={selectTaskForBatch}
+                onSelectAllPage={selectAllPageForBatch}
+                onBatchDelete={deleteTaskSelection}
+                onRefresh={refreshTasks}
+                taskSearchQuery={taskSearchQuery}
+                onTaskSearch={setTaskSearchQuery}
+                page={currentTaskPage}
+                totalPages={totalTaskPages}
+                onPageChange={changeTaskPage}
+                translate={translate}
+              />
+              <TaskComposer models={models} onCreate={createNewTask} translate={translate} />
+            </aside>
+            <section className="task-detail-pane">
+              <TaskDetailPage
+                task={selectedTask}
+                taskResult={taskResult}
+                taskTab={taskTab}
+                setTaskTab={setTaskTab}
+                events={events}
+                hasMoreEvents={hasMoreEvents}
+                isLoadingEvents={isLoadingEvents}
+                onLoadMore={() => loadEvents(selectedId, false, null, true)}
+                translate={translate}
+              />
+            </section>
+          </div>
+        ) : activeMenu === "models" ? (
+          <ModelManager
+            models={models}
+            onCreate={createModelHandler}
+            onUpdate={updateModelHandler}
+            onDelete={deleteModelHandler}
+            onRefresh={refreshModels}
+            translate={translate}
+          />
+        ) : activeMenu === "config" ? (
+          <div className="config-stack">
+            <MaxStepsManager
+              maxStepsConfig={maxStepsConfig}
+              onSave={updateMaxSteps}
+              onRefresh={refreshMaxSteps}
+              translate={translate}
+            />
             <RetentionManager
               retentionConfig={retentionConfig}
               onSave={updateRetention}
               onRefresh={() =>
-                refreshRetention().catch((error) => setError(error?.message || translate("errorLoadFailed")))
+                refreshRetention().catch((refreshError) =>
+                  setError(refreshError?.message || translate("errorLoadFailed"))
+                )
               }
               translate={translate}
             />
-          )}
-        </main>
-        <CreateTaskDialog
-          open={isTaskCreateOpen}
-          onClose={closeCreateDialog}
-          onCreate={createNewTask}
-          focusSignal={createFormFocusSignal}
-          translate={translate}
-        />
-      </section>
+          </div>
+        ) : (
+          <RetentionManager
+            retentionConfig={retentionConfig}
+            onSave={updateRetention}
+            onRefresh={() =>
+              refreshRetention().catch((refreshError) =>
+                setError(refreshError?.message || translate("errorLoadFailed"))
+              )
+            }
+            translate={translate}
+          />
+        )}
+      </main>
     </div>
   )
 }
-
-
-

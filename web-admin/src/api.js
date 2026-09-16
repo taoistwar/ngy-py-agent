@@ -25,9 +25,74 @@ async function requestJson(url, options = {}) {
   return payload
 }
 
-export async function fetchTasks() {
-  const data = await requestJson(`${API_BASE}/api/tasks`)
+export async function fetchTasks(sessionId) {
+  const query = sessionId
+    ? `?${new URLSearchParams({ session_id: sessionId }).toString()}`
+    : ""
+  const data = await requestJson(`${API_BASE}/api/tasks${query}`)
   return data.tasks ?? []
+}
+
+export async function fetchSessions() {
+  const data = await requestJson(`${API_BASE}/api/sessions`)
+  return data.sessions ?? []
+}
+
+export async function createSession(name) {
+  return requestJson(`${API_BASE}/api/sessions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name }),
+  })
+}
+
+export async function renameSession(sessionId, name) {
+  return requestJson(`${API_BASE}/api/sessions/${sessionId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name }),
+  })
+}
+
+export async function deleteSession(sessionId) {
+  return requestJson(`${API_BASE}/api/sessions/${sessionId}`, {
+    method: "DELETE",
+  })
+}
+
+export async function fetchModels() {
+  const data = await requestJson(`${API_BASE}/api/models`)
+  return data.models ?? []
+}
+
+export async function createModel(payload) {
+  return requestJson(`${API_BASE}/api/models`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateModel(modelId, payload) {
+  return requestJson(`${API_BASE}/api/models/${modelId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteModel(modelId) {
+  return requestJson(`${API_BASE}/api/models/${modelId}`, {
+    method: "DELETE",
+  })
 }
 
 export async function createTask(payload) {
@@ -74,4 +139,18 @@ export async function updateRetentionConfig(retentionDays) {
 
 export async function fetchHealth() {
   return requestJson(`${API_BASE}/api/healthz`)
+}
+
+export async function fetchMaxStepsConfig() {
+  return requestJson(`${API_BASE}/api/admin/max-steps`)
+}
+
+export async function updateMaxStepsConfig(maxSteps) {
+  return requestJson(`${API_BASE}/api/admin/max-steps`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ max_steps: maxSteps }),
+  })
 }
