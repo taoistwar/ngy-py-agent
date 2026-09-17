@@ -187,6 +187,113 @@
   font-size: 13px;
 }
 
+.session-menu {
+  position: fixed;
+  z-index: 30;
+  min-width: 132px;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #16233f;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+}
+
+.session-menu button {
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  padding: 7px 10px;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.session-menu button:hover {
+  background: rgba(79, 120, 203, 0.28);
+}
+
+.session-menu button.danger {
+  color: #ffbcc4;
+}
+
+.session-menu button.danger:hover {
+  background: rgba(139, 52, 68, 0.4);
+}
+
+.session-history-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(4, 7, 17, 0.72);
+}
+
+.session-history-dialog {
+  width: min(420px, 100%);
+  max-height: min(72vh, 540px);
+  display: flex;
+  flex-direction: column;
+}
+
+.session-history-dialog .panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.session-history-search {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(17, 28, 50, 0.8);
+}
+
+.session-history-search .task-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.session-history-list {
+  display: grid;
+  gap: 6px;
+  overflow: auto;
+  align-content: start;
+}
+
+.session-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #2f4369;
+  border-radius: 9px;
+  background: rgba(18, 31, 58, 0.7);
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.session-history-item:hover {
+  border-color: #4f68b4;
+  background: rgba(72, 102, 173, 0.2);
+}
+
+.session-history-item.active {
+  border-color: #5f80cf;
+  background: rgba(75, 106, 177, 0.32);
+}
+
 .session-task-panel .panel-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -195,7 +302,7 @@
 
 .session-task-body {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 8px;
   min-height: 0;
 }
@@ -363,6 +470,7 @@
   min-width: 0;
   min-height: 0;
   display: grid;
+  overflow: auto;
 }
 
 .model-manager .panel-body {
@@ -779,6 +887,7 @@
   padding: 12px;
   display: grid;
   gap: 7px;
+  min-height: 0;
 }
 
 .global-error {
@@ -1394,10 +1503,6 @@
 }
 
 @media (max-width: 1280px) {
-  .admin-root {
-    grid-template-columns: 220px minmax(0, 1fr);
-  }
-
   .admin-sidebar {
     width: 220px;
     padding: 10px;

@@ -137,6 +137,8 @@ class _SqliteTaskStore:
             self._conn.execute("ALTER TABLE tasks ADD COLUMN model_id TEXT")
         if "mode" not in existing:
             self._conn.execute("ALTER TABLE tasks ADD COLUMN mode TEXT NOT NULL DEFAULT 'build'")
+        if "result" not in existing:
+            self._conn.execute("ALTER TABLE tasks ADD COLUMN result TEXT")
 
     @staticmethod
     def _session_to_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -343,8 +345,8 @@ class _SqliteTaskStore:
             self._conn.execute(
                 """
                 INSERT INTO tasks (
-                    task_id, query, provider, status, created_at, updated_at, session_id, model_id, mode
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    task_id, query, provider, status, created_at, updated_at, session_id, model_id, mode, result
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
@@ -356,6 +358,7 @@ class _SqliteTaskStore:
                     target_session,
                     model_id,
                     mode,
+                    "",
                 ),
             )
             self._conn.execute(
@@ -496,14 +499,14 @@ class _SqliteTaskStore:
                 rows = self._conn.execute(
                     """
                     SELECT t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at,
-                           t.session_id, t.model_id, t.mode, m.name AS model_name,
+                           t.session_id, t.model_id, t.mode, m.name AS model_name, t.result,
                            COUNT(e.event_id) AS event_count
                     FROM tasks t
                     LEFT JOIN events e ON t.task_id = e.task_id
                     LEFT JOIN models m ON m.model_id = t.model_id
                     WHERE t.session_id = ?
                     GROUP BY t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at,
-                             t.session_id, t.model_id, t.mode, m.name
+                             t.session_id, t.model_id, t.mode, m.name, t.result
                     ORDER BY t.created_at DESC
                     """,
                     (session_id,),
@@ -512,13 +515,13 @@ class _SqliteTaskStore:
                 rows = self._conn.execute(
                     """
                     SELECT t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at,
-                           t.session_id, t.model_id, t.mode, m.name AS model_name,
+                           t.session_id, t.model_id, t.mode, m.name AS model_name, t.result,
                            COUNT(e.event_id) AS event_count
                     FROM tasks t
                     LEFT JOIN events e ON t.task_id = e.task_id
                     LEFT JOIN models m ON m.model_id = t.model_id
                     GROUP BY t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at,
-                             t.session_id, t.model_id, t.mode, m.name
+                             t.session_id, t.model_id, t.mode, m.name, t.result
                     ORDER BY t.created_at DESC
                     """
                 ).fetchall()
@@ -535,6 +538,7 @@ class _SqliteTaskStore:
                     "model_name": row["model_name"],
                     "mode": row["mode"],
                     "event_count": int(row["event_count"]),
+                    "result": row["result"] or "",
                 }
                 for row in rows
             ]
@@ -656,17 +660,18 @@ class _SqliteTaskStore:
             )
             self._conn.commit()
 
-    def finish_task(self, task_id: str, success: bool) -> None:
+    def finish_task(self, task_id: str, success: bool, result: str | None = None) -> None:
         with self._lock:
             self._conn.execute(
                 """
                 UPDATE tasks
-                SET status = ?, updated_at = ?
+                SET status = ?, updated_at = ?, result = ?
                 WHERE task_id = ?
                 """,
                 (
                     TaskStatus.SUCCESS if success else TaskStatus.FAILED,
                     datetime.now(UTC).isoformat(),
+                    result if result is not None else "",
                     task_id,
                 ),
             )

@@ -219,9 +219,13 @@ class OpenAIProvider(BaseProvider):
                 "openai package is required for openai-compatible providers."
             ) from exc
 
+        # Ollama and other local OpenAI-compatible servers do not require a
+        # real API key. Default a blank key to a harmless placeholder so the
+        # SDK does not raise a "Missing credentials" error.
+        api_key = config.api_key or "ollama"
         self._client = OpenAI(
             base_url=config.base_url,
-            api_key=config.api_key,
+            api_key=api_key,
         )
 
     def chat_completion(
