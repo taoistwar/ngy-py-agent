@@ -244,15 +244,47 @@ function SessionTabs({ sessions, activeSessionId, onSelect, onCreate, onRename, 
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState("")
   const [renaming, setRenaming] = useState(false)
+  const [renameTargetId, setRenameTargetId] = useState("")
   const [renameValue, setRenameValue] = useState("")
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [menu, setMenu] = useState(null)
+  const [searchText, setSearchText] = useState("")
+  const [searchMode, setSearchMode] = useState("title")
   const addInputRef = useRef(null)
 
   useEffect(() => {
     if (adding) addInputRef.current?.focus()
   }, [adding])
 
-  const beginRename = () => {
-    const current = sessions.find((item) => item.session_id === activeSessionId)
+  const historySessions = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase()
+    if (!keyword) return sessions
+    return sessions.filter((item) => {
+      const title = (item.name || "").toLowerCase()
+      const prompt = (item.query_preview || "").toLowerCase()
+      const answer = (item.result_preview || "").toLowerCase()
+      if (searchMode === "title") return title.includes(keyword)
+      if (searchMode === "prompt") return prompt.includes(keyword)
+      return title.includes(keyword) || prompt.includes(keyword) || answer.includes(keyword)
+    })
+  }, [sessions, searchText, searchMode])
+
+  useEffect(() => {
+    if (!menu) return undefined
+    const closeMenu = () => setMenu(null)
+    window.addEventListener("click", closeMenu)
+    window.addEventListener("contextmenu", closeMenu)
+    window.addEventListener("scroll", closeMenu, true)
+    return () => {
+      window.removeEventListener("click", closeMenu)
+      window.removeEventListener("contextmenu", closeMenu)
+      window.removeEventListener("scroll", closeMenu, true)
+    }
+  }, [menu])
+
+  const beginRename = (sessionId) => {
+    const current = sessions.find((item) => item.session_id === sessionId)
+    setRenameTargetId(sessionId)
     setRenameValue(current?.name || "")
     setRenaming(true)
   }
@@ -267,9 +299,19 @@ function SessionTabs({ sessions, activeSessionId, onSelect, onCreate, onRename, 
 
   const submitRename = () => {
     const value = renameValue.trim()
-    if (!value) return
-    onRename(activeSessionId, value)
+    if (!value || !renameTargetId) return
+    onRename(renameTargetId, value)
     setRenaming(false)
+  }
+
+  const openSessionMenu = (event, sessionId) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setMenu({
+      sessionId,
+      x: Math.min(event.clientX, window.innerWidth - 150),
+      y: Math.min(event.clientY, window.innerHeight - 84),
+    })
   }
 
   return (
@@ -282,20 +324,17 @@ function SessionTabs({ sessions, activeSessionId, onSelect, onCreate, onRename, 
               {translate("sessionAdd")}
             </button>
           )}
-          {activeSessionId && !renaming && (
-            <>
-              <button type="button" className="btn btn-compact" onClick={beginRename}>
-                {translate("sessionRename")}
-              </button>
-              <button
-                type="button"
-                className="btn btn-compact btn-danger"
-                onClick={() => onDelete(activeSessionId)}
-              >
-                {translate("sessionDelete")}
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            className="btn btn-compact"
+            onClick={() => {
+              setSearchText("")
+              setSearchMode("title")
+              setHistoryOpen(true)
+            }}
+          >
+            {translate("sessionHistory")}
+          </button>
         </div>
       </div>
       <div className="panel-body session-tabs-body">
@@ -306,6 +345,7 @@ function SessionTabs({ sessions, activeSessionId, onSelect, onCreate, onRename, 
               type="button"
               className={`session-tab ${item.session_id === activeSessionId ? "active" : ""}`}
               onClick={() => onSelect(item.session_id)}
+              onContextMenu={(event) => openSessionMenu(event, item.session_id)}
             >
               <span className="session-tab-name">{item.name}</span>
               {item.task_count > 0 && <span className="session-tab-count">{item.task_count}</span>}
@@ -364,6 +404,104 @@ function SessionTabs({ sessions, activeSessionId, onSelect, onCreate, onRename, 
           </div>
         )}
       </div>
+      {menu && (
+        <div
+          className="session-menu"
+          style={{ left: menu.x, top: menu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setMenu(null)
+              beginRename(menu.sessionId)
+            }}
+          >
+            {translate("sessionRename")}
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => {
+              setMenu(null)
+              onDelete(menu.sessionId)
+            }}
+          >
+            {translate("sessionDelete")}
+          </button>
+        </div>
+      )}
+      {historyOpen && (
+        <div className="session-history-overlay" onClick={() => setHistoryOpen(false)}>
+          <section
+            className="panel session-history-dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="panel-titlebar">
+              <h2>{translate("sessionHistory")}</h2>
+              <button type="button" className="btn btn-compact" onClick={() => setHistoryOpen(false)}>
+                {translate("dialogClose")}
+              </button>
+            </div>
+            <div className="session-history-search">
+              <input
+                type="text"
+                className="task-search-input"
+                value={searchText}
+                placeholder={translate("sessionSearchPlaceholder")}
+                onChange={(event) => setSearchText(event.target.value)}
+              />
+              <div className="segmented">
+                <button
+                  type="button"
+                  className={`segmented-item ${searchMode === "title" ? "active" : ""}`}
+                  onClick={() => setSearchMode("title")}
+                >
+                  {translate("sessionSearchTitle")}
+                </button>
+                <button
+                  type="button"
+                  className={`segmented-item ${searchMode === "prompt" ? "active" : ""}`}
+                  onClick={() => setSearchMode("prompt")}
+                >
+                  {translate("sessionSearchPrompt")}
+                </button>
+                <button
+                  type="button"
+                  className={`segmented-item ${searchMode === "all" ? "active" : ""}`}
+                  onClick={() => setSearchMode("all")}
+                >
+                  {translate("sessionSearchAll")}
+                </button>
+              </div>
+            </div>
+            <div className="panel-body session-history-list">
+              {historySessions.length === 0 ? (
+                <div className="empty">{translate("sessionHistoryEmpty")}</div>
+              ) : (
+                historySessions.map((item) => (
+                  <button
+                    key={item.session_id}
+                    type="button"
+                    className={`session-history-item ${
+                      item.session_id === activeSessionId ? "active" : ""
+                    }`}
+                    onClick={() => {
+                      setHistoryOpen(false)
+                      onSelect(item.session_id)
+                    }}
+                  >
+                    <span className="session-tab-name">{item.name}</span>
+                    {item.task_count > 0 && (
+                      <span className="session-tab-count">{item.task_count}</span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   )
 }
@@ -420,15 +558,6 @@ function TaskList({
           <div className="empty">{translate("taskNoTasks")}</div>
         ) : (
           <>
-            <div className="session-task-head">
-              <label className="task-select-label">
-                <input type="checkbox" checked={isAllPageSelected} onChange={onSelectAllPage} />
-                {translate("taskListColumnSelect")}
-              </label>
-              <span className="hint">
-                {translate("taskListSelected")}: {selectedCount}
-              </span>
-            </div>
             <div className="session-task-rows">
               {tasks.map((item) => (
                 <div
@@ -499,6 +628,15 @@ function TaskList({
               >
                 {translate("taskListNext")}
               </button>
+            </div>
+            <div className="session-task-head">
+              <label className="task-select-label">
+                <input type="checkbox" checked={isAllPageSelected} onChange={onSelectAllPage} />
+                {translate("taskListColumnSelect")}
+              </label>
+              <span className="hint">
+                {translate("taskListSelected")}: {selectedCount}
+              </span>
             </div>
           </>
         )}
@@ -750,6 +888,8 @@ function TaskDetailPage({ task, taskResult, taskTab, setTaskTab, events, hasMore
 function EventItem({ event, collapsed, onToggle, translate }) {
   const rawPayload = getRawEventPayload(event)
   const jsonBody = safeStringify(rawPayload)
+  const isLlmPayload = event.category === "llm_request" || event.category === "llm_response"
+  const editorHeight = isLlmPayload ? "450px" : "150px"
 
   return (
     <div className="event-card">
@@ -766,7 +906,7 @@ function EventItem({ event, collapsed, onToggle, translate }) {
         <div className="event-body">
           <div className="event-json-editor">
             <MonacoEditor
-              height="240px"
+              height={editorHeight}
               defaultLanguage="json"
               defaultValue={jsonBody}
               options={{
@@ -1154,7 +1294,7 @@ function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }) {
     if (!Number.isFinite(parsed) || parsed < 1) return
     setBusy(true)
     try {
-      await onSave(Math.max(1, Math.min(parsed, 40)))
+      await onSave(Math.max(1, Math.min(parsed, 1000)))
     } finally {
       setBusy(false)
     }
@@ -1184,7 +1324,7 @@ function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }) {
           </label>
           <label>
             <span>{translate("maxStepsSet")}</span>
-            <input type="number" min="1" max="40" value={value} onChange={(event) => setValue(event.target.value)} />
+            <input type="number" min="1" max="1000" value={value} onChange={(event) => setValue(event.target.value)} />
           </label>
           <button type="submit" className="btn" disabled={busy || !value}>
             {busy ? translate("maxStepsSaving") : translate("maxStepsSave")}

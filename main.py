@@ -72,7 +72,7 @@ class RunTaskRequest(BaseModel):
     max_steps: int | None = Field(
         default=None,
         ge=1,
-        le=40,
+        le=1000,
         description="Optional override; omit to use the global REACT_MAX_STEPS config.",
     )
     mode: str = Field(
@@ -105,6 +105,7 @@ class TaskListItemResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     event_count: int
+    result: str | None = None
 
 
 class TaskDetailResponse(BaseModel):
@@ -194,6 +195,8 @@ class SessionItemResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     task_count: int = 0
+    query_preview: str = ""
+    result_preview: str = ""
 
 
 class SessionListResponse(BaseModel):
@@ -390,7 +393,7 @@ def _run_task(
             mode=request.mode,
         )
         _emit_debug(_sink, task_id, "Task finished", {"result": result})
-        monitor_store.finish_task(task_id, success=True)
+        monitor_store.finish_task(task_id, success=True, result=result)
     except Exception as exc:
         _emit_debug(
             _sink,
@@ -404,7 +407,21 @@ def _run_task(
 @app.get("/api/sessions", response_model=SessionListResponse)
 async def list_sessions() -> SessionListResponse:
     sessions = monitor_store.list_sessions()
-    return SessionListResponse(sessions=[SessionItemResponse(**item) for item in sessions])
+    items = []
+    for item in sessions:
+        tasks = monitor_store.list_tasks(session_id=item["session_id"])
+        query_preview = " ".join(str(task.get("query", "")) for task in tasks)
+        result_preview = " ".join(
+            str(task.get("result", "")) for task in tasks if task.get("result")
+        )
+        items.append(
+            SessionItemResponse(
+                **item,
+                query_preview=query_preview,
+                result_preview=result_preview,
+            )
+        )
+    return SessionListResponse(sessions=items)
 
 
 @app.post("/api/sessions", response_model=SessionItemResponse)
@@ -702,12 +719,12 @@ def _load_agent_max_steps_config() -> tuple[int, str]:
         env_steps = int(env_raw)
     except ValueError:
         env_steps = DEFAULT_MAX_STEPS
-    env_steps = max(1, min(env_steps, 40))
+    env_steps = max(1, min(env_steps, 1000))
 
     db_steps = monitor_store.get_agent_max_steps()
     if db_steps is None:
         return env_steps, "env"
-    return max(1, min(db_steps, 40)), "database"
+    return max(1, min(db_steps, 1000)), "database"
 
 
 def _load_env_file() -> None:
@@ -789,7 +806,7 @@ async def get_max_steps_config() -> MaxStepsConfigResponse:
 async def set_max_steps_config(
     payload: MaxStepsConfigRequest,
 ) -> MaxStepsConfigResponse:
-    steps = max(1, min(payload.max_steps, 40))
+    steps = max(1, min(payload.max_steps, 1000))
     monitor_store.set_agent_max_steps(steps)
     global _agent_max_steps
     global _agent_max_steps_source
