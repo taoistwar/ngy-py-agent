@@ -178,15 +178,18 @@ class ToolRegistry:
         return schemas
 
     def execute_tool(self, name: str, arguments: Dict[str, Any]) -> str:
-        """Execute a tool by name with given arguments"""
+        """Execute a tool by name and return its result as a string.
+
+        Tool exceptions are deliberately propagated instead of being converted
+        into an ``{"error": ...}`` payload: callers rely on them to mark the
+        step as failed (see ``agent.agent_loop``), and a "successful" result
+        carrying an error key hides the failure from both the model and the UI.
+        """
         if name not in self.tools:
             return json.dumps({"error": f"Tool '{name}' not found"})
 
-        try:
-            result = self.tools[name]["function"](**arguments)
-            return json.dumps(result) if isinstance(result, (dict, list)) else str(result)
-        except Exception as e:
-            return json.dumps({"error": str(e)})
+        result = self.tools[name]["function"](**arguments)
+        return json.dumps(result) if isinstance(result, (dict, list)) else str(result)
 
     # Backwards compatible aliases for the previous static-method API.
     get_current_temperature = staticmethod(weather_tools.get_current_temperature)

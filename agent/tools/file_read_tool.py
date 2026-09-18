@@ -29,12 +29,16 @@ BINARY_SNIFF_BYTES = 8192
 
 TEXT_ENCODING = "utf-8"
 
-LINE_NUMBER_SEPARATOR = "| "
+# Line numbers are always emitted and deliberately have no opt-out switch: the
+# model cannot see the real line numbers, so a numberless read turns every later
+# "change line N" reference into guesswork. Saving tokens is not worth that.
+LINE_NUMBER_SEPARATOR = "\t"
 
 READ_FILE_DESCRIPTION = (
     "Read a text file. Paths are resolved against the workspace root when the session "
     "has one and can never escape it; a global allow/deny policy always applies on top. "
-    "Returns the requested line range with a 'N| ' line number prefix. Omit 'limit' to "
+    "Returns the requested line range, each line prefixed with its 1-based line number "
+    "followed by a single tab. Omit 'limit' to "
     "read from 'offset' to the end of the file (rejected when the file is larger than "
     "256KB). Provide 'limit' to read a specific number of lines; the returned text is "
     "rejected when it exceeds the output token budget, so prefer small ranges and "
@@ -54,16 +58,13 @@ READ_FILE_PARAMETERS: Dict[str, Any] = {
         "offset": {
             "type": "integer",
             "minimum": 0,
-            "description": (
-                "1-based line number to start from. Defaults to 1; 0 is treated as 1."
-            ),
+            "description": ("1-based line number to start from. Defaults to 1; 0 is treated as 1."),
         },
         "limit": {
             "type": "integer",
             "minimum": 0,
             "description": (
-                "Number of lines to read. Omit it (or pass 0) to read from 'offset' to "
-                "the end of the file."
+                "Number of lines to read. Omit it (or pass 0) to read from 'offset' to the end of the file."
             ),
         },
     },
@@ -101,9 +102,7 @@ def _ensure_readable_file(path: Path) -> None:
             path=path.as_posix(),
         )
     if _looks_binary(path):
-        raise ReadFileError(
-            "File looks binary; only text files can be read.", path=path.as_posix()
-        )
+        raise ReadFileError("File looks binary; only text files can be read.", path=path.as_posix())
 
 
 def _looks_binary(path: Path) -> bool:
@@ -123,16 +122,13 @@ def _normalize_line_range(offset: Any, limit: Any) -> Tuple[int, Optional[int]]:
         count = int(limit) if limit is not None else None
     except (TypeError, ValueError):
         raise ReadFileError("'limit' must be an integer.") from None
-    if start < 1:
-        start = 1
+    start = max(start, 1)
     if count is not None and count <= 0:
         count = None
     return start, count
 
 
-def _read_slice(
-    path: Path, start: int, count: int, byte_limit: int
-) -> Tuple[list[str], bool, int, int]:
+def _read_slice(path: Path, start: int, count: int, byte_limit: int) -> Tuple[list[str], bool, int, int]:
     """Read ``count`` lines from ``start``.
 
     Returns ``(lines, has_more, used_bytes, scanned_lines)``.
@@ -152,8 +148,7 @@ def _read_slice(
             used += len(raw.encode("utf-8"))
             if used > byte_limit:
                 raise ReadFileError(
-                    "Requested line range is too large to return in one call; "
-                    "narrow 'offset'/'limit' and try again.",
+                    "Requested line range is too large to return in one call; narrow 'offset'/'limit' and try again.",
                     byte_limit=byte_limit,
                 )
             selected.append(raw.rstrip("\r\n"))
@@ -168,8 +163,7 @@ def _read_to_end(path: Path, start: int, byte_limit: int) -> Tuple[list[str], in
         raise ReadFileError(f"Cannot stat file: {exc}", path=path.as_posix()) from exc
     if size > byte_limit:
         raise ReadFileError(
-            "File is too large to read as a whole; request an explicit 'limit' or a "
-            "narrower 'offset'.",
+            "File is too large to read as a whole; request an explicit 'limit' or a narrower 'offset'.",
             file_bytes=size,
             byte_limit=byte_limit,
         )
@@ -185,10 +179,7 @@ def _format_lines(lines: list[str], start: int) -> str:
     if not lines:
         return ""
     width = len(str(start + len(lines) - 1))
-    return "\n".join(
-        f"{number:>{width}}{LINE_NUMBER_SEPARATOR}{line}"
-        for number, line in enumerate(lines, start)
-    )
+    return "\n".join(f"{number:>{width}}{LINE_NUMBER_SEPARATOR}{line}" for number, line in enumerate(lines, start))
 
 
 def _build_result(
@@ -272,9 +263,7 @@ def _read_file_impl(
             **token_check.to_dict(),
         )
 
-    return _build_result(
-        display, start, lines, has_more, used_bytes, total_lines, token_check.to_dict(), content
-    )
+    return _build_result(display, start, lines, has_more, used_bytes, total_lines, token_check.to_dict(), content)
 
 
 def make_read_file_tool(
@@ -289,9 +278,7 @@ def make_read_file_tool(
 
     def read_file(file_path: str, offset: Any = 1, limit: Any = None) -> Dict[str, Any]:
         try:
-            return _read_file_impl(
-                file_path, offset, limit, base_dir, max_tokens, provider, model, config
-            )
+            return _read_file_impl(file_path, offset, limit, base_dir, max_tokens, provider, model, config)
         except ReadFileError as exc:
             return exc.to_dict()
         except AccessDenied as exc:

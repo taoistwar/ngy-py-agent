@@ -2,7 +2,7 @@
 
 Run from the repository root::
 
-    uv run python test/tools/file_tools_test.py -v
+    uv run python test/tools/file_read_tool_test.py -v
 """
 
 import random
@@ -19,7 +19,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from agent.tools.file_access import FileAccessConfig  # noqa: E402
-from agent.tools.file_tools import (  # noqa: E402
+from agent.tools.file_read_tool import (  # noqa: E402
     MAX_FULL_READ_BYTES,
     make_read_file_tool,
 )
@@ -75,8 +75,8 @@ class ReadFileToolTest(unittest.TestCase):
 
         content = self.tool("notes.txt")["content"].splitlines()
 
-        self.assertEqual(content[0], "1| alpha")
-        self.assertEqual(content[1], "2| beta")
+        self.assertEqual(content[0], "1\talpha")
+        self.assertEqual(content[1], "2\tbeta")
 
     def test_offset_past_end_reports_total_lines(self):
         self.write("notes.txt", "alpha\nbeta\n")
