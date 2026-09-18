@@ -27,6 +27,7 @@ class TaskStatus(str, Enum):
     RUNNING = "running"
     SUCCESS = "success"
     FAILED = "failed"
+    STOPPED = "stopped"
 
 
 class TaskEvent(BaseModel):

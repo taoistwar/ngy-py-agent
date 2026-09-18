@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agent.models import (
     EventCategory,
@@ -13,7 +13,12 @@ from agent.models import (
     ToolCallData,
     ToolResultData,
 )
-from agent.modes import build_system_prompt, build_tool_registry
+from agent.modes import (
+    build_system_prompt,
+    build_system_prompt_from_config,
+    build_tool_registry,
+    build_tool_registry_from_names,
+)
 from agent.provider import (
     ProviderConfig,
     build_provider,
@@ -144,6 +149,19 @@ def _tool_fallback_parse(content: str) -> Optional[Tuple[str, Dict[str, Any], st
     return name, args, _new_id()
 
 
+def _with_base_dir(prompt: str, base_dir: Optional[str]) -> str:
+    """Append the workspace root so relative paths resolve against that folder."""
+    directory = (base_dir or "").strip()
+    if not directory:
+        return prompt
+    return (
+        f"{prompt}\n\n## Working directory\n"
+        f"All project tasks run inside the workspace root folder: {directory}\n"
+        "Treat this folder as the base for every relative file path and keep all reads "
+        "and writes inside it."
+    )
+
+
 def _emit(
     event_sink: EventSink | None,
     task_id: str | None,
@@ -174,12 +192,24 @@ def _build_runtime(
     provider_config: Optional[ProviderConfig] = None,
     enable_tools: bool = True,
     mode: str = "build",
+    base_dir: Optional[str] = None,
+    agent_config: Optional[Dict[str, Any]] = None,
 ) -> tuple[str, ToolRegistry, Any, Optional[List[Dict[str, Any]]]]:
     provider_name = canonicalize_provider(provider_name or DEFAULT_PROVIDER)
-    if enable_tools:
-        registry = build_tool_registry(mode)
+    registry_options = {
+        "base_dir": base_dir,
+        "max_tokens": int(getattr(provider_config, "max_input_tokens", 0) or 0),
+        "provider": provider_name,
+        "model": getattr(provider_config, "model", "") or "",
+    }
+    if not enable_tools:
+        registry = ToolRegistry(enabled_tools=[], **registry_options)
+    elif agent_config is not None:
+        registry = build_tool_registry_from_names(
+            agent_config.get("tool_names"), **registry_options
+        )
     else:
-        registry = ToolRegistry(enabled_tools=[])
+        registry = build_tool_registry(mode, **registry_options)
     tool_schemas: Optional[List[Dict[str, Any]]] = None
     if enable_tools:
         try:
@@ -209,12 +239,17 @@ def run_react_loop(
     max_output_tokens: Optional[int] = None,
     thinking_mode: bool = False,
     mode: str = "build",
+    base_dir: Optional[str] = None,
+    agent_config: Optional[Dict[str, Any]] = None,
+    should_stop: Optional[Callable[[], bool]] = None,
 ) -> str:
     _, registry, provider, request_tools = _build_runtime(
         provider_name=provider_name,
         provider_config=provider_config,
         enable_tools=enable_tools,
         mode=mode,
+        base_dir=base_dir,
+        agent_config=agent_config,
     )
 
     if verbose:
@@ -225,11 +260,13 @@ def run_react_loop(
     if initial_messages is not None:
         messages = initial_messages
     else:
-        system_prompt = (
-            build_system_prompt(mode, enable_tools=enable_tools)
-            if enable_tools
-            else "You are a helpful assistant. Answer the user request directly and clearly."
-        )
+        if agent_config is not None:
+            system_prompt = build_system_prompt_from_config(agent_config, enable_tools=enable_tools)
+        elif enable_tools:
+            system_prompt = build_system_prompt(mode, enable_tools=True)
+        else:
+            system_prompt = "You are a helpful assistant. Answer the user request directly and clearly."
+        system_prompt = _with_base_dir(system_prompt, base_dir)
         messages = [
             {
                 "role": "system",
@@ -256,14 +293,21 @@ def run_react_loop(
                 "tools_enabled": enable_tools,
                 "thinking_mode": thinking_mode,
                 "max_output_tokens": max_output_tokens,
+                "base_dir": base_dir,
+                "agent_id": (agent_config or {}).get("agent_id"),
+                "mcp_servers": (agent_config or {}).get("mcp_servers"),
             },
             collapsed=True,
         ),
     )
 
     final_output: Optional[str] = None
+    stopped = False
 
     for step in range(1, max_steps + 1):
+        if should_stop is not None and should_stop():
+            stopped = True
+            break
         if verbose:
             print(f"\n=== ReAct Step {step}/{max_steps} ===")
 
@@ -372,6 +416,9 @@ def run_react_loop(
             break
 
         for name, args, call_id in tool_calls:
+            if should_stop is not None and should_stop():
+                stopped = True
+                break
             call_data = ToolCallData(
                 step=step,
                 name=name,
@@ -441,6 +488,26 @@ def run_react_loop(
             )
             if verbose:
                 print(f"[tool:{name}] {result}")
+
+        if stopped:
+            break
+
+    if stopped:
+        final_output = "Task stopped by user."
+        _emit(
+            event_sink,
+            task_id,
+            TaskEvent(
+                task_id=task_id or "",
+                category=EventCategory.DEBUG,
+                title="ReAct stopped",
+                data={"reason": final_output},
+                collapsed=True,
+            ),
+        )
+        if verbose:
+            print("[warn] loop stopped by user")
+        return final_output
 
     if final_output is None:
         final_output = "Reached maximum reasoning steps without a final answer."

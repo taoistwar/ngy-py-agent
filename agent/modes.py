@@ -29,13 +29,6 @@ SKILLS: Dict[str, Dict[str, str]] = {
 
 AVAILABLE_SKILLS = sorted(SKILLS.keys())
 
-DEFAULT_TOOL_NAMES = [
-    "get_current_temperature",
-    "get_current_time",
-    "convert_currency",
-    "code_interpreter",
-]
-
 MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
     "build": {
         "label": "Build",
@@ -58,7 +51,7 @@ MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
             "not perform side-effecting actions. If the question is ambiguous, state your "
             "assumptions before answering."
         ),
-        "tool_names": ["get_current_time", "code_interpreter"],
+        "tool_names": ["get_current_time", "code_interpreter", "read_file"],
         "skills": ["cite_sources"],
     },
     "plan": {
@@ -86,15 +79,13 @@ def get_mode_config(mode: str) -> Dict[str, Any]:
     return MODE_CONFIGS[mode]
 
 
-def build_system_prompt(mode: str, enable_tools: bool = True) -> str:
-    """Build the full system prompt for a mode, including active skill instructions."""
-    config = get_mode_config(mode)
-    prompt = config["system_prompt"]
+DIRECT_ANSWER_PROMPT = "You are a helpful assistant. Answer the user request directly and clearly."
+
+
+def _compose_prompt(prompt: str, skill_names: Any, enable_tools: bool) -> str:
     if not enable_tools:
-        return (
-            "You are a helpful assistant. Answer the user request directly and clearly."
-        )
-    skills = [SKILLS[name] for name in config.get("skills", []) if name in SKILLS]
+        return DIRECT_ANSWER_PROMPT
+    skills = [SKILLS[name] for name in (skill_names or []) if name in SKILLS]
     if skills:
         lines = ["", "## Active skills"]
         for skill in skills:
@@ -103,10 +94,80 @@ def build_system_prompt(mode: str, enable_tools: bool = True) -> str:
     return prompt
 
 
-def build_tool_registry(mode: str) -> ToolRegistry:
-    """Build a ToolRegistry restricted to the tools allowed for ``mode``."""
+def build_system_prompt_from_config(config: Dict[str, Any], enable_tools: bool = True) -> str:
+    """Build the system prompt from an explicit agent config (prompt + skills)."""
+    return _compose_prompt(
+        str(config.get("system_prompt") or ""),
+        config.get("skills"),
+        enable_tools,
+    )
+
+
+def build_system_prompt(mode: str, enable_tools: bool = True) -> str:
+    """Build the full system prompt for a mode, including active skill instructions."""
     config = get_mode_config(mode)
-    tool_names = config.get("tool_names")
+    return build_system_prompt_from_config(
+        {"system_prompt": config["system_prompt"], "skills": config.get("skills", [])},
+        enable_tools=enable_tools,
+    )
+
+
+def build_tool_registry_from_names(
+    tool_names: Any,
+    base_dir: str | None = None,
+    max_tokens: int = 0,
+    provider: str = "",
+    model: str = "",
+) -> ToolRegistry:
+    """Build a ToolRegistry from an explicit tool-name allow list (``None`` = all tools)."""
+    options = {
+        "base_dir": base_dir,
+        "max_tokens": max_tokens,
+        "provider": provider,
+        "model": model,
+    }
     if tool_names is None:
-        return ToolRegistry()
-    return ToolRegistry(enabled_tools=list(tool_names))
+        return ToolRegistry(**options)
+    return ToolRegistry(enabled_tools=list(tool_names), **options)
+
+
+def build_tool_registry(
+    mode: str,
+    base_dir: str | None = None,
+    max_tokens: int = 0,
+    provider: str = "",
+    model: str = "",
+) -> ToolRegistry:
+    """Build a ToolRegistry restricted to the tools allowed for ``mode``."""
+    return build_tool_registry_from_names(
+        get_mode_config(mode).get("tool_names"),
+        base_dir=base_dir,
+        max_tokens=max_tokens,
+        provider=provider,
+        model=model,
+    )
+
+
+def list_available_tools() -> List[Dict[str, Any]]:
+    """List every registered tool with its description and parameter schema."""
+    registry = ToolRegistry()
+    return [
+        {
+            "name": name,
+            "description": tool.get("description", ""),
+            "parameters": tool.get("parameters") or {},
+        }
+        for name, tool in registry.tools.items()
+    ]
+
+
+def list_available_skills() -> List[Dict[str, str]]:
+    """List every registered skill with its label and instruction block."""
+    return [
+        {
+            "name": name,
+            "label": config.get("label", name),
+            "instruction": config.get("instruction", ""),
+        }
+        for name, config in SKILLS.items()
+    ]

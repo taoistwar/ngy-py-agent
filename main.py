@@ -27,13 +27,18 @@ from agent.models import (
     TaskEvent,
     TaskStatus,
 )
-from agent.provider import ProviderConfig, canonicalize_provider
+from agent import skills as skill_library
+from agent.provider import ProviderConfig, build_provider, canonicalize_provider
+from mcp_api import router as mcp_router
+from mcp_store import MCP_TRANSPORTS
 from task_store import TASK_RETENTION_DEFAULT_DAYS, monitor_store
 from agent.modes import (
     DEFAULT_MODE,
     MODE_CONFIGS,
     SKILLS,
     VALID_MODES,
+    list_available_skills,
+    list_available_tools,
 )
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -61,6 +66,32 @@ _task_retention_source = "env"
 _agent_max_steps = DEFAULT_MAX_STEPS
 _agent_max_steps_source = "env"
 
+_task_stop_events: Dict[str, threading.Event] = {}
+_task_stop_lock = threading.Lock()
+
+
+def _register_task_stop(task_id: str) -> threading.Event:
+    """Register a cooperative stop flag for a running task."""
+    event = threading.Event()
+    with _task_stop_lock:
+        _task_stop_events[task_id] = event
+    return event
+
+
+def _signal_task_stop(task_id: str) -> bool:
+    """Request a running task to stop; returns whether it was registered."""
+    with _task_stop_lock:
+        event = _task_stop_events.get(task_id)
+    if event is None:
+        return False
+    event.set()
+    return True
+
+
+def _clear_task_stop(task_id: str) -> None:
+    with _task_stop_lock:
+        _task_stop_events.pop(task_id, None)
+
 
 class RunTaskRequest(BaseModel):
     """Create task request."""
@@ -75,9 +106,13 @@ class RunTaskRequest(BaseModel):
         le=1000,
         description="Optional override; omit to use the global REACT_MAX_STEPS config.",
     )
+    agent_id: str | None = Field(
+        default=None,
+        description="Configured agent id; falls back to mode / the default agent when omitted.",
+    )
     mode: str = Field(
         default=DEFAULT_MODE,
-        description="Agent mode: build / ask / plan. Each mode has its own prompt, tools and skills.",
+        description="Legacy agent mode (build / ask / plan); used when agent_id is omitted.",
     )
     stream: bool = False
 
@@ -178,7 +213,15 @@ class RetentionConfigResponse(BaseModel):
 class SessionCreateRequest(BaseModel):
     """Create session request."""
 
-    name: str = Field(min_length=1, max_length=120, description="Session name.")
+    name: str | None = Field(
+        default=None,
+        max_length=120,
+        description="Session name; auto-generated from the current time when omitted.",
+    )
+    workspace_id: str | None = Field(
+        default=None,
+        description="Owning workspace id; empty means the session has no workspace.",
+    )
 
 
 class SessionUpdateRequest(BaseModel):
@@ -192,6 +235,7 @@ class SessionItemResponse(BaseModel):
 
     session_id: str
     name: str
+    workspace_id: str | None = None
     created_at: datetime
     updated_at: datetime
     task_count: int = 0
@@ -203,6 +247,113 @@ class SessionListResponse(BaseModel):
     """Session list response."""
 
     sessions: list[SessionItemResponse]
+
+
+class WorkspaceCreateRequest(BaseModel):
+    """Create workspace request."""
+
+    name: str = Field(min_length=1, max_length=120, description="Workspace name.")
+    root_path: str = Field(
+        min_length=1,
+        max_length=1024,
+        description="Workspace root folder; tasks run relative to it.",
+    )
+
+
+class WorkspaceUpdateRequest(BaseModel):
+    """Partial update of a workspace."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    root_path: str | None = Field(default=None, min_length=1, max_length=1024)
+
+
+class WorkspaceItemResponse(BaseModel):
+    """Workspace list item."""
+
+    workspace_id: str
+    name: str
+    root_path: str
+    created_at: datetime
+    updated_at: datetime
+    session_count: int = 0
+
+
+class WorkspaceListResponse(BaseModel):
+    """Workspace list response."""
+
+    workspaces: list[WorkspaceItemResponse]
+
+
+class McpServerConfig(BaseModel):
+    """One MCP server entry configured on an agent.
+
+    The entry is a snapshot resolved from the MCP marketplace. ``mcp_id`` keeps
+    the link back to that marketplace entry so the agent editor can restore the
+    selection; it is absent on entries written before the marketplace existed.
+    """
+
+    name: str = Field(min_length=1, max_length=120, description="MCP server name.")
+    transport: str = Field(default="stdio", max_length=32, description="stdio or sse.")
+    target: str = Field(default="", max_length=1024, description="Command (stdio) or URL (sse).")
+    mcp_id: str | None = Field(default=None, max_length=64, description="Marketplace entry id.")
+
+
+class AgentUpsertRequest(BaseModel):
+    """Create or update an agent configuration."""
+
+    name: str = Field(min_length=1, max_length=120, description="Agent name.")
+    description: str = Field(default="", max_length=2000)
+    system_prompt: str = Field(default="", description="System prompt used for this agent.")
+    tool_names: list[str] | None = Field(
+        default=None,
+        description="Allowed tool names; null means all registered tools.",
+    )
+    skill_names: list[str] = Field(default_factory=list, description="Enabled skill names.")
+    mcp_servers: list[McpServerConfig] = Field(default_factory=list, description="MCP servers.")
+
+
+class AgentUpdateRequest(BaseModel):
+    """Partial update of an agent configuration."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=2000)
+    system_prompt: str | None = None
+    tool_names: list[str] | None = None
+    skill_names: list[str] | None = None
+    mcp_servers: list[McpServerConfig] | None = None
+
+
+class AgentItemResponse(BaseModel):
+    """Agent configuration item."""
+
+    agent_id: str
+    name: str
+    description: str = ""
+    system_prompt: str = ""
+    tool_names: list[str] | None = None
+    skill_names: list[str] = Field(default_factory=list)
+    mcp_servers: list[dict[str, Any]] = Field(default_factory=list)
+    is_builtin: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentListResponse(BaseModel):
+    """Agent list response."""
+
+    agents: list[AgentItemResponse]
+
+
+class SkillsRootUpdateRequest(BaseModel):
+    """Update the shared skills root folder."""
+
+    skills_root: str = Field(default="", max_length=1024, description="Shared skills root folder.")
+
+
+class SkillImportRequest(BaseModel):
+    """Import a local folder as a new skill."""
+
+    source_path: str = Field(min_length=1, max_length=1024, description="Local folder to copy in.")
 
 
 class ModelUpsertRequest(BaseModel):
@@ -269,6 +420,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(mcp_router)
 
 
 def _build_event(
@@ -332,7 +484,68 @@ def _build_provider_config(
         model=str(model.get("name") or ""),
         api_key=str(model.get("api_key") or ""),
         base_url=(str(model.get("base_url")).strip() or None) if model.get("base_url") else None,
+        max_input_tokens=int(model.get("max_input_tokens") or 0),
     )
+
+
+_SESSION_TITLE_MAX_LENGTH = 60
+_SESSION_TITLE_PROMPT = (
+    "You generate a very short session title for a task list. "
+    "Summarize the user's task into a concise title using the same language as the request. "
+    "Reply with the title only, without quotes, and keep it under 20 characters when possible."
+)
+
+
+def _default_session_name() -> str:
+    """Time-based session name used when the user does not provide one."""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _fallback_session_title(query: str) -> str:
+    """Fallback title derived from the raw query when the LLM is unavailable."""
+    collapsed = " ".join(str(query or "").split())
+    if not collapsed:
+        return _default_session_name()
+    return collapsed[:_SESSION_TITLE_MAX_LENGTH]
+
+
+def _summarize_session_title(
+    provider_name: str,
+    provider_config: ProviderConfig | None,
+    query: str,
+) -> str:
+    """Ask the LLM for a short session title, falling back to the raw query."""
+    try:
+        provider = build_provider(provider_name, provider_config)
+        response = provider.chat_completion(
+            messages=[
+                {"role": "system", "content": _SESSION_TITLE_PROMPT},
+                {"role": "user", "content": str(query or "")},
+            ]
+        )
+        message = response.choices[0].message
+        content = message.get("content") if isinstance(message, dict) else getattr(message, "content", None)
+    except Exception:
+        return _fallback_session_title(query)
+
+    title = str(content or "").strip().strip('"').strip("'").strip()
+    if not title:
+        return _fallback_session_title(query)
+    return title[:_SESSION_TITLE_MAX_LENGTH]
+
+
+def _update_session_title(
+    session_id: str | None,
+    provider_name: str,
+    provider_config: ProviderConfig | None,
+    query: str,
+) -> None:
+    """Rename a session with an LLM-generated title derived from the task query."""
+    if not session_id:
+        return
+    title = _summarize_session_title(provider_name, provider_config, query)
+    if title:
+        monitor_store.rename_session(session_id, title)
 
 
 def _get_global_max_steps() -> int:
@@ -347,10 +560,51 @@ def _resolve_max_steps(request: RunTaskRequest) -> int:
     return _get_global_max_steps()
 
 
+def _resolve_session_base_dir(session_id: str | None) -> str | None:
+    """Return the workspace root path bound to a session, if any."""
+    if not session_id:
+        return None
+    session = monitor_store.get_session(session_id)
+    workspace_id = (session or {}).get("workspace_id")
+    if not workspace_id:
+        return None
+    workspace = monitor_store.get_workspace(workspace_id)
+    root_path = str((workspace or {}).get("root_path") or "").strip()
+    return root_path or None
+
+
+def _agent_runtime_config(agent: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Map a stored agent record to the runtime config consumed by the ReAct loop."""
+    if not agent:
+        return None
+    return {
+        "agent_id": agent.get("agent_id"),
+        "name": agent.get("name"),
+        "system_prompt": agent.get("system_prompt") or "",
+        "tool_names": agent.get("tool_names"),
+        "skills": agent.get("skill_names") or [],
+        "mcp_servers": agent.get("mcp_servers") or [],
+    }
+
+
+def _resolve_skills_root() -> str:
+    """Shared skills root folder: database setting, else env, else the repo ``skills`` folder."""
+    stored = monitor_store.get_skills_root()
+    if stored is not None and stored.strip():
+        return stored.strip()
+    env_root = os.getenv("SKILLS_ROOT", "").strip()
+    if env_root:
+        return env_root
+    return str(ROOT_DIR / "skills")
+
+
 def _run_task(
     task_id: str,
     request: RunTaskRequest,
     model: dict[str, Any] | None = None,
+    base_dir: str | None = None,
+    agent_config: dict[str, Any] | None = None,
+    stop_event: threading.Event | None = None,
 ) -> None:
     provider = str((model or {}).get("provider") or request.provider or "openai-compatible")
     provider_config = _build_provider_config(model)
@@ -368,6 +622,8 @@ def _run_task(
             "model": (model or {}).get("name"),
             "model_id": (model or {}).get("model_id"),
             "session_id": request.session_id,
+            "base_dir": base_dir,
+            "agent_id": (agent_config or {}).get("agent_id"),
             "max_steps": max_steps,
             "query": request.query,
             "mode": request.mode,
@@ -377,6 +633,12 @@ def _run_task(
             "max_output_tokens": (model or {}).get("max_output_tokens", 0),
         },
     )
+
+    threading.Thread(
+        target=_update_session_title,
+        args=(request.session_id, provider, provider_config, request.query),
+        daemon=True,
+    ).start()
 
     try:
         result = run_react_loop(
@@ -391,9 +653,16 @@ def _run_task(
             task_id=task_id,
             event_sink=_sink,
             mode=request.mode,
+            base_dir=base_dir,
+            agent_config=agent_config,
+            should_stop=stop_event.is_set if stop_event is not None else None,
         )
-        _emit_debug(_sink, task_id, "Task finished", {"result": result})
-        monitor_store.finish_task(task_id, success=True, result=result)
+        if stop_event is not None and stop_event.is_set():
+            _emit_debug(_sink, task_id, "Task stopped", {"result": result})
+            monitor_store.finish_task(task_id, success=False, result=result, status=TaskStatus.STOPPED)
+        else:
+            _emit_debug(_sink, task_id, "Task finished", {"result": result})
+            monitor_store.finish_task(task_id, success=True, result=result)
     except Exception as exc:
         _emit_debug(
             _sink,
@@ -402,6 +671,8 @@ def _run_task(
             {"error": str(exc), "type": exc.__class__.__name__},
         )
         monitor_store.finish_task(task_id, success=False)
+    finally:
+        _clear_task_stop(task_id)
 
 
 @app.get("/api/sessions", response_model=SessionListResponse)
@@ -426,7 +697,11 @@ async def list_sessions() -> SessionListResponse:
 
 @app.post("/api/sessions", response_model=SessionItemResponse)
 async def create_session(payload: SessionCreateRequest) -> SessionItemResponse:
-    session_id = monitor_store.create_session(payload.name.strip())
+    name = (payload.name or "").strip() or _default_session_name()
+    workspace_id = (payload.workspace_id or "").strip() or None
+    if workspace_id and monitor_store.get_workspace(workspace_id) is None:
+        raise HTTPException(status_code=404, detail="Workspace not found.")
+    session_id = monitor_store.create_session(name, workspace_id)
     session = monitor_store.get_session(session_id)
     if session is None:
         raise HTTPException(status_code=500, detail="Failed to read created session.")
@@ -451,6 +726,38 @@ async def delete_session(session_id: str) -> dict[str, Any]:
     if not monitor_store.delete_session(session_id):
         raise HTTPException(status_code=404, detail="Session not found.")
     return {"session_id": session_id, "deleted": True}
+
+
+@app.get("/api/workspaces", response_model=WorkspaceListResponse)
+async def list_workspaces() -> WorkspaceListResponse:
+    workspaces = monitor_store.list_workspaces()
+    return WorkspaceListResponse(workspaces=[WorkspaceItemResponse(**item) for item in workspaces])
+
+
+@app.post("/api/workspaces", response_model=WorkspaceItemResponse)
+async def create_workspace(payload: WorkspaceCreateRequest) -> WorkspaceItemResponse:
+    workspace_id = monitor_store.create_workspace(payload.name.strip(), payload.root_path.strip())
+    workspace = monitor_store.get_workspace(workspace_id)
+    if workspace is None:
+        raise HTTPException(status_code=500, detail="Failed to read created workspace.")
+    return WorkspaceItemResponse(**workspace)
+
+
+@app.put("/api/workspaces/{workspace_id}", response_model=WorkspaceItemResponse)
+async def update_workspace(workspace_id: str, payload: WorkspaceUpdateRequest) -> WorkspaceItemResponse:
+    name = payload.name.strip() if payload.name is not None else None
+    root_path = payload.root_path.strip() if payload.root_path is not None else None
+    updated = monitor_store.update_workspace(workspace_id, name=name, root_path=root_path)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Workspace not found.")
+    return WorkspaceItemResponse(**updated)
+
+
+@app.delete("/api/workspaces/{workspace_id}")
+async def delete_workspace(workspace_id: str) -> dict[str, Any]:
+    if not monitor_store.delete_workspace(workspace_id):
+        raise HTTPException(status_code=404, detail="Workspace not found.")
+    return {"workspace_id": workspace_id, "deleted": True}
 
 
 @app.get("/api/models", response_model=ModelListResponse)
@@ -483,7 +790,13 @@ async def delete_model(model_id: str) -> dict[str, Any]:
 @app.post("/api/tasks", response_model=RunTaskResponse)
 async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
     _purge_expired_tasks_with_log("Creating new API task")
-    mode = payload.mode if payload.mode in VALID_MODES else DEFAULT_MODE
+    agent_id = (payload.agent_id or "").strip() or (
+        payload.mode if payload.mode in VALID_MODES else DEFAULT_MODE
+    )
+    agent = monitor_store.get_agent(agent_id)
+    if agent is None:
+        agent_id = payload.mode if payload.mode in VALID_MODES else DEFAULT_MODE
+        agent = monitor_store.get_agent(agent_id)
     model = monitor_store.get_model(payload.model_id) if payload.model_id else None
     if payload.model_id and model is None:
         raise HTTPException(status_code=404, detail="Model not found.")
@@ -499,11 +812,18 @@ async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
         provider=provider,
         session_id=session_id,
         model_id=payload.model_id,
-        mode=mode,
+        mode=agent_id,
     )
 
-    request = payload.model_copy(update={"session_id": session_id, "mode": mode})
-    threading.Thread(target=_run_task, args=(task_id, request, model), daemon=True).start()
+    request = payload.model_copy(update={"session_id": session_id, "mode": agent_id})
+    agent_config = _agent_runtime_config(agent)
+    base_dir = _resolve_session_base_dir(session_id)
+    stop_event = _register_task_stop(task_id)
+    threading.Thread(
+        target=_run_task,
+        args=(task_id, request, model, base_dir, agent_config, stop_event),
+        daemon=True,
+    ).start()
 
     trace = monitor_store.get_task(task_id)
     if trace is None:
@@ -539,12 +859,115 @@ async def list_modes() -> dict[str, Any]:
     return {"modes": modes, "default_mode": DEFAULT_MODE}
 
 
+@app.get("/api/agents", response_model=AgentListResponse)
+async def list_agents() -> AgentListResponse:
+    agents = monitor_store.list_agents()
+    return AgentListResponse(agents=[AgentItemResponse(**item) for item in agents])
+
+
+@app.get("/api/agents/meta")
+async def get_agent_meta() -> dict[str, Any]:
+    """Available tools, skills and MCP transports used to build agents.
+
+    ``skills`` are the built-in registry skills injected into the system prompt;
+    ``library_skills`` are the folders of the shared skills root, listed in the
+    agent editor for reference but not yet injected at runtime.
+    """
+    return {
+        "tools": list_available_tools(),
+        "skills": list_available_skills(),
+        "library_skills": skill_library.list_skills(_resolve_skills_root()),
+        "mcp_transports": list(MCP_TRANSPORTS),
+    }
+
+
+@app.post("/api/agents", response_model=AgentItemResponse)
+async def create_agent(payload: AgentUpsertRequest) -> AgentItemResponse:
+    created = monitor_store.create_agent(payload.model_dump())
+    return AgentItemResponse(**created)
+
+
+@app.put("/api/agents/{agent_id}", response_model=AgentItemResponse)
+async def update_agent(agent_id: str, payload: AgentUpdateRequest) -> AgentItemResponse:
+    updated = monitor_store.update_agent(agent_id, payload.model_dump(exclude_unset=True))
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Agent not found.")
+    return AgentItemResponse(**updated)
+
+
+@app.delete("/api/agents/{agent_id}")
+async def delete_agent(agent_id: str) -> dict[str, Any]:
+    agent = monitor_store.get_agent(agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found.")
+    if agent.get("is_builtin"):
+        raise HTTPException(status_code=400, detail="Built-in agents cannot be deleted.")
+    if not monitor_store.delete_agent(agent_id):
+        raise HTTPException(status_code=404, detail="Agent not found.")
+    return {"agent_id": agent_id, "deleted": True}
+
+
+@app.get("/api/skills")
+async def list_skills() -> dict[str, Any]:
+    """List skills stored under the shared root folder."""
+    root = _resolve_skills_root()
+    return {"skills_root": root, "skills": skill_library.list_skills(root)}
+
+
+@app.get("/api/admin/skills-root")
+async def get_skills_root() -> dict[str, Any]:
+    stored = monitor_store.get_skills_root()
+    return {
+        "skills_root": _resolve_skills_root(),
+        "skills_root_source": "database" if stored and stored.strip() else "env",
+    }
+
+
+@app.put("/api/admin/skills-root")
+async def update_skills_root(payload: SkillsRootUpdateRequest) -> dict[str, Any]:
+    monitor_store.set_skills_root(payload.skills_root.strip())
+    return {"skills_root": _resolve_skills_root()}
+
+
+@app.post("/api/skills/import")
+async def import_skill(payload: SkillImportRequest) -> dict[str, Any]:
+    root = _resolve_skills_root()
+    try:
+        return skill_library.import_skill(root, payload.source_path.strip())
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/skills/{name}")
+async def delete_skill(name: str) -> dict[str, Any]:
+    if not skill_library.delete_skill(_resolve_skills_root(), name):
+        raise HTTPException(status_code=404, detail="Skill not found.")
+    return {"name": name, "deleted": True}
+
+
 @app.get("/api/tasks", response_model=TaskListResponse)
 async def list_tasks(
     session_id: str | None = Query(None, description="Only return tasks that belong to this session."),
 ) -> TaskListResponse:
     tasks = monitor_store.list_tasks(session_id=session_id)
     return TaskListResponse(tasks=[TaskListItemResponse(**item) for item in tasks])
+
+
+@app.post("/api/tasks/{task_id}/stop")
+async def stop_task(task_id: str) -> dict[str, Any]:
+    """Request a running task to stop; marks stale running tasks as stopped."""
+    trace = monitor_store.get_task(task_id)
+    if trace is None:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    stopped = _signal_task_stop(task_id)
+    if not stopped and str(trace.get("status")) == TaskStatus.RUNNING.value:
+        monitor_store.finish_task(task_id, success=False, status=TaskStatus.STOPPED)
+        stopped = True
+    return {"task_id": task_id, "stopped": stopped}
 
 
 @app.get("/api/tasks/{task_id}", response_model=TaskDetailResponse)
@@ -965,6 +1388,7 @@ def main() -> None:
                     max_steps=args.steps,
                     verbose=interactive_verbose,
                     initial_messages=messages,
+                    base_dir=str(ROOT_DIR),
                 )
                 if not args.quiet:
                     print(f"assistant> {answer}")
@@ -977,6 +1401,7 @@ def main() -> None:
         provider_name=args.provider,
         max_steps=args.steps,
         verbose=not args.quiet,
+        base_dir=str(ROOT_DIR),
     )
 
 

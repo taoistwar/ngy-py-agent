@@ -203,6 +203,7 @@ class ProviderConfig:
     model: str
     api_key: str
     base_url: Optional[str] = None
+    max_input_tokens: int = 0
 
 
 class OpenAIProvider(BaseProvider):

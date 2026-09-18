@@ -6,9 +6,9 @@ adding one entry here plus the implementation module next to it.
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Sequence
+from typing import Any, Callable, Dict, Optional, Sequence
 
-from agent.tools import code_tools, finance_tools, time_tools, weather_tools
+from agent.tools import code_tools, file_tools, finance_tools, time_tools, weather_tools
 
 
 @dataclass(frozen=True)
@@ -107,6 +107,29 @@ SPEC_CODE_INTERPRETER = ToolSpec(
         "required": ["code"],
     },
 )
+
+READ_FILE_TOOL_NAME = "read_file"
+
+
+def build_read_file_spec(
+    base_dir: Optional[str] = None,
+    max_tokens: int = 0,
+    provider: str = "",
+    model: str = "",
+) -> ToolSpec:
+    """Build the workspace scoped read tool, bound to a workspace root."""
+    return ToolSpec(
+        name=READ_FILE_TOOL_NAME,
+        handler=file_tools.make_read_file_tool(
+            base_dir=base_dir,
+            max_tokens=max_tokens,
+            provider=provider,
+            model=model,
+        ),
+        description=file_tools.READ_FILE_DESCRIPTION,
+        parameters=file_tools.READ_FILE_PARAMETERS,
+    )
+
 
 DEFAULT_TOOL_SPECS: Sequence[ToolSpec] = (
     SPEC_GET_CURRENT_TEMPERATURE,

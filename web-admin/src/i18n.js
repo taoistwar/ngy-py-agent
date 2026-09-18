@@ -56,6 +56,7 @@ const TASK_STATUS_TEXT_KEYS = {
   started: "statusStarted",
   success: "statusSuccess",
   failed: "statusFailed",
+  stopped: "statusStopped",
   degraded: "statusDegraded",
   unknown: "statusUnknown",
 }
@@ -77,7 +78,7 @@ export function getTaskStatusText(translate, status) {
 
 export function getTaskStatusClass(status) {
   const normalized = normalizeTaskStatus(status)
-  if (normalized === "success" || normalized === "failed") {
+  if (normalized === "success" || normalized === "failed" || normalized === "stopped") {
     return normalized
   }
   if (TASK_RUNNING_STATUS_SET.has(normalized)) {

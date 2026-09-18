@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WIP 是什么？</title>
+<style>
+  :root {
+    --ink: #1b2430;
+    --muted: #667889;
+    --line: #e3e9f0;
+    --done: #2f9e6b;
+    --half: #d9843a;
+    --paper: #f6f8fb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 48px 24px 72px;
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size: 42px; margin: 0 0 8px; letter-spacing: -1px; }
+  .sub { font-size: 20px; color: var(--muted); margin: 0 0 40px; }
+  h2 { font-size: 24px; margin: 0 0 20px; }
+
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .card {
+    background: #fff;
+    border-radius: 20px;
+    padding: 28px;
+    box-shadow: 0 10px 30px rgba(27, 36, 48, .07);
+    border-top: 6px solid var(--line);
+  }
+  .card.wip { border-top-color: var(--half); }
+  .card.done { border-top-color: var(--done); }
+
+  .stage {
+    background: var(--paper);
+    border-radius: 14px;
+    padding: 22px;
+    height: 210px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .sheet {
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 14px;
+    color: var(--muted);
+    position: relative;
+  }
+  .sheet .tag {
+    position: absolute;
+    right: -8px;
+    top: -10px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    color: #fff;
+  }
+  .card.wip .sheet { transform: rotate(-1.4deg); border-style: dashed; }
+  .card.wip .sheet:nth-child(2) { transform: rotate(1.8deg); }
+  .card.wip .tag { background: var(--half); }
+  .card.done .sheet { border-color: #cfe6da; }
+  .card.done .tag { background: var(--done); }
+
+  .say { font-size: 19px; margin: 0 0 6px; }
+  .why { margin: 0; font-size: 17px; color: var(--muted); }
+  .card.wip .why { color: var(--half); }
+  .card.done .why { color: var(--done); }
+
+  .answer {
+    margin-top: 40px;
+    background: #fff;
+    border-radius: 20px;
+    padding: 32px;
+    box-shadow: 0 10px 30px rgba(27, 36, 48, .07);
+  }
+  .answer ul { margin: 0; padding-left: 22px; font-size: 18px; }
+  .answer li { margin-bottom: 12px; }
+  .big { font-size: 21px; font-weight: 600; }
+  code {
+    background: var(--paper);
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 16px;
+  }
+
+  @media (max-width: 760px) {
+    .cards { grid-template-columns: 1fr; }
+    h1 { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>WIP 是什么？</h1>
+  <p class="sub">Work In Progress —— “正在做，还没做完”。</p>
+
+  <div class="cards">
+
+    <article class="card wip">
+      <h2>你的桌子</h2>
+      <div class="stage">
+        <div class="sheet">agent_loop.py<span class="tag">改了一半</span></div>
+        <div class="sheet">modes.py<span class="tag">改了一半</span></div>
+        <div class="sheet">main.py<span class="tag">改了一半</span></div>
+      </div>
+      <p class="say">写到一半的稿子，摊在桌上。</p>
+      <p class="why">还没收进柜子（没提交）。</p>
+    </article>
+
+    <article class="card done">
+      <h2>柜子</h2>
+      <div class="stage">
+        <div class="sheet">工具拆分<span class="tag">已完成</span></div>
+        <div class="sheet">文件读取<span class="tag">已完成</span></div>
+      </div>
+      <p class="say">装订好的成品，一册一册排好。</p>
+      <p class="why">每次收进去，都留下一条“什么时候改的、改了什么”。</p>
+    </article>
+
+  </div>
+
+  <section class="answer">
+    <h2>为什么我停手了</h2>
+    <ul>
+      <li>桌上的三份半成品，是<strong>你开始时就在那儿</strong>的，不是我写的。</li>
+      <li>如果我把它们和“文件读取工具”<strong>捆成一本一起收进柜子</strong>，
+          以后想查“文件读取工具到底改了啥”，会翻出一堆不相关的半成品。</li>
+      <li><span class="big">所以：半成品和成品要分开收。</span></li>
+      <li>你只要说一句“收吧”，或者“这三份先别管”，我就照办。</li>
+    </ul>
+  </section>
+
+</div>
+</body>
+</html>

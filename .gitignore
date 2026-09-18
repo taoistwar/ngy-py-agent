@@ -12,3 +12,7 @@ node_modules/
 # Virtual environments
 .venv
 *.db
+TODO.md
+
+# Downloaded model assets
+data/ds-tokenizer/
