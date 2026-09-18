@@ -1,2 +1,6 @@
+# 120 instead of the 88 default: only 4 lines in the repo exceed 120, while 191
+# exceed 88. 88 is Black's default and never was a choice made for this repo.
+line-length = 120
+
 [lint]
 ignore = ["UP035", "UP006", "UP045"]

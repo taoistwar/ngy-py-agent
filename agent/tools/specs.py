@@ -8,7 +8,7 @@ adding one entry here plus the implementation module next to it.
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Sequence
 
-from agent.tools import code_tools, file_tools, finance_tools, time_tools, weather_tools
+from agent.tools import code_tools, file_read_tool, finance_tools, time_tools, weather_tools
 
 
 @dataclass(frozen=True)
@@ -120,14 +120,14 @@ def build_read_file_spec(
     """Build the workspace scoped read tool, bound to a workspace root."""
     return ToolSpec(
         name=READ_FILE_TOOL_NAME,
-        handler=file_tools.make_read_file_tool(
+        handler=file_read_tool.make_read_file_tool(
             base_dir=base_dir,
             max_tokens=max_tokens,
             provider=provider,
             model=model,
         ),
-        description=file_tools.READ_FILE_DESCRIPTION,
-        parameters=file_tools.READ_FILE_PARAMETERS,
+        description=file_read_tool.READ_FILE_DESCRIPTION,
+        parameters=file_read_tool.READ_FILE_PARAMETERS,
     )
 
 

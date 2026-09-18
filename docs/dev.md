@@ -150,3 +150,14 @@ npm run i18n:check
   - close Vite/dev servers or editors that may hold `esbuild.exe`
   - rerun `python scripts/ci_check.py`
   - if still failing, this script now falls back to `npm install --no-audit --no-fund` for local use.
+
+## 12. 工具设计约束
+
+### read_file 永远带行号
+
+- `read_file` 的返回内容一律带 `N<TAB>` 行号前缀（`agent/tools/file_read_tool.py` 的 `LINE_NUMBER_SEPARATOR` / `_format_lines`），**不提供 `include_line_numbers` 之类的开关**。
+- 分隔符用制表符而不是 `| `：同样能对齐，但每行只占 1 个字符，比 `| ` 少一个字符。
+- 原因：模型看不到文件的真实行号，也不具备可靠的行号推算能力。返回不带行号的正文，会让后续所有“把第 N 行改掉”“第 N 行有问题”的引用变成猜测，而猜错的行号会直接传导到写操作上。
+- 代价：读 2000 行大约多花 4000 个 token。这个开销是明知的，且远小于一次错行号的返工成本。
+- 因此：不要为了省 token 给这个行为加开关，也不要让 `_format_lines` 支持“无前缀”模式。
+- 相关说明页：`docs/tools/read_file/eli5-line-numbers.html`
