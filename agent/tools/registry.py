@@ -5,7 +5,7 @@ import json
 from typing import Any, Callable, Dict, List
 
 from agent.tools import code_tools, finance_tools, time_tools, weather_tools
-from agent.tools.specs import DEFAULT_TOOL_SPECS
+from agent.tools.specs import DEFAULT_TOOL_SPECS, build_read_file_spec
 
 
 class ToolRegistry:
@@ -33,13 +33,34 @@ class ToolRegistry:
         key = (provider or "openai").strip().lower()
         return cls._ADAPTERS.get(key, key)
 
-    def __init__(self, enabled_tools: list[str] | None = None):
+    def __init__(
+        self,
+        enabled_tools: list[str] | None = None,
+        base_dir: str | None = None,
+        max_tokens: int = 0,
+        provider: str = "",
+        model: str = "",
+    ):
+        self.base_dir = base_dir
+        self.max_tokens = max_tokens
+        self.provider = provider
+        self.model = model
         self.tools = {}
         self._register_default_tools(enabled_tools)
 
     def _register_default_tools(self, enabled_tools: list[str] | None = None):
         """Register default tools. Pass enabled_tools to restrict the set."""
-        for spec in DEFAULT_TOOL_SPECS:
+        specs = list(DEFAULT_TOOL_SPECS)
+        specs.append(
+            build_read_file_spec(
+                base_dir=self.base_dir,
+                max_tokens=self.max_tokens,
+                provider=self.provider,
+                model=self.model,
+            )
+        )
+
+        for spec in specs:
             self.register_tool(
                 name=spec.name,
                 function=spec.handler,

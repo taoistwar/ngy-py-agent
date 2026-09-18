@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { default as MonacoEditor } from "@monaco-editor/react"
 import {
+  createAgent,
+  createMcpServer,
   createModel,
   createSession,
   createTask,
+  createWorkspace,
+  deleteAgent,
+  deleteMcpServer,
   deleteModel,
   deleteSession,
+  deleteSkill,
   deleteTask,
+  deleteWorkspace,
+  fetchAgentMeta,
+  fetchAgents,
+  fetchSkills,
   fetchHealth,
+  fetchMcpServers,
   fetchModels,
   fetchRetentionConfig,
   fetchMaxStepsConfig,
@@ -16,9 +28,16 @@ import {
   fetchTask,
   fetchTaskEvents,
   fetchTasks,
+  fetchWorkspaces,
+  importSkill,
   renameSession,
+  stopTask,
+  updateAgent,
+  updateMcpServer,
   updateModel,
   updateRetentionConfig,
+  updateSkillsRoot,
+  updateWorkspace,
 } from "./api"
 import {
   getDefaultLocale,
@@ -30,31 +49,73 @@ import {
   LOCALE_KEY,
   t,
 } from "./i18n"
+import TaskRowActions from "./components/TaskRowActions"
+import AgentManager from "./components/admin/AgentManager"
+import McpServerManager from "./components/admin/McpServerManager"
+import ModelManager from "./components/admin/ModelManager"
+import { MaxStepsManager, RetentionManager } from "./components/admin/SettingsPanels"
+import SkillManager from "./components/admin/SkillManager"
+import WorkspaceManager from "./components/admin/WorkspaceManager"
+import { PROVIDER_OPTIONS, agentDisplayName } from "./components/admin/shared"
 import "./App.css"
 
 const EVENT_PAGE_SIZE = 30
 const TASK_PAGE_SIZE = 12
+const SESSION_PREVIEW_LIMIT = 10
 
 const MENU_ITEMS = [
   { key: "tasks", labelKey: "menuTasks" },
+  { key: "agents", labelKey: "menuAgents" },
+  { key: "skills", labelKey: "menuSkills" },
+  { key: "mcp", labelKey: "menuMcp" },
+  { key: "workspaces", labelKey: "menuWorkspaces" },
   { key: "models", labelKey: "menuModels" },
   { key: "config", labelKey: "menuConfig" },
 ]
 
-const PROVIDER_OPTIONS = [
-  "openai-compatible",
-  "openai",
-  "anthropic",
-  "anthropic-compatible",
-  "ollama",
-  "gemini",
-]
+const AGENT_CREATE_OPTION = "__create_agent__"
 
-const MODE_OPTIONS = [
-  { value: "build", labelKey: "modeBuild" },
-  { value: "ask", labelKey: "modeAsk" },
-  { value: "plan", labelKey: "modePlan" },
-]
+function resolveAgentName(agentId, agents, translate) {
+  const agent = (agents || []).find((item) => item.agent_id === agentId)
+  if (agent) return agentDisplayName(agent, translate)
+  return translate(modeLabelKey(agentId))
+}
+
+const TASK_COLUMN_MIN_LEFT = 160
+const TASK_COLUMN_MIN_MID = 220
+const TASK_COLUMN_MIN_DETAIL = 280
+const TASK_COLUMN_RESIZER_WIDTH = 8
+const TASK_COLUMN_COLLAPSED_WIDTH = 44
+const TASK_COLUMN_WIDTHS_KEY = "web-admin.taskColumnWidths"
+const TASK_COLUMN_COLLAPSED_KEY = "web-admin.leftColumnCollapsed"
+const TASK_COLUMN_DEFAULT_WIDTHS = { left: 260, mid: 360 }
+
+function loadLeftColumnCollapsed() {
+  if (typeof window === "undefined") return false
+  try {
+    return window.localStorage.getItem(TASK_COLUMN_COLLAPSED_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+function loadTaskColumnWidths() {
+  const fallback = { ...TASK_COLUMN_DEFAULT_WIDTHS }
+  if (typeof window === "undefined") return fallback
+  try {
+    const raw = window.localStorage.getItem(TASK_COLUMN_WIDTHS_KEY)
+    if (!raw) return fallback
+    const parsed = JSON.parse(raw)
+    const left = Number(parsed?.left)
+    const mid = Number(parsed?.mid)
+    return {
+      left: Number.isFinite(left) ? Math.max(TASK_COLUMN_MIN_LEFT, left) : fallback.left,
+      mid: Number.isFinite(mid) ? Math.max(TASK_COLUMN_MIN_MID, mid) : fallback.mid,
+    }
+  } catch {
+    return fallback
+  }
+}
 
 const MODE_LABEL_KEYS = {
   build: "modeBuild",
@@ -63,17 +124,6 @@ const MODE_LABEL_KEYS = {
 }
 
 const modeLabelKey = (mode) => MODE_LABEL_KEYS[mode] || "modeBuild"
-
-const INPUT_TOKEN_PRESETS = [32768, 65536, 131072, 262144]
-const OUTPUT_TOKEN_PRESETS = [8192, 16384, 32768, 65536]
-
-function formatTokenCount(value) {
-  const num = Number(value)
-  if (!Number.isFinite(num) || num <= 0) return ""
-  if (num % 1024 === 0) return `${num / 1024}K`
-  if (num % 1000 === 0) return `${num / 1000}K`
-  return String(num)
-}
 
 function formatTime(value) {
   if (!value) return ""
@@ -240,38 +290,51 @@ function TopBar({ activeMenu, onChangeMenu, health, tasks, locale, localeOptions
   )
 }
 
-function SessionTabs({ sessions, activeSessionId, onSelect, onCreate, onRename, onDelete, translate }) {
-  const [adding, setAdding] = useState(false)
-  const [newName, setNewName] = useState("")
+function SessionTabs({
+  workspaces,
+  sessions,
+  activeSessionId,
+  activeWorkspaceId,
+  onSelect,
+  onSelectWorkspace,
+  onCreate,
+  onRename,
+  onDelete,
+  onRenameWorkspace,
+  onDeleteWorkspace,
+  onManageWorkspaces,
+  onCollapse,
+  translate,
+}) {
   const [renaming, setRenaming] = useState(false)
   const [renameTargetId, setRenameTargetId] = useState("")
   const [renameValue, setRenameValue] = useState("")
-  const [historyOpen, setHistoryOpen] = useState(false)
+  const [collapsedWorkspaces, setCollapsedWorkspaces] = useState({})
+  const [expandedGroups, setExpandedGroups] = useState({})
   const [menu, setMenu] = useState(null)
-  const [searchText, setSearchText] = useState("")
-  const [searchMode, setSearchMode] = useState("title")
-  const addInputRef = useRef(null)
+  const [wsMenu, setWsMenu] = useState(null)
 
-  useEffect(() => {
-    if (adding) addInputRef.current?.focus()
-  }, [adding])
+  const orphanSessions = useMemo(
+    () => sessions.filter((item) => !item.workspace_id),
+    [sessions]
+  )
 
-  const historySessions = useMemo(() => {
-    const keyword = searchText.trim().toLowerCase()
-    if (!keyword) return sessions
-    return sessions.filter((item) => {
-      const title = (item.name || "").toLowerCase()
-      const prompt = (item.query_preview || "").toLowerCase()
-      const answer = (item.result_preview || "").toLowerCase()
-      if (searchMode === "title") return title.includes(keyword)
-      if (searchMode === "prompt") return prompt.includes(keyword)
-      return title.includes(keyword) || prompt.includes(keyword) || answer.includes(keyword)
+  const sessionsByWorkspace = useMemo(() => {
+    const grouped = {}
+    sessions.forEach((item) => {
+      if (!item.workspace_id) return
+      if (!grouped[item.workspace_id]) grouped[item.workspace_id] = []
+      grouped[item.workspace_id].push(item)
     })
-  }, [sessions, searchText, searchMode])
+    return grouped
+  }, [sessions])
 
   useEffect(() => {
-    if (!menu) return undefined
-    const closeMenu = () => setMenu(null)
+    if (!menu && !wsMenu) return undefined
+    const closeMenu = () => {
+      setMenu(null)
+      setWsMenu(null)
+    }
     window.addEventListener("click", closeMenu)
     window.addEventListener("contextmenu", closeMenu)
     window.addEventListener("scroll", closeMenu, true)
@@ -280,21 +343,17 @@ function SessionTabs({ sessions, activeSessionId, onSelect, onCreate, onRename, 
       window.removeEventListener("contextmenu", closeMenu)
       window.removeEventListener("scroll", closeMenu, true)
     }
-  }, [menu])
+  }, [menu, wsMenu])
+
+  const toggleWorkspace = (workspaceId) => {
+    setCollapsedWorkspaces((prev) => ({ ...prev, [workspaceId]: !prev[workspaceId] }))
+  }
 
   const beginRename = (sessionId) => {
     const current = sessions.find((item) => item.session_id === sessionId)
     setRenameTargetId(sessionId)
     setRenameValue(current?.name || "")
     setRenaming(true)
-  }
-
-  const submitNew = () => {
-    const value = newName.trim()
-    if (!value) return
-    onCreate(value)
-    setNewName("")
-    setAdding(false)
   }
 
   const submitRename = () => {
@@ -304,9 +363,19 @@ function SessionTabs({ sessions, activeSessionId, onSelect, onCreate, onRename, 
     setRenaming(false)
   }
 
+  const beginWorkspaceRename = (workspaceId) => {
+    const current = workspaces.find((item) => item.workspace_id === workspaceId)
+    const next = window.prompt(translate("workspaceRenamePrompt"), current?.name || "")
+    if (next === null) return
+    const value = next.trim()
+    if (!value) return
+    onRenameWorkspace(workspaceId, value)
+  }
+
   const openSessionMenu = (event, sessionId) => {
     event.preventDefault()
     event.stopPropagation()
+    setWsMenu(null)
     setMenu({
       sessionId,
       x: Math.min(event.clientX, window.innerWidth - 150),
@@ -314,95 +383,200 @@ function SessionTabs({ sessions, activeSessionId, onSelect, onCreate, onRename, 
     })
   }
 
+  const openWorkspaceMenu = (event, workspaceId) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setMenu(null)
+    setWsMenu({
+      workspaceId,
+      x: Math.min(event.clientX, window.innerWidth - 150),
+      y: Math.min(event.clientY, window.innerHeight - 84),
+    })
+  }
+
+  const renderSessionRow = (item) => (
+    <button
+      key={item.session_id}
+      type="button"
+      className={`session-node session-node-child ${item.session_id === activeSessionId ? "active" : ""}`}
+      onClick={() => onSelect(item.session_id)}
+      onContextMenu={(event) => openSessionMenu(event, item.session_id)}
+    >
+      <span className="session-node-name">{item.name}</span>
+      {item.task_count > 0 && <span className="session-tab-count">{item.task_count}</span>}
+    </button>
+  )
+
+  const renderSessionGroup = (groupKey, items, emptyText) => {
+    if (items.length === 0) {
+      return <div className="session-group-empty">{emptyText}</div>
+    }
+    const sorted = [...items].sort(
+      (a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
+    )
+    const expanded = expandedGroups[groupKey] === true
+    const visible = expanded ? sorted : sorted.slice(0, SESSION_PREVIEW_LIMIT)
+    const hidden = sorted.length - visible.length
+    return (
+      <>
+        {visible.map(renderSessionRow)}
+        {hidden > 0 && (
+          <button
+            type="button"
+            className="session-more"
+            onClick={() => setExpandedGroups((prev) => ({ ...prev, [groupKey]: true }))}
+          >
+            {translate("sessionShowMore")} ({hidden})
+          </button>
+        )}
+      </>
+    )
+  }
+
   return (
     <section className="panel session-tabs-panel">
       <div className="panel-titlebar session-tabs-titlebar">
         <h2>{translate("sessionTitle")}</h2>
-        <div className="task-toolbar-actions">
-          {!adding && (
-            <button type="button" className="btn btn-compact" onClick={() => setAdding(true)}>
-              {translate("sessionAdd")}
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-compact"
-            onClick={() => {
-              setSearchText("")
-              setSearchMode("title")
-              setHistoryOpen(true)
-            }}
-          >
-            {translate("sessionHistory")}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="session-collapse-btn"
+          onClick={onCollapse}
+          title={translate("sessionCollapse")}
+          aria-label={translate("sessionCollapse")}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M15 5l-7 7 7 7"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
       </div>
       <div className="panel-body session-tabs-body">
-        <div className="session-tabs">
-          {sessions.map((item) => (
-            <button
-              key={item.session_id}
-              type="button"
-              className={`session-tab ${item.session_id === activeSessionId ? "active" : ""}`}
-              onClick={() => onSelect(item.session_id)}
-              onContextMenu={(event) => openSessionMenu(event, item.session_id)}
-            >
-              <span className="session-tab-name">{item.name}</span>
-              {item.task_count > 0 && <span className="session-tab-count">{item.task_count}</span>}
-            </button>
-          ))}
+        <div className="session-tree">
+          <div className="session-group">
+            <div className="session-group-head">
+              <button type="button" className="session-group-title" onClick={onManageWorkspaces}>
+                {translate("workspaceGroupTitle")}
+              </button>
+              <span className="session-group-count">{workspaces.length}</span>
+              <button
+                type="button"
+                className="session-group-action"
+                onClick={onManageWorkspaces}
+                title={translate("workspaceManage")}
+              >
+                +
+              </button>
+            </div>
+            {workspaces.length === 0 ? (
+              <div className="session-group-empty">{translate("workspaceEmpty")}</div>
+            ) : (
+              workspaces.map((workspace) => {
+                const collapsed = collapsedWorkspaces[workspace.workspace_id] === true
+                const children = sessionsByWorkspace[workspace.workspace_id] || []
+                return (
+                  <div className="workspace-node" key={workspace.workspace_id}>
+                    <div
+                      className={`session-node workspace-node-head ${
+                        workspace.workspace_id === activeWorkspaceId ? "active" : ""
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        className="session-node-caret"
+                        onClick={() => toggleWorkspace(workspace.workspace_id)}
+                      >
+                        {collapsed ? "▸" : "▾"}
+                      </button>
+                      <button
+                        type="button"
+                        className="session-node-main"
+                        title={workspace.root_path}
+                        onClick={() => {
+                          onSelectWorkspace(workspace.workspace_id)
+                          setCollapsedWorkspaces((prev) => ({
+                            ...prev,
+                            [workspace.workspace_id]: false,
+                          }))
+                        }}
+                        onContextMenu={(event) => openWorkspaceMenu(event, workspace.workspace_id)}
+                      >
+                        <svg className="workspace-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M3 6.5A2.5 2.5 0 0 1 5.5 4h3.2l1.8 2h8A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                        <span className="session-node-name">{workspace.name}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="session-node-action"
+                        title={translate("sessionAdd")}
+                        onClick={() => onCreate(workspace.workspace_id)}
+                      >
+                        +
+                      </button>
+                    </div>
+                    {!collapsed && (
+                      <div className="workspace-children">
+                        {renderSessionGroup(
+                          workspace.workspace_id,
+                          children,
+                          translate("workspaceNoSessions")
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          <div className="session-group">
+            <div className="session-group-head">
+              <span className="session-group-title static">{translate("taskGroupTitle")}</span>
+              <span className="session-group-count">{orphanSessions.length}</span>
+              <button
+                type="button"
+                className="session-group-action"
+                onClick={() => onCreate("")}
+                title={translate("sessionAdd")}
+              >
+                +
+              </button>
+            </div>
+            <div className="workspace-children">
+              {renderSessionGroup("__orphan__", orphanSessions, translate("taskGroupEmpty"))}
+            </div>
+          </div>
+
+          {renaming && (
+            <div className="session-add-row">
+              <input
+                className="session-add-input"
+                autoFocus
+                value={renameValue}
+                onChange={(event) => setRenameValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitRename()
+                  if (event.key === "Escape") setRenaming(false)
+                }}
+              />
+              <button type="button" className="btn btn-compact" onClick={submitRename}>
+                {translate("sessionAddConfirm")}
+              </button>
+              <button type="button" className="btn btn-compact" onClick={() => setRenaming(false)}>
+                {translate("dialogClose")}
+              </button>
+            </div>
+          )}
         </div>
-        {adding && (
-          <div className="session-add-row">
-            <input
-              ref={addInputRef}
-              className="session-add-input"
-              value={newName}
-              placeholder={translate("sessionNamePlaceholder")}
-              onChange={(event) => setNewName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitNew()
-                if (event.key === "Escape") {
-                  setAdding(false)
-                  setNewName("")
-                }
-              }}
-            />
-            <button type="button" className="btn btn-compact" onClick={submitNew}>
-              {translate("sessionAddConfirm")}
-            </button>
-            <button
-              type="button"
-              className="btn btn-compact"
-              onClick={() => {
-                setAdding(false)
-                setNewName("")
-              }}
-            >
-              {translate("dialogClose")}
-            </button>
-          </div>
-        )}
-        {renaming && (
-          <div className="session-add-row">
-            <input
-              className="session-add-input"
-              autoFocus
-              value={renameValue}
-              onChange={(event) => setRenameValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitRename()
-                if (event.key === "Escape") setRenaming(false)
-              }}
-            />
-            <button type="button" className="btn btn-compact" onClick={submitRename}>
-              {translate("sessionAddConfirm")}
-            </button>
-            <button type="button" className="btn btn-compact" onClick={() => setRenaming(false)}>
-              {translate("dialogClose")}
-            </button>
-          </div>
-        )}
       </div>
       {menu && (
         <div
@@ -431,75 +605,31 @@ function SessionTabs({ sessions, activeSessionId, onSelect, onCreate, onRename, 
           </button>
         </div>
       )}
-      {historyOpen && (
-        <div className="session-history-overlay" onClick={() => setHistoryOpen(false)}>
-          <section
-            className="panel session-history-dialog"
-            onClick={(event) => event.stopPropagation()}
+      {wsMenu && (
+        <div
+          className="session-menu"
+          style={{ left: wsMenu.x, top: wsMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setWsMenu(null)
+              beginWorkspaceRename(wsMenu.workspaceId)
+            }}
           >
-            <div className="panel-titlebar">
-              <h2>{translate("sessionHistory")}</h2>
-              <button type="button" className="btn btn-compact" onClick={() => setHistoryOpen(false)}>
-                {translate("dialogClose")}
-              </button>
-            </div>
-            <div className="session-history-search">
-              <input
-                type="text"
-                className="task-search-input"
-                value={searchText}
-                placeholder={translate("sessionSearchPlaceholder")}
-                onChange={(event) => setSearchText(event.target.value)}
-              />
-              <div className="segmented">
-                <button
-                  type="button"
-                  className={`segmented-item ${searchMode === "title" ? "active" : ""}`}
-                  onClick={() => setSearchMode("title")}
-                >
-                  {translate("sessionSearchTitle")}
-                </button>
-                <button
-                  type="button"
-                  className={`segmented-item ${searchMode === "prompt" ? "active" : ""}`}
-                  onClick={() => setSearchMode("prompt")}
-                >
-                  {translate("sessionSearchPrompt")}
-                </button>
-                <button
-                  type="button"
-                  className={`segmented-item ${searchMode === "all" ? "active" : ""}`}
-                  onClick={() => setSearchMode("all")}
-                >
-                  {translate("sessionSearchAll")}
-                </button>
-              </div>
-            </div>
-            <div className="panel-body session-history-list">
-              {historySessions.length === 0 ? (
-                <div className="empty">{translate("sessionHistoryEmpty")}</div>
-              ) : (
-                historySessions.map((item) => (
-                  <button
-                    key={item.session_id}
-                    type="button"
-                    className={`session-history-item ${
-                      item.session_id === activeSessionId ? "active" : ""
-                    }`}
-                    onClick={() => {
-                      setHistoryOpen(false)
-                      onSelect(item.session_id)
-                    }}
-                  >
-                    <span className="session-tab-name">{item.name}</span>
-                    {item.task_count > 0 && (
-                      <span className="session-tab-count">{item.task_count}</span>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-          </section>
+            {translate("sessionRename")}
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => {
+              setWsMenu(null)
+              onDeleteWorkspace(wsMenu.workspaceId)
+            }}
+          >
+            {translate("workspaceDelete")}
+          </button>
         </div>
       )}
     </section>
@@ -510,6 +640,7 @@ function TaskList({
   tasks,
   selectedId,
   onSelect,
+  onRerun,
   onDelete,
   selectedTaskIds,
   isAllPageSelected,
@@ -522,6 +653,7 @@ function TaskList({
   page,
   totalPages,
   onPageChange,
+  agents,
   translate,
 }) {
   const selectedCount = selectedTaskIds.size
@@ -588,23 +720,19 @@ function TaskList({
                         <span className="hint">{item.provider}</span>
                       )}
                       <span className={`badge badge-mode badge-mode-${item.mode || "build"}`}>
-                        {translate(modeLabelKey(item.mode))}
+                        {resolveAgentName(item.mode, agents, translate)}
                       </span>
                       <span className="hint">
                         {translate("taskEventCountPrefix")}: {item.event_count}
                       </span>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-danger btn-xs"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onDelete(item.task_id)
-                    }}
-                  >
-                    {translate("taskDelete")}
-                  </button>
+                  <TaskRowActions
+                    running={isTaskRunningStatus(item.status)}
+                    onRerun={() => onRerun(item)}
+                    onDelete={() => onDelete(item.task_id)}
+                    translate={translate}
+                  />
                 </div>
               ))}
             </div>
@@ -645,21 +773,128 @@ function TaskList({
   )
 }
 
-function TaskComposer({ models, onCreate, translate }) {
+function SkillPicker({ anchor, innerRef, skills, onPick, onImport, translate }) {
+  const [search, setSearch] = useState("")
+
+  const filtered = useMemo(() => {
+    const keyword = search.trim().toLowerCase()
+    if (!keyword) return skills
+    return skills.filter((item) =>
+      `${item.display_name || ""} ${item.name || ""} ${item.description || ""}`
+        .toLowerCase()
+        .includes(keyword)
+    )
+  }, [skills, search])
+
+  if (typeof document === "undefined") return null
+
+  // Render in a portal with fixed positioning so the popup is not clipped by
+  // (or limited to) the task composer panel.
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const width = Math.min(340, Math.max(240, viewportWidth - 16))
+  const left = anchor ? Math.min(Math.max(8, anchor.left), Math.max(8, viewportWidth - width - 8)) : 8
+  const bottom = anchor ? Math.max(8, viewportHeight - anchor.top + 6) : 8
+  const maxHeight = anchor ? Math.max(200, anchor.top - 16) : 340
+
+  return createPortal(
+    <div
+      ref={innerRef}
+      className="skill-picker"
+      style={{
+        left: `${left}px`,
+        bottom: `${bottom}px`,
+        width: `${width}px`,
+        maxHeight: `${maxHeight}px`,
+      }}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <input
+        className="skill-picker-search"
+        autoFocus
+        value={search}
+        placeholder={translate("skillSearchPlaceholder")}
+        onChange={(event) => setSearch(event.target.value)}
+      />
+      <div className="skill-picker-list">
+        {filtered.length === 0 ? (
+          <div className="empty skill-picker-empty">{translate("skillPickerEmpty")}</div>
+        ) : (
+          filtered.map((skill) => (
+            <button
+              type="button"
+              className="skill-picker-item"
+              key={skill.name}
+              onClick={() => onPick(skill)}
+            >
+              <span className="skill-picker-badge">
+                {(skill.display_name || skill.name || "?").slice(0, 1).toUpperCase()}
+              </span>
+              <span className="skill-picker-text">
+                <span className="skill-picker-name">{skill.display_name || skill.name}</span>
+                <span className="skill-picker-desc">{skill.description || skill.name}</span>
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+      <button type="button" className="skill-picker-import" onClick={onImport}>
+        {translate("skillImport")}
+      </button>
+    </div>,
+    document.body,
+  )
+}
+
+function TaskComposer({
+  models,
+  agents,
+  skills,
+  composerRunning,
+  onCreate,
+  onStop,
+  onRequestCreateAgent,
+  onImportSkill,
+  translate,
+}) {
   const [query, setQuery] = useState("")
   const [modelId, setModelId] = useState("")
   const [provider, setProvider] = useState("openai-compatible")
-  const [mode, setMode] = useState("build")
+  const [agentId, setAgentId] = useState("")
   const [busy, setBusy] = useState(false)
+  const [skillsOpen, setSkillsOpen] = useState(false)
+  const [pickerAnchor, setPickerAnchor] = useState(null)
+  const [pickedSkills, setPickedSkills] = useState([])
+  const skillsButtonRef = useRef(null)
+  const pickerRef = useRef(null)
 
   const effectiveModelId = modelId || (models && models.length ? models[0].model_id : "")
+  const effectiveAgentId = agentId || (agents && agents.length ? agents[0].agent_id : "")
+
+  useEffect(() => {
+    if (!skillsOpen) return undefined
+    const closePicker = (event) => {
+      if (pickerRef.current && pickerRef.current.contains(event.target)) return
+      if (skillsButtonRef.current && skillsButtonRef.current.contains(event.target)) return
+      setSkillsOpen(false)
+    }
+    const handleViewportChange = () => setSkillsOpen(false)
+    window.addEventListener("click", closePicker)
+    window.addEventListener("resize", handleViewportChange)
+    window.addEventListener("scroll", handleViewportChange, true)
+    return () => {
+      window.removeEventListener("click", closePicker)
+      window.removeEventListener("resize", handleViewportChange)
+      window.removeEventListener("scroll", handleViewportChange, true)
+    }
+  }, [skillsOpen])
 
   const submit = async (event) => {
     event.preventDefault()
-    if (!query.trim()) return
+    if (composerRunning || !query.trim()) return
     setBusy(true)
     try {
-      const payload = { query, stream: false, mode }
+      const payload = { query, stream: false, agent_id: effectiveAgentId }
       if (models && models.length) {
         payload.model_id = effectiveModelId
       } else {
@@ -667,6 +902,7 @@ function TaskComposer({ models, onCreate, translate }) {
       }
       await onCreate(payload)
       setQuery("")
+      setPickedSkills([])
     } catch {
       // surface errors through the global error banner
     } finally {
@@ -680,6 +916,14 @@ function TaskComposer({ models, onCreate, translate }) {
     }
   }
 
+  const applySkill = (skill) => {
+    const label = skill.display_name || skill.name
+    const line = skill.description ? `使用技能 ${label}：${skill.description}` : `使用技能 ${label}`
+    setQuery((prev) => (prev ? `${prev}\n${line}` : line))
+    setPickedSkills((prev) => (prev.includes(skill.name) ? prev : [...prev, skill.name]))
+    setSkillsOpen(false)
+  }
+
   return (
     <section className="panel task-composer-panel">
       <div className="panel-titlebar">
@@ -687,66 +931,135 @@ function TaskComposer({ models, onCreate, translate }) {
       </div>
       <div className="panel-body">
         <form className="task-composer" onSubmit={submit}>
-          <label className="composer-field">
-            <span>{translate("taskFormPrompt")}</span>
-            <textarea
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={onQueryKeyDown}
-              placeholder={translate("taskFormPlaceholder")}
-            />
-          </label>
-          <div className="composer-fields">
+          <textarea
+            className="composer-textarea"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={onQueryKeyDown}
+            placeholder={translate("taskFormPlaceholder")}
+          />
+          <div className="composer-toolbar">
+            <select
+              className="composer-select"
+              value={effectiveAgentId}
+              onChange={(event) => {
+                const value = event.target.value
+                if (value === AGENT_CREATE_OPTION) {
+                  onRequestCreateAgent()
+                  return
+                }
+                setAgentId(value)
+              }}
+              title={translate("taskFormAgent")}
+            >
+              {(agents || []).map((item) => (
+                <option value={item.agent_id} key={item.agent_id}>
+                  {agentDisplayName(item, translate)}
+                </option>
+              ))}
+              <option value={AGENT_CREATE_OPTION}>{translate("agentCreateOption")}</option>
+            </select>
+
             {models && models.length > 0 ? (
-              <label className="composer-field">
-                <span>{translate("taskFormModel")}</span>
-                <select value={effectiveModelId} onChange={(event) => setModelId(event.target.value)}>
-                  {models.map((item) => (
-                    <option value={item.model_id} key={item.model_id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <select
+                className="composer-select"
+                value={effectiveModelId}
+                onChange={(event) => setModelId(event.target.value)}
+                title={translate("taskFormModel")}
+              >
+                {models.map((item) => (
+                  <option value={item.model_id} key={item.model_id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
             ) : (
-              <label className="composer-field">
-                <span>{translate("taskFormProvider")}</span>
-                <select value={provider} onChange={(event) => setProvider(event.target.value)}>
-                  {PROVIDER_OPTIONS.map((item) => (
-                    <option value={item} key={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <select
+                className="composer-select"
+                value={provider}
+                onChange={(event) => setProvider(event.target.value)}
+                title={translate("taskFormProvider")}
+              >
+                {PROVIDER_OPTIONS.map((item) => (
+                  <option value={item} key={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <div className="composer-skills">
+              <button
+                ref={skillsButtonRef}
+                type="button"
+                className={`composer-skills-btn ${skillsOpen ? "active" : ""}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  if (skillsOpen) {
+                    setSkillsOpen(false)
+                    return
+                  }
+                  const rect = skillsButtonRef.current?.getBoundingClientRect()
+                  setPickerAnchor(rect ? { left: rect.left, top: rect.top } : null)
+                  setSkillsOpen(true)
+                }}
+              >
+                {translate("taskFormSkills")}
+                {pickedSkills.length > 0 && (
+                  <span className="composer-skill-count">{pickedSkills.length}</span>
+                )}
+              </button>
+              {skillsOpen && (
+                <SkillPicker
+                  anchor={pickerAnchor}
+                  innerRef={pickerRef}
+                  skills={skills || []}
+                  onPick={applySkill}
+                  onImport={onImportSkill}
+                  translate={translate}
+                />
+              )}
+            </div>
+
+            {composerRunning ? (
+              <button
+                type="button"
+                className="composer-icon-btn stop"
+                onClick={onStop}
+                title={translate("taskStop")}
+                aria-label={translate("taskStop")}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M6 6l12 12M18 6L6 18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="composer-icon-btn create"
+                disabled={busy || !query.trim()}
+                title={translate("taskFormCreate")}
+                aria-label={translate("taskFormCreate")}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M2 21l21-9L2 3v7l15 2-15 2z" fill="currentColor" />
+                </svg>
+              </button>
             )}
           </div>
-          <div className="composer-mode">
-            <span className="composer-mode-label">{translate("modeLabel")}</span>
-            <div className="segmented">
-              {MODE_OPTIONS.map((option) => (
-                <button
-                  type="button"
-                  key={option.value}
-                  className={`segmented-item ${mode === option.value ? "active" : ""}`}
-                  onClick={() => setMode(option.value)}
-                >
-                  {translate(option.labelKey)}
-                </button>
-              ))}
-            </div>
-            <span className="hint">{translate("modeHint")}</span>
-          </div>
-          <button className="btn" type="submit" disabled={busy || !query.trim()}>
-            {busy ? translate("taskFormCreating") : translate("taskFormCreate")}
-          </button>
         </form>
       </div>
     </section>
   )
 }
 
-function TaskDetail({ task, result, translate }) {
+function TaskDetail({ task, result, agents, translate }) {
   if (!task) {
     return <div className="empty">{translate("taskSelectHint")}</div>
   }
@@ -769,8 +1082,8 @@ function TaskDetail({ task, result, translate }) {
           <strong>{task.provider}</strong>
         </div>
         <div className="detail-item">
-          <span>{translate("modeLabel")}</span>
-          <strong>{translate(modeLabelKey(task.mode))}</strong>
+          <span>{translate("detailAgent")}</span>
+          <strong>{resolveAgentName(task.mode, agents, translate)}</strong>
         </div>
         <div className="detail-item">
           <span>{translate("detailModel")}</span>
@@ -853,7 +1166,7 @@ function TaskDetail({ task, result, translate }) {
   )
 }
 
-function TaskDetailPage({ task, taskResult, taskTab, setTaskTab, events, hasMoreEvents, isLoadingEvents, onLoadMore, translate }) {
+function TaskDetailPage({ task, taskResult, agents, taskTab, setTaskTab, events, hasMoreEvents, isLoadingEvents, onLoadMore, translate }) {
   return (
     <section className="panel">
       <div className="task-page-titlebar">
@@ -876,7 +1189,7 @@ function TaskDetailPage({ task, taskResult, taskTab, setTaskTab, events, hasMore
       </div>
       <div className="panel-body">
         {taskTab === "detail" ? (
-          <TaskDetail task={task} result={taskResult} translate={translate} />
+          <TaskDetail task={task} result={taskResult} agents={agents} translate={translate} />
         ) : (
           <EventTimeline task={task} events={events} hasMore={hasMoreEvents} loadingMore={isLoadingEvents} onLoadMore={onLoadMore} translate={translate} />
         )}
@@ -992,410 +1305,22 @@ function EventTimeline({ task, events, hasMore, loadingMore, onLoadMore, transla
   )
 }
 
-function TokenLimitField({ label, value, presets, onChange, translate }) {
-  const current = String(value ?? "").trim()
-
-  return (
-    <div className="token-field">
-      <span className="token-field-label">{label}</span>
-      <input
-        type="text"
-        inputMode="numeric"
-        value={current}
-        placeholder={translate("modelFormTokensDefault")}
-        onChange={(event) => onChange(event.target.value.replace(/[^\d]/g, ""))}
-      />
-      <div className="token-presets">
-        {presets.map((preset) => {
-          const isActive = current === String(preset)
-          return (
-            <button
-              key={preset}
-              type="button"
-              className={`token-preset ${isActive ? "active" : ""}`}
-              onClick={() => onChange(isActive ? "" : String(preset))}
-            >
-              {formatTokenCount(preset)}
-            </button>
-          )
-        })}
-        <button
-          type="button"
-          className="token-preset token-preset-clear"
-          disabled={!current}
-          onClick={() => onChange("")}
-        >
-          {translate("modelFormTokensClear")}
-        </button>
-      </div>
-      <span className="token-field-hint">
-        {current ? `${current} tokens` : translate("modelFormTokensDefaultHint")}
-      </span>
-    </div>
-  )
-}
-
-function ModelManager({ models, onCreate, onUpdate, onDelete, onRefresh, translate }) {
-  const [form, setForm] = useState({
-    model_id: "",
-    name: "",
-    provider: "openai-compatible",
-    base_url: "",
-    api_key: "",
-    supports_tool_calls: true,
-    supports_image_input: false,
-    thinking_mode: false,
-    max_input_tokens: "",
-    max_output_tokens: "",
-  })
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState("")
-
-  const editingId = form.model_id
-
-  const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
-
-  const startEdit = (model) => {
-    setError("")
-    setForm({
-      model_id: model.model_id,
-      name: model.name || "",
-      provider: model.provider || "openai-compatible",
-      base_url: model.base_url || "",
-      api_key: model.api_key || "",
-      supports_tool_calls: model.supports_tool_calls !== false,
-      supports_image_input: model.supports_image_input === true,
-      thinking_mode: model.thinking_mode === true,
-      max_input_tokens: model.max_input_tokens ? String(model.max_input_tokens) : "",
-      max_output_tokens: model.max_output_tokens ? String(model.max_output_tokens) : "",
-    })
-  }
-
-  const resetForm = () => {
-    setForm({
-      model_id: "",
-      name: "",
-      provider: "openai-compatible",
-      base_url: "",
-      api_key: "",
-      supports_tool_calls: true,
-      supports_image_input: false,
-      thinking_mode: false,
-      max_input_tokens: "",
-      max_output_tokens: "",
-    })
-    setError("")
-  }
-
-  const submit = async (event) => {
-    event.preventDefault()
-    setError("")
-    if (!form.name.trim()) {
-      setError(translate("modelNameRequired"))
-      return
-    }
-    setBusy(true)
-    const payload = {
-      name: form.name.trim(),
-      provider: form.provider,
-      base_url: form.base_url.trim(),
-      api_key: form.api_key,
-      supports_tool_calls: form.supports_tool_calls,
-      supports_image_input: form.supports_image_input,
-      thinking_mode: form.thinking_mode,
-      max_input_tokens: Number(form.max_input_tokens) || 0,
-      max_output_tokens: Number(form.max_output_tokens) || 0,
-    }
-    try {
-      if (editingId) {
-        await onUpdate(editingId, payload)
-      } else {
-        await onCreate(payload)
-      }
-      resetForm()
-    } catch {
-      // error surfaced through the global banner
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const handleDelete = async (model) => {
-    if (!window.confirm(`${translate("modelDeleteConfirm")} (${model.name})`)) return
-    try {
-      await onDelete(model.model_id)
-    } catch {
-      // error surfaced through the global banner
-    }
-  }
-
-  return (
-    <section className="panel model-manager">
-      <div className="panel-titlebar">
-        <div>
-          <h2>{translate("modelManagerTitle")}</h2>
-          <span className="hint">{translate("modelManagerHint")}</span>
-        </div>
-        <button type="button" className="btn btn-compact" onClick={onRefresh}>
-          {translate("modelListRefresh")}
-        </button>
-      </div>
-      <div className="panel-body">
-        <form className="model-form form-grid" onSubmit={submit}>
-          <p className="model-form-heading">
-            {editingId ? translate("modelFormEdit") : translate("modelFormCreate")}
-          </p>
-          <label>
-            <span>{translate("modelFormName")}</span>
-            <input value={form.name} onChange={(event) => setField("name", event.target.value)} placeholder={translate("modelFormNamePlaceholder")} />
-          </label>
-          <label>
-            <span>{translate("modelFormProvider")}</span>
-            <select value={form.provider} onChange={(event) => setField("provider", event.target.value)}>
-              {PROVIDER_OPTIONS.map((item) => (
-                <option value={item} key={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>{translate("modelFormBaseUrl")}</span>
-            <input value={form.base_url} onChange={(event) => setField("base_url", event.target.value)} placeholder={translate("modelFormBaseUrlPlaceholder")} />
-          </label>
-          <label>
-            <span>{translate("modelFormApiKey")}</span>
-            <input type="password" value={form.api_key} onChange={(event) => setField("api_key", event.target.value)} placeholder={translate("modelFormApiKeyPlaceholder")} />
-          </label>
-          <div className="model-form-checks">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={form.supports_tool_calls}
-                onChange={(event) => setField("supports_tool_calls", event.target.checked)}
-              />
-              {translate("modelFormToolCalls")}
-            </label>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={form.supports_image_input}
-                onChange={(event) => setField("supports_image_input", event.target.checked)}
-              />
-              {translate("modelFormImageInput")}
-            </label>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={form.thinking_mode}
-                onChange={(event) => setField("thinking_mode", event.target.checked)}
-              />
-              {translate("modelFormThinking")}
-            </label>
-          </div>
-          <div className="model-form-tokens">
-            <TokenLimitField
-              label={translate("modelFormMaxInput")}
-              value={form.max_input_tokens}
-              presets={INPUT_TOKEN_PRESETS}
-              onChange={(value) => setField("max_input_tokens", value)}
-              translate={translate}
-            />
-            <TokenLimitField
-              label={translate("modelFormMaxOutput")}
-              value={form.max_output_tokens}
-              presets={OUTPUT_TOKEN_PRESETS}
-              onChange={(value) => setField("max_output_tokens", value)}
-              translate={translate}
-            />
-          </div>
-          {error && <div className="form-error">{error}</div>}
-          <div className="model-form-actions">
-            <button type="submit" className="btn" disabled={busy}>
-              {busy ? translate("modelFormSaving") : editingId ? translate("modelFormUpdate") : translate("modelFormSave")}
-            </button>
-            {editingId && (
-              <button type="button" className="btn btn-compact" onClick={resetForm}>
-                {translate("modelFormCancel")}
-              </button>
-            )}
-          </div>
-        </form>
-
-        <div className="model-list">
-          {models.length === 0 ? (
-            <div className="empty">{translate("modelListEmpty")}</div>
-          ) : (
-            <table className="model-table">
-              <thead>
-                <tr>
-                  <th>{translate("modelListName")}</th>
-                  <th>{translate("modelListProvider")}</th>
-                  <th>{translate("modelListBaseUrl")}</th>
-                  <th>{translate("modelListToolCalls")}</th>
-                  <th>{translate("modelListImageInput")}</th>
-                  <th>{translate("modelListThinking")}</th>
-                  <th>{translate("modelListTokens")}</th>
-                  <th>{translate("modelListActions")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {models.map((model) => (
-                  <tr key={model.model_id}>
-                    <td className="model-name">{model.name}</td>
-                    <td>
-                      <code>{model.provider}</code>
-                    </td>
-                    <td className="mono">{model.base_url || "-"}</td>
-                    <td className={model.supports_tool_calls ? "flag-on" : "flag-off"}>
-                      {model.supports_tool_calls ? translate("yes") : translate("no")}
-                    </td>
-                    <td className={model.supports_image_input ? "flag-on" : "flag-off"}>
-                      {model.supports_image_input ? translate("yes") : translate("no")}
-                    </td>
-                    <td className={model.thinking_mode ? "flag-on" : "flag-off"}>
-                      {model.thinking_mode ? translate("yes") : translate("no")}
-                    </td>
-                    <td className="mono">
-                      {model.max_input_tokens ? formatTokenCount(model.max_input_tokens) : "-"}/
-                      {model.max_output_tokens ? formatTokenCount(model.max_output_tokens) : "-"}
-                    </td>
-                    <td className="model-actions">
-                      <button type="button" className="btn btn-xs" onClick={() => startEdit(model)}>
-                        {translate("modelEdit")}
-                      </button>
-                      <button type="button" className="btn btn-danger btn-xs" onClick={() => handleDelete(model)}>
-                        {translate("modelDelete")}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }) {
-  const [value, setValue] = useState("")
-  const [busy, setBusy] = useState(false)
-
-  useEffect(() => {
-    if (!maxStepsConfig) return
-    setValue(String(maxStepsConfig.max_steps ?? 8))
-  }, [maxStepsConfig])
-
-  const submit = async (event) => {
-    event.preventDefault()
-    const parsed = Number(value)
-    if (!Number.isFinite(parsed) || parsed < 1) return
-    setBusy(true)
-    try {
-      await onSave(Math.max(1, Math.min(parsed, 1000)))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <section className="panel">
-      <div className="panel-titlebar">
-        <div>
-          <h2>{translate("maxStepsTitle")}</h2>
-          <span className="hint">
-            {translate("maxStepsCurrentSource")}:{" "}
-            {maxStepsConfig?.source === "database"
-              ? translate("maxStepsSourceDb")
-              : translate("maxStepsSourceEnv")}
-          </span>
-        </div>
-        <button type="button" className="btn btn-compact" onClick={onRefresh}>
-          {translate("sidebarQuickRefreshMaxSteps")}
-        </button>
-      </div>
-      <div className="panel-body">
-        <form className="form-grid" onSubmit={submit}>
-          <label>
-            <span>{translate("maxStepsCurrent")}</span>
-            <input type="text" readOnly value={maxStepsConfig ? maxStepsConfig.max_steps : ""} />
-          </label>
-          <label>
-            <span>{translate("maxStepsSet")}</span>
-            <input type="number" min="1" max="1000" value={value} onChange={(event) => setValue(event.target.value)} />
-          </label>
-          <button type="submit" className="btn" disabled={busy || !value}>
-            {busy ? translate("maxStepsSaving") : translate("maxStepsSave")}
-          </button>
-        </form>
-        <div className="hint">{translate("maxStepsHint")}</div>
-      </div>
-    </section>
-  )
-}
-
-function RetentionManager({ retentionConfig, onSave, onRefresh, translate }) {
-  const [days, setDays] = useState("")
-  const [busy, setBusy] = useState(false)
-
-  useEffect(() => {
-    if (!retentionConfig) return
-    setDays(String(retentionConfig.retention_days ?? 0))
-  }, [retentionConfig])
-
-  const submit = async (event) => {
-    event.preventDefault()
-    const parsed = Number(days)
-    if (!Number.isFinite(parsed) || parsed < 0) return
-    setBusy(true)
-    try {
-      await onSave(parsed)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <section className="panel">
-      <div className="panel-titlebar">
-        <div>
-          <h2>{translate("retentionTitle")}</h2>
-          <span className="hint">
-            {translate("retentionCurrentSource")}:{" "}
-            {retentionConfig?.retention_source === "database"
-              ? translate("retentionSourceDb")
-              : translate("retentionSourceEnv")}
-          </span>
-        </div>
-        <button type="button" className="btn btn-compact" onClick={onRefresh}>
-          {translate("sidebarQuickRefreshRetention")}
-        </button>
-      </div>
-      <div className="panel-body">
-        <form className="form-grid" onSubmit={submit}>
-          <label>
-            <span>{translate("retentionCurrentDays")}</span>
-            <input type="text" readOnly value={retentionConfig ? retentionConfig.retention_days : ""} />
-          </label>
-          <label>
-            <span>{translate("retentionSetDays")}</span>
-            <input type="number" min="0" value={days} onChange={(event) => setDays(event.target.value)} />
-          </label>
-          <button type="submit" className="btn" disabled={busy || !days}>
-            {busy ? translate("retentionSaving") : translate("retentionSave")}
-          </button>
-        </form>
-        <div className="hint">{translate("retentionHint")}</div>
-      </div>
-    </section>
-  )
-}
-
 export default function App() {
   const [sessions, setSessions] = useState([])
+  const [workspaces, setWorkspaces] = useState([])
+  const [agents, setAgents] = useState([])
+  const [mcpServers, setMcpServers] = useState([])
+  const [agentMeta, setAgentMeta] = useState(null)
+  const [agentCreateSignal, setAgentCreateSignal] = useState(0)
+  const [skills, setSkills] = useState([])
+  const [skillsRoot, setSkillsRoot] = useState("")
+  const [composerTaskId, setComposerTaskId] = useState("")
+  const [taskColumnWidths, setTaskColumnWidths] = useState(loadTaskColumnWidths)
+  const [leftColumnCollapsed, setLeftColumnCollapsed] = useState(loadLeftColumnCollapsed)
+  const [resizingColumn, setResizingColumn] = useState("")
+  const taskWorkspaceRef = useRef(null)
   const [activeSessionId, setActiveSessionId] = useState("")
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState("")
   const [tasks, setTasks] = useState([])
   const [selectedId, setSelectedId] = useState("")
   const [selectedTask, setSelectedTask] = useState(null)
@@ -1520,6 +1445,37 @@ export default function App() {
     return list
   }, [])
 
+  const refreshWorkspaces = useCallback(async () => {
+    const list = await fetchWorkspaces()
+    setWorkspaces(list)
+    return list
+  }, [])
+
+  const refreshAgents = useCallback(async () => {
+    const list = await fetchAgents()
+    setAgents(list)
+    return list
+  }, [])
+
+  const refreshAgentMeta = useCallback(async () => {
+    const data = await fetchAgentMeta()
+    setAgentMeta(data)
+    return data
+  }, [])
+
+  const refreshMcpServers = useCallback(async () => {
+    const list = await fetchMcpServers()
+    setMcpServers(list)
+    return list
+  }, [])
+
+  const refreshSkills = useCallback(async () => {
+    const data = await fetchSkills()
+    setSkills(data.skills ?? [])
+    setSkillsRoot(data.skills_root ?? "")
+    return data
+  }, [])
+
   const refreshRetention = useCallback(async () => {
     const config = await fetchRetentionConfig()
     setRetentionConfig(config)
@@ -1618,20 +1574,238 @@ export default function App() {
     [totalTaskPages]
   )
 
+  const handleSelectSession = useCallback(
+    (sessionId) => {
+      const target = sessions.find((item) => item.session_id === sessionId)
+      setActiveWorkspaceId(target?.workspace_id || "")
+      selectSession(sessionId)
+    },
+    [selectSession, sessions]
+  )
+
+  const handleSelectWorkspace = useCallback((workspaceId) => {
+    setActiveWorkspaceId(workspaceId || "")
+  }, [])
+
   const createNewSession = useCallback(
-    async (name) => {
+    async (workspaceId = null) => {
+      const target = workspaceId === null ? activeWorkspaceId || "" : workspaceId || ""
       try {
-        const created = await createSession(name)
+        const scoped = sessions.filter((item) => (item.workspace_id || "") === target)
+        const latestSession = scoped[scoped.length - 1]
+        if (latestSession && (latestSession.task_count || 0) === 0) {
+          setActiveWorkspaceId(target)
+          await selectSession(latestSession.session_id)
+          return
+        }
+        const created = await createSession("", target || undefined)
         await refreshSessions()
         if (created?.session_id) {
+          setActiveWorkspaceId(target)
           await selectSession(created.session_id)
         }
       } catch (sessionError) {
         setError(sessionError?.message || translate("errorLoadFailed"))
       }
     },
-    [refreshSessions, selectSession, translate]
+    [activeWorkspaceId, refreshSessions, selectSession, sessions, translate]
   )
+
+  const createWorkspaceHandler = useCallback(
+    async (payload) => {
+      try {
+        await createWorkspace(payload)
+        await refreshWorkspaces()
+      } catch (workspaceError) {
+        setError(workspaceError?.message || translate("errorLoadFailed"))
+        throw workspaceError
+      }
+    },
+    [refreshWorkspaces, translate]
+  )
+
+  const updateWorkspaceHandler = useCallback(
+    async (workspaceId, payload) => {
+      try {
+        await updateWorkspace(workspaceId, payload)
+        await refreshWorkspaces()
+        await refreshSessions()
+      } catch (workspaceError) {
+        setError(workspaceError?.message || translate("errorLoadFailed"))
+        throw workspaceError
+      }
+    },
+    [refreshSessions, refreshWorkspaces, translate]
+  )
+
+  const renameWorkspaceHandler = useCallback(
+    async (workspaceId, name) => {
+      try {
+        await updateWorkspace(workspaceId, { name })
+        await refreshWorkspaces()
+      } catch (workspaceError) {
+        setError(workspaceError?.message || translate("errorLoadFailed"))
+      }
+    },
+    [refreshWorkspaces, translate]
+  )
+
+  const deleteWorkspaceHandler = useCallback(
+    async (workspaceId) => {
+      if (!window.confirm(translate("workspaceDeleteConfirm"))) return
+      try {
+        await deleteWorkspace(workspaceId)
+        if (activeWorkspaceId === workspaceId) setActiveWorkspaceId("")
+        await refreshWorkspaces()
+        await refreshSessions()
+      } catch (workspaceError) {
+        setError(workspaceError?.message || translate("errorLoadFailed"))
+      }
+    },
+    [activeWorkspaceId, refreshSessions, refreshWorkspaces, translate]
+  )
+
+  const manageWorkspaces = useCallback(() => setActiveMenu("workspaces"), [])
+
+  const createAgentHandler = useCallback(
+    async (payload) => {
+      try {
+        await createAgent(payload)
+        await refreshAgents()
+      } catch (agentError) {
+        setError(agentError?.message || translate("errorLoadFailed"))
+        throw agentError
+      }
+    },
+    [refreshAgents, translate]
+  )
+
+  const updateAgentHandler = useCallback(
+    async (agentId, payload) => {
+      try {
+        await updateAgent(agentId, payload)
+        await refreshAgents()
+      } catch (agentError) {
+        setError(agentError?.message || translate("errorLoadFailed"))
+        throw agentError
+      }
+    },
+    [refreshAgents, translate]
+  )
+
+  const deleteAgentHandler = useCallback(
+    async (agentId) => {
+      try {
+        await deleteAgent(agentId)
+        await refreshAgents()
+      } catch (agentError) {
+        setError(agentError?.message || translate("errorLoadFailed"))
+      }
+    },
+    [refreshAgents, translate]
+  )
+
+  const requestCreateAgent = useCallback(() => {
+    setActiveMenu("agents")
+    setAgentCreateSignal((prev) => prev + 1)
+  }, [])
+
+  const saveSkillsRootHandler = useCallback(
+    async (root) => {
+      try {
+        const data = await updateSkillsRoot(root)
+        setSkillsRoot(data.skills_root ?? "")
+        await refreshSkills()
+      } catch (skillError) {
+        setError(skillError?.message || translate("errorLoadFailed"))
+        throw skillError
+      }
+    },
+    [refreshSkills, translate]
+  )
+
+  const importSkillHandler = useCallback(
+    async (sourcePath) => {
+      try {
+        await importSkill(sourcePath)
+        await refreshSkills()
+      } catch (skillError) {
+        setError(skillError?.message || translate("errorLoadFailed"))
+        throw skillError
+      }
+    },
+    [refreshSkills, translate]
+  )
+
+  const deleteSkillHandler = useCallback(
+    async (name) => {
+      try {
+        await deleteSkill(name)
+        await refreshSkills()
+      } catch (skillError) {
+        setError(skillError?.message || translate("errorLoadFailed"))
+      }
+    },
+    [refreshSkills, translate]
+  )
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TASK_COLUMN_WIDTHS_KEY, JSON.stringify(taskColumnWidths))
+    } catch {
+      // ignore persistence errors
+    }
+  }, [taskColumnWidths])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TASK_COLUMN_COLLAPSED_KEY, leftColumnCollapsed ? "1" : "0")
+    } catch {
+      // ignore persistence errors
+    }
+  }, [leftColumnCollapsed])
+
+  const startColumnResize = (event, which) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const containerWidth = taskWorkspaceRef.current?.clientWidth || window.innerWidth
+    const available = Math.max(
+      TASK_COLUMN_MIN_LEFT + TASK_COLUMN_MIN_MID,
+      containerWidth - TASK_COLUMN_RESIZER_WIDTH * 2 - TASK_COLUMN_MIN_DETAIL
+    )
+    const startLeft = taskColumnWidths.left
+    const startMid = taskColumnWidths.mid
+
+    setResizingColumn(which)
+    const previousUserSelect = document.body.style.userSelect
+    const previousCursor = document.body.style.cursor
+    document.body.style.userSelect = "none"
+    document.body.style.cursor = "col-resize"
+
+    const onMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX
+      if (which === "left") {
+        const maxLeft = Math.max(TASK_COLUMN_MIN_LEFT, available - startMid)
+        const next = Math.min(Math.max(startLeft + delta, TASK_COLUMN_MIN_LEFT), maxLeft)
+        setTaskColumnWidths((prev) => ({ ...prev, left: Math.round(next) }))
+      } else {
+        const maxMid = Math.max(TASK_COLUMN_MIN_MID, available - startLeft)
+        const next = Math.min(Math.max(startMid + delta, TASK_COLUMN_MIN_MID), maxMid)
+        setTaskColumnWidths((prev) => ({ ...prev, mid: Math.round(next) }))
+      }
+    }
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      document.body.style.userSelect = previousUserSelect
+      document.body.style.cursor = previousCursor
+      setResizingColumn("")
+    }
+
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+  }
 
   const renameSessionHandler = useCallback(
     async (sessionId, name) => {
@@ -1659,6 +1833,7 @@ export default function App() {
         setSessions(nextList)
         if (sessionId === activeSessionRef.current) {
           const nextId = nextList[0]?.session_id || ""
+          setActiveWorkspaceId(nextList[0]?.workspace_id || "")
           await selectSession(nextId)
         }
       } catch (sessionError) {
@@ -1675,6 +1850,7 @@ export default function App() {
         const result = await createTask({ ...payload, session_id: activeSessionRef.current })
         if (result?.task_id) {
           setSelectedId(result.task_id)
+          setComposerTaskId(result.task_id)
           setEvents([])
           nextOffsetRef.current = 0
           setHasMoreEvents(false)
@@ -1684,6 +1860,7 @@ export default function App() {
           await refreshTasks()
           await refreshSessions()
         }
+        return result
       } catch (createError) {
         setError(createError?.message || translate("errorUnknown"))
         throw createError
@@ -1691,6 +1868,33 @@ export default function App() {
     },
     [loadEvents, refreshTask, refreshTasks, refreshSessions, translate]
   )
+
+  // Re-running replays the original request; a model that no longer exists falls
+  // back to the provider recorded on the task.
+  const rerunTaskHandler = useCallback(
+    (task) => {
+      if (!task) return
+      const payload = { query: task.query, agent_id: task.mode || "build", stream: false }
+      if (task.model_id && models.some((item) => item.model_id === task.model_id)) {
+        payload.model_id = task.model_id
+      } else if (task.provider) {
+        payload.provider = task.provider
+      }
+      createNewTask(payload).catch(() => {})
+    },
+    [createNewTask, models]
+  )
+
+  const stopComposerTask = useCallback(async () => {
+    if (!composerTaskId) return
+    try {
+      await stopTask(composerTaskId)
+      await refreshTasks()
+      await refreshTask(composerTaskId)
+    } catch (stopError) {
+      setError(stopError?.message || translate("errorUnknown"))
+    }
+  }, [composerTaskId, refreshTask, refreshTasks, translate])
 
   const selectTaskForBatch = useCallback((taskId) => {
     setSelectedTaskIds((prev) => {
@@ -1826,6 +2030,44 @@ export default function App() {
     [refreshModels, translate]
   )
 
+  const createMcpServerHandler = useCallback(
+    async (payload) => {
+      try {
+        await createMcpServer(payload)
+        await refreshMcpServers()
+      } catch (mcpError) {
+        setError(mcpError?.message || translate("errorUnknown"))
+        throw mcpError
+      }
+    },
+    [refreshMcpServers, translate]
+  )
+
+  const updateMcpServerHandler = useCallback(
+    async (mcpId, payload) => {
+      try {
+        await updateMcpServer(mcpId, payload)
+        await refreshMcpServers()
+      } catch (mcpError) {
+        setError(mcpError?.message || translate("errorUnknown"))
+        throw mcpError
+      }
+    },
+    [refreshMcpServers, translate]
+  )
+
+  const deleteMcpServerHandler = useCallback(
+    async (mcpId) => {
+      try {
+        await deleteMcpServer(mcpId)
+        await refreshMcpServers()
+      } catch (mcpError) {
+        setError(mcpError?.message || translate("errorUnknown"))
+      }
+    },
+    [refreshMcpServers, translate]
+  )
+
   const updateRetention = useCallback(
     async (daysValue) => {
       try {
@@ -1863,13 +2105,28 @@ export default function App() {
         const sessionList = await fetchSessions()
         if (cancelled) return
         setSessions(sessionList)
+        const workspaceList = await fetchWorkspaces()
+        if (cancelled) return
+        setWorkspaces(workspaceList)
+        const agentList = await fetchAgents()
+        if (cancelled) return
+        setAgents(agentList)
+        const skillData = await fetchSkills()
+        if (cancelled) return
+        setSkills(skillData.skills ?? [])
+        setSkillsRoot(skillData.skills_root ?? "")
         const modelList = await fetchModels()
         if (cancelled) return
         setModels(modelList)
+        const mcpList = await fetchMcpServers()
+        if (cancelled) return
+        setMcpServers(mcpList)
 
         const sid = activeSessionRef.current || (sessionList[0]?.session_id ?? "")
         if (sid) {
           if (sid !== activeSessionRef.current) setActiveSessionId(sid)
+          const currentSession = sessionList.find((item) => item.session_id === sid)
+          setActiveWorkspaceId(currentSession?.workspace_id || "")
           const taskList = await fetchTasks(sid)
           if (cancelled) return
           setTasks(taskList)
@@ -1895,6 +2152,7 @@ export default function App() {
       setError(maxStepsError?.message || translate("errorLoadFailed"))
     )
     refreshHealth().catch(() => {})
+    refreshAgentMeta().catch(() => {})
 
     const timer = setInterval(() => {
       refreshHealth().catch(() => {})
@@ -1903,6 +2161,24 @@ export default function App() {
       )
       if (activeMenu === "tasks") {
         refreshTasks().catch((tasksError) => setError(tasksError?.message || translate("errorLoadFailed")))
+        refreshSessions().catch(() => {})
+        refreshWorkspaces().catch(() => {})
+        refreshAgents().catch(() => {})
+        refreshSkills().catch(() => {})
+      }
+      if (activeMenu === "agents") {
+        refreshAgents().catch(() => {})
+        refreshAgentMeta().catch(() => {})
+        refreshMcpServers().catch(() => {})
+      }
+      if (activeMenu === "skills") {
+        refreshSkills().catch(() => {})
+      }
+      if (activeMenu === "mcp") {
+        refreshMcpServers().catch(() => {})
+      }
+      if (activeMenu === "workspaces") {
+        refreshWorkspaces().catch(() => {})
       }
       if (activeMenu === "models") {
         refreshModels().catch(() => {})
@@ -1916,7 +2192,7 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [activeMenu, refreshHealth, refreshMaxSteps, refreshModels, refreshRetention, refreshTasks, translate])
+  }, [activeMenu, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshMcpServers, refreshModels, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshWorkspaces, translate])
 
   useEffect(() => {
     if (!selectedId || activeMenu !== "tasks") return
@@ -1945,6 +2221,30 @@ export default function App() {
     return () => clearInterval(timer)
   }, [activeMenu, selectedId, loadEvents, refreshTask])
 
+  useEffect(() => {
+    if (!composerTaskId) return undefined
+
+    let cancelled = false
+    const check = async () => {
+      try {
+        const task = await fetchTask(composerTaskId)
+        if (cancelled) return
+        if (!task || !isTaskRunningStatus(task.status)) {
+          setComposerTaskId("")
+        }
+      } catch {
+        if (!cancelled) setComposerTaskId("")
+      }
+    }
+
+    check()
+    const timer = setInterval(check, 1500)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [composerTaskId])
+
   return (
     <div className="admin-root">
       <TopBar
@@ -1964,21 +2264,73 @@ export default function App() {
       {error && <div className="global-error">{error}</div>}
       <main className="admin-content">
         {activeMenu === "tasks" ? (
-          <div className="task-workspace">
-            <aside className="task-column">
-              <SessionTabs
-                sessions={sessions}
-                activeSessionId={activeSessionId}
-                onSelect={selectSession}
-                onCreate={createNewSession}
-                onRename={renameSessionHandler}
-                onDelete={deleteSessionHandler}
-                translate={translate}
-              />
+          <div
+            className="task-workspace"
+            ref={taskWorkspaceRef}
+            style={{
+              gridTemplateColumns: `minmax(0, ${
+                leftColumnCollapsed ? TASK_COLUMN_COLLAPSED_WIDTH : taskColumnWidths.left
+              }px) ${leftColumnCollapsed ? 0 : TASK_COLUMN_RESIZER_WIDTH}px minmax(0, ${
+                taskColumnWidths.mid
+              }px) ${TASK_COLUMN_RESIZER_WIDTH}px minmax(0, 1fr)`,
+            }}
+          >
+            {leftColumnCollapsed ? (
+              <aside className="task-column task-column-collapsed">
+                <button
+                  type="button"
+                  className="session-collapse-btn"
+                  onClick={() => setLeftColumnCollapsed(false)}
+                  title={translate("sessionExpand")}
+                  aria-label={translate("sessionExpand")}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M9 5l7 7-7 7"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              </aside>
+            ) : (
+              <aside className="task-column">
+                <SessionTabs
+                  workspaces={workspaces}
+                  sessions={sessions}
+                  activeSessionId={activeSessionId}
+                  activeWorkspaceId={activeWorkspaceId}
+                  onSelect={handleSelectSession}
+                  onSelectWorkspace={handleSelectWorkspace}
+                  onCreate={createNewSession}
+                  onRename={renameSessionHandler}
+                  onDelete={deleteSessionHandler}
+                  onRenameWorkspace={renameWorkspaceHandler}
+                  onDeleteWorkspace={deleteWorkspaceHandler}
+                  onManageWorkspaces={manageWorkspaces}
+                  onCollapse={() => setLeftColumnCollapsed(true)}
+                  translate={translate}
+                />
+              </aside>
+            )}
+            <div
+              className={`task-resizer ${resizingColumn === "left" ? "active" : ""} ${
+                leftColumnCollapsed ? "disabled" : ""
+              }`}
+              role="separator"
+              aria-orientation="vertical"
+              title={translate("taskColumnResize")}
+              onPointerDown={(event) => startColumnResize(event, "left")}
+            />
+            <section className="task-column-main">
               <TaskList
                 tasks={pagedTasks}
                 selectedId={selectedId}
                 onSelect={selectTask}
+                onRerun={rerunTaskHandler}
                 onDelete={deleteTaskItem}
                 selectedTaskIds={selectedTaskIds}
                 isAllPageSelected={isAllPageSelected}
@@ -1991,14 +2343,33 @@ export default function App() {
                 page={currentTaskPage}
                 totalPages={totalTaskPages}
                 onPageChange={changeTaskPage}
+                agents={agents}
                 translate={translate}
               />
-              <TaskComposer models={models} onCreate={createNewTask} translate={translate} />
-            </aside>
+              <TaskComposer
+                models={models}
+                agents={agents}
+                skills={skills}
+                composerRunning={Boolean(composerTaskId)}
+                onCreate={createNewTask}
+                onStop={stopComposerTask}
+                onRequestCreateAgent={requestCreateAgent}
+                onImportSkill={importSkillHandler}
+                translate={translate}
+              />
+            </section>
+            <div
+              className={`task-resizer ${resizingColumn === "mid" ? "active" : ""}`}
+              role="separator"
+              aria-orientation="vertical"
+              title={translate("taskColumnResize")}
+              onPointerDown={(event) => startColumnResize(event, "mid")}
+            />
             <section className="task-detail-pane">
               <TaskDetailPage
                 task={selectedTask}
                 taskResult={taskResult}
+                agents={agents}
                 taskTab={taskTab}
                 setTaskTab={setTaskTab}
                 events={events}
@@ -2009,6 +2380,47 @@ export default function App() {
               />
             </section>
           </div>
+        ) : activeMenu === "agents" ? (
+          <AgentManager
+            agents={agents}
+            meta={agentMeta}
+            createSignal={agentCreateSignal}
+            mcpServers={mcpServers}
+            onManageMcp={() => setActiveMenu("mcp")}
+            onCreate={createAgentHandler}
+            onUpdate={updateAgentHandler}
+            onDelete={deleteAgentHandler}
+            onRefresh={refreshAgents}
+            translate={translate}
+          />
+        ) : activeMenu === "skills" ? (
+          <SkillManager
+            skills={skills}
+            skillsRoot={skillsRoot}
+            onSaveRoot={saveSkillsRootHandler}
+            onImport={importSkillHandler}
+            onDelete={deleteSkillHandler}
+            onRefresh={refreshSkills}
+            translate={translate}
+          />
+        ) : activeMenu === "mcp" ? (
+          <McpServerManager
+            servers={mcpServers}
+            onCreate={createMcpServerHandler}
+            onUpdate={updateMcpServerHandler}
+            onDelete={deleteMcpServerHandler}
+            onRefresh={refreshMcpServers}
+            translate={translate}
+          />
+        ) : activeMenu === "workspaces" ? (
+          <WorkspaceManager
+            workspaces={workspaces}
+            onCreate={createWorkspaceHandler}
+            onUpdate={updateWorkspaceHandler}
+            onDelete={deleteWorkspaceHandler}
+            onRefresh={refreshWorkspaces}
+            translate={translate}
+          />
         ) : activeMenu === "models" ? (
           <ModelManager
             models={models}

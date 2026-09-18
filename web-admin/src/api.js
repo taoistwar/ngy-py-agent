@@ -38,13 +38,117 @@ export async function fetchSessions() {
   return data.sessions ?? []
 }
 
-export async function createSession(name) {
+export async function createSession(name, workspaceId) {
+  const trimmed = typeof name === "string" ? name.trim() : ""
+  const body = {}
+  if (trimmed) {
+    body.name = trimmed
+  }
+  if (workspaceId) {
+    body.workspace_id = workspaceId
+  }
   return requestJson(`${API_BASE}/api/sessions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(body),
+  })
+}
+
+export async function fetchWorkspaces() {
+  const data = await requestJson(`${API_BASE}/api/workspaces`)
+  return data.workspaces ?? []
+}
+
+export async function fetchAgents() {
+  const data = await requestJson(`${API_BASE}/api/agents`)
+  return data.agents ?? []
+}
+
+export async function fetchSkills() {
+  return requestJson(`${API_BASE}/api/skills`)
+}
+
+export async function updateSkillsRoot(skillsRoot) {
+  return requestJson(`${API_BASE}/api/admin/skills-root`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ skills_root: skillsRoot }),
+  })
+}
+
+export async function importSkill(sourcePath) {
+  return requestJson(`${API_BASE}/api/skills/import`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ source_path: sourcePath }),
+  })
+}
+
+export async function deleteSkill(name) {
+  return requestJson(`${API_BASE}/api/skills/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  })
+}
+
+export async function fetchAgentMeta() {
+  return requestJson(`${API_BASE}/api/agents/meta`)
+}
+
+export async function createAgent(payload) {
+  return requestJson(`${API_BASE}/api/agents`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateAgent(agentId, payload) {
+  return requestJson(`${API_BASE}/api/agents/${agentId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteAgent(agentId) {
+  return requestJson(`${API_BASE}/api/agents/${agentId}`, {
+    method: "DELETE",
+  })
+}
+
+export async function createWorkspace(payload) {
+  return requestJson(`${API_BASE}/api/workspaces`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateWorkspace(workspaceId, payload) {
+  return requestJson(`${API_BASE}/api/workspaces/${workspaceId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteWorkspace(workspaceId) {
+  return requestJson(`${API_BASE}/api/workspaces/${workspaceId}`, {
+    method: "DELETE",
   })
 }
 
@@ -95,6 +199,37 @@ export async function deleteModel(modelId) {
   })
 }
 
+export async function fetchMcpServers() {
+  const data = await requestJson(`${API_BASE}/api/mcp-servers`)
+  return data.servers ?? []
+}
+
+export async function createMcpServer(payload) {
+  return requestJson(`${API_BASE}/api/mcp-servers`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateMcpServer(mcpId, payload) {
+  return requestJson(`${API_BASE}/api/mcp-servers/${mcpId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteMcpServer(mcpId) {
+  return requestJson(`${API_BASE}/api/mcp-servers/${mcpId}`, {
+    method: "DELETE",
+  })
+}
+
 export async function createTask(payload) {
   return requestJson(`${API_BASE}/api/tasks`, {
     method: "POST",
@@ -113,6 +248,12 @@ export async function deleteTask(taskId) {
 
 export async function fetchTask(taskId) {
   return requestJson(`${API_BASE}/api/tasks/${taskId}`)
+}
+
+export async function stopTask(taskId) {
+  return requestJson(`${API_BASE}/api/tasks/${taskId}/stop`, {
+    method: "POST",
+  })
 }
 
 export async function fetchTaskEvents(taskId, { offset, limit }) {
