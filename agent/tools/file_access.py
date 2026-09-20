@@ -1,19 +1,25 @@
-"""Path policy for the file reading tool.
+"""Access policy shared by the file tools (read and edit).
 
 Two layers of confinement are applied together:
 
 - **Workspace root** - when the session is bound to a workspace (``base_dir``),
-  reads resolve against it and may never leave it.
+  paths resolve against it and may never leave it.
 - **Global policy** - applied in every case, bound or not:
 
   * ``deny_dirs``: these directories and everything below them are off limits.
   * ``deny_files``: these exact files are off limits.
-  * ``allow_dirs``: when non-empty, only files below these directories may be read.
+  * ``allow_dirs``: when non-empty, only files below these directories may be accessed.
 
   Deny rules always win over allow rules.
 
 The policy lives in a JSON file (``FILE_ACCESS_CONFIG`` to relocate it, default
 ``data/file_access.json``). A missing or unreadable file means "no policy".
+
+**Additional read roots** are a third, per-run layer: directories outside the
+workspace that may be *read* but never written (currently the persisted output
+tree of ``exec``). This is a deliberate exception to "a file you can read, you can
+edit" - scratch output is not project content. The global policy still applies on
+top, so a deny rule or a non-empty ``allow_dirs`` can keep them unreachable.
 """
 
 import json
@@ -29,6 +35,7 @@ REASON_DENY_DIR = "deny_dir"
 REASON_DENY_FILE = "deny_file"
 REASON_OUTSIDE_ALLOW = "outside_allow_dirs"
 REASON_OUTSIDE_WORKSPACE = "outside_workspace"
+REASON_READ_ONLY_ROOT = "read_only_root"
 
 
 class AccessDenied(Exception):
@@ -114,7 +121,7 @@ def _same_file(path: Path, other: Path) -> bool:
     return os.path.normcase(str(path)) == os.path.normcase(str(other))
 
 
-def enforce_policy(path: Path, config: FileAccessConfig) -> None:
+def enforce_policy(path: Path, config: FileAccessConfig, action: str = "read") -> None:
     """Raise :class:`AccessDenied` when ``path`` violates the global policy."""
     display = path.as_posix()
 
@@ -134,7 +141,7 @@ def enforce_policy(path: Path, config: FileAccessConfig) -> None:
 
     if config.allow_dirs and not any(is_within(path, item) for item in config.allow_dirs):
         raise AccessDenied(
-            "Only files inside the global allow list can be read.",
+            f"Only files inside the global allow list can be {action}.",
             display,
             REASON_OUTSIDE_ALLOW,
         )
@@ -145,15 +152,30 @@ def _workspace_root(base_dir: Optional[str]) -> Optional[Path]:
     return _normalize(Path(text)) if text else None
 
 
-def resolve_read_path(
+def _normalized_roots(extra_read_roots: Sequence[Any]) -> Tuple[Path, ...]:
+    roots = []
+    for item in extra_read_roots or ():
+        text = str(item or "").strip()
+        if text:
+            roots.append(_normalize(Path(text).expanduser()))
+    return tuple(roots)
+
+
+def _resolve_path(
     file_path: str,
-    base_dir: Optional[str] = None,
-    config: Optional[FileAccessConfig] = None,
+    base_dir: Optional[str],
+    config: Optional[FileAccessConfig],
+    action: str,
+    extra_read_roots: Sequence[Any] = (),
 ) -> Tuple[Path, Optional[Path]]:
-    """Resolve ``file_path`` and enforce the workspace root and global policy.
+    """Resolve ``file_path`` and enforce the workspace root, extra roots and policy.
 
     Returns ``(resolved_path, workspace_root)`` where ``workspace_root`` is
     ``None`` for unbound sessions.
+
+    A path inside an *additional read root* is readable but never modifiable, and
+    the global policy is still applied to it - a deny rule or a non-empty
+    ``allow_dirs`` keeps working, it is only the workspace ceiling that is lifted.
     """
     root = _workspace_root(base_dir)
     candidate = Path(file_path)
@@ -161,12 +183,49 @@ def resolve_read_path(
         candidate = (root or Path.cwd()) / candidate
     resolved = _normalize(candidate)
 
+    if any(is_within(resolved, extra) for extra in _normalized_roots(extra_read_roots)):
+        if action == "modified":
+            raise AccessDenied(
+                "This is the read-only scratch area for tool output; it can be read but not "
+                "modified. Write to the workspace instead.",
+                resolved.as_posix(),
+                REASON_READ_ONLY_ROOT,
+            )
+        enforce_policy(resolved, config or FileAccessConfig(), action=action)
+        return resolved, root
+
     if root is not None and not is_within(resolved, root):
         raise AccessDenied(
-            "Path escapes the workspace root; only files inside the workspace can be read.",
+            f"Path escapes the workspace root; only files inside the workspace can be {action}.",
             resolved.as_posix(),
             REASON_OUTSIDE_WORKSPACE,
         )
 
-    enforce_policy(resolved, config or FileAccessConfig())
+    enforce_policy(resolved, config or FileAccessConfig(), action=action)
     return resolved, root
+
+
+def resolve_read_path(
+    file_path: str,
+    base_dir: Optional[str] = None,
+    config: Optional[FileAccessConfig] = None,
+    extra_read_roots: Sequence[Any] = (),
+) -> Tuple[Path, Optional[Path]]:
+    """Resolve ``file_path`` for reading, including the additional read roots."""
+    return _resolve_path(file_path, base_dir, config, "read", extra_read_roots)
+
+
+def resolve_write_path(
+    file_path: str,
+    base_dir: Optional[str] = None,
+    config: Optional[FileAccessConfig] = None,
+    extra_read_roots: Sequence[Any] = (),
+) -> Tuple[Path, Optional[Path]]:
+    """Resolve ``file_path`` for writing.
+
+    Writes reuse the read policy on purpose - a file you can read, you can edit
+    (see ``docs/decisions/0001-file-edit-tool.md``) - with one exception: the
+    additional read roots are refused, because they are scratch output rather than
+    project content (see ``docs/decisions/0005-exec-tool.md``).
+    """
+    return _resolve_path(file_path, base_dir, config, "modified", extra_read_roots)

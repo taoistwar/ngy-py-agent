@@ -886,6 +886,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "accelerate" },
+    { name = "charset-normalizer" },
     { name = "dotenv" },
     { name = "fastapi" },
     { name = "ollama" },
@@ -905,6 +906,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "accelerate", specifier = ">=0.25.0" },
+    { name = "charset-normalizer", specifier = ">=3.0.0" },
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "fastapi", specifier = ">=0.104.0" },
     { name = "ollama", specifier = ">=0.1.0" },

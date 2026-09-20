@@ -5,6 +5,7 @@ Run from the repository root::
     uv run python test/tools/file_read_tool_test.py -v
 """
 
+import codecs
 import random
 import string
 import sys
@@ -174,6 +175,99 @@ class ReadFileToolTest(unittest.TestCase):
         self.assertNotIn("error", result)
         self.assertTrue(result["token_budget"]["exact"])
         self.assertTrue(result["token_budget"]["ok"])
+
+    def test_preserves_crlf_line_endings(self):
+        (self.root / "win.txt").write_bytes(b"alpha\r\nbeta\r\n")
+
+        result = self.tool("win.txt")
+
+        self.assertEqual(result["content"], "1\talpha\r\n2\tbeta\r\n")
+
+    def test_preserves_a_missing_final_newline(self):
+        (self.root / "tail.txt").write_bytes(b"alpha\nbeta")
+
+        result = self.tool("tail.txt")
+
+        self.assertEqual(result["content"], "1\talpha\n2\tbeta")
+
+    def test_output_is_byte_identical_once_prefixes_are_stripped(self):
+        (self.root / "win.txt").write_bytes(b"alpha\r\nbeta\r\n")
+
+        content = self.tool("win.txt")["content"]
+        stripped = "".join(line.split("\t", 1)[1] for line in content.splitlines(keepends=True))
+
+        self.assertEqual(stripped.encode("utf-8"), b"alpha\r\nbeta\r\n")
+
+    def test_bom_is_stripped_from_the_content(self):
+        (self.root / "bom.txt").write_bytes(codecs.BOM_UTF8 + b"alpha\n")
+
+        result = self.tool("bom.txt")
+
+        self.assertTrue(result["bom"])
+        self.assertEqual(result["encoding"], "utf-8")
+        # The BOM is kept aside for a byte-faithful write, never handed to the model.
+        self.assertEqual(result["content"], "1\talpha\n")
+
+    def test_utf16_file_is_read_through_its_bom(self):
+        # UTF-16 text always contains NUL bytes, so the BOM check has to run
+        # before the binary sniff or the file would never be readable.
+        (self.root / "u16.txt").write_bytes("hello\n世界\n".encode("utf-16"))
+
+        result = self.tool("u16.txt")
+
+        self.assertNotIn("error", result)
+        self.assertEqual(result["encoding"], "utf-16-le")
+        self.assertTrue(result["bom"])
+        self.assertIn("世界", result["content"])
+
+    def test_encoding_argument_decodes_other_encodings(self):
+        (self.root / "gbk.txt").write_bytes("第一行：中文\n第二行：内容\n".encode("gbk"))
+
+        result = self.tool("gbk.txt", 1, None, "gbk")
+
+        self.assertNotIn("error", result)
+        self.assertEqual(result["encoding"], "gbk")
+        self.assertIn("第二行：内容", result["content"])
+
+    def test_decode_failure_lists_candidate_encodings(self):
+        (self.root / "gbk.txt").write_bytes("第一行：中文\n".encode("gbk"))
+
+        result = self.tool("gbk.txt")
+
+        self.assertEqual(result["reason"], "decode_failed")
+        self.assertEqual(result["encoding"], "utf-8")
+        self.assertIn("error", result)
+        # Detection only produces a hint: the bytes are never silently re-read.
+        candidates = {item["encoding"] for item in result["suggested_encodings"]}
+        self.assertIn("gb18030", candidates)
+
+    def test_unknown_encoding_is_reported(self):
+        (self.root / "notes.txt").write_text("alpha\n", encoding="utf-8")
+
+        result = self.tool("notes.txt", 1, None, "not-a-codec")
+
+        self.assertEqual(result["reason"], "unknown_encoding")
+
+    def test_form_feed_does_not_start_a_new_line(self):
+        # ``str.splitlines`` treats \x0c as a line break, the file stream does not.
+        # The two must agree or patch line numbers drift away from what was read.
+        (self.root / "ff.txt").write_bytes(b"1\n2\n\x0c3\n4\n")
+
+        result = self.tool("ff.txt")
+
+        self.assertEqual(result["total_lines"], 4)
+        self.assertEqual(result["content"], "1\t1\n2\t2\n3\t\x0c3\n4\t4\n")
+
+    def test_file_path_keeps_surrounding_whitespace(self):
+        (self.root / " spaced.txt").write_bytes(b"alpha\n")
+
+        found = self.tool(" spaced.txt")
+        missing = self.tool("nomatch.txt ")
+
+        self.assertNotIn("error", found)
+        self.assertEqual(found["path"], " spaced.txt")
+        self.assertEqual(missing["reason"], "file_not_found")
+        self.assertIn("whitespace", missing["hint"])
 
 
 if __name__ == "__main__":

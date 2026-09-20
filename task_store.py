@@ -718,6 +718,29 @@ class _SqliteTaskStore:
             )
         self._conn.commit()
 
+    def get_permission_mode(self) -> str | None:
+        row = self._conn.execute(
+            "SELECT value FROM settings WHERE key = ?",
+            ("permission_mode",),
+        ).fetchone()
+        if row is None:
+            return None
+        text = str(row["value"] or "").strip()
+        return text or None
+
+    def set_permission_mode(self, mode: str) -> None:
+        now = datetime.now(UTC).isoformat()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """,
+                ("permission_mode", str(mode), now),
+            )
+        self._conn.commit()
+
     def get_skills_root(self) -> str | None:
         row = self._conn.execute(
             "SELECT value FROM settings WHERE key = ?",
@@ -963,6 +986,34 @@ class _SqliteTaskStore:
             self._conn.execute(
                 "UPDATE tasks SET updated_at = ? WHERE task_id = ?",
                 (event.timestamp.isoformat(), task_id),
+            )
+            self._conn.commit()
+
+    def close(self) -> None:
+        """Release the SQLite handle.
+
+        The process keeps one store for its whole life, so this exists for tests
+        that point the store at a temporary database and then want to delete the
+        directory (Windows refuses to unlink an open file).
+        """
+        with self._lock:
+            self._conn.close()
+
+    def set_task_status(self, task_id: str, status: TaskStatus) -> None:
+        """Move a task between non-final states.
+
+        Needed because a task can now be in flight *while blocked on a user
+        confirmation* (``TaskStatus.WAITING``, see ADR 0006 D10). ``finish_task``
+        is for the final state only and would also overwrite ``result``.
+        """
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE tasks
+                SET status = ?, updated_at = ?
+                WHERE task_id = ?
+                """,
+                (status, datetime.now(UTC).isoformat(), task_id),
             )
             self._conn.commit()
 

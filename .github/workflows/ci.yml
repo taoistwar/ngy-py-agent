@@ -50,3 +50,12 @@ jobs:
             echo "3) Check new CLI options are registered with defaults."
             exit 1
           fi
+      - name: Run backend tests
+        run: |
+          set -euo pipefail
+          # ``test/`` is intentionally not a package, so the files are run one by
+          # one instead of using ``unittest discover``.
+          for test_file in $(find test -name '*_test.py' | sort); do
+            echo "==> $test_file"
+            uv run python "$test_file"
+          done

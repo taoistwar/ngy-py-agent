@@ -29,6 +29,13 @@ from agent.models import (
 )
 from agent import skills as skill_library
 from agent.provider import ProviderConfig, build_provider, canonicalize_provider
+from agent.tools.permission_rules import PermissionRuleStore
+from agent.tools.permissions import (
+    SCOPES,
+    PermissionBroker,
+    PermissionMode,
+    normalize_mode,
+)
 from mcp_api import router as mcp_router
 from mcp_store import MCP_TRANSPORTS
 from task_store import TASK_RETENTION_DEFAULT_DAYS, monitor_store
@@ -66,8 +73,45 @@ _task_retention_source = "env"
 _agent_max_steps = DEFAULT_MAX_STEPS
 _agent_max_steps_source = "env"
 
+_agent_permission_mode = PermissionMode.ASK
+_agent_permission_mode_source = "env"
+
+# Persisted "always allow" rules, shared by every task (ADR 0006 D8).
+permission_rule_store = PermissionRuleStore()
+
 _task_stop_events: Dict[str, threading.Event] = {}
 _task_stop_lock = threading.Lock()
+
+# Live permission brokers, one per running task, so the API can answer the
+# questions they are blocked on. The broker lives exactly as long as the task's
+# thread (see ADR 0006 D1).
+_task_permission_brokers: Dict[str, PermissionBroker] = {}
+_task_permission_lock = threading.Lock()
+
+
+def _register_task_permission(task_id: str, broker: PermissionBroker) -> None:
+    """Track a running task's broker so a decision can reach its waiting thread."""
+    with _task_permission_lock:
+        _task_permission_brokers[task_id] = broker
+
+
+def _get_task_permission_broker(task_id: str) -> PermissionBroker | None:
+    with _task_permission_lock:
+        return _task_permission_brokers.get(task_id)
+
+
+def _pending_permission(task_id: str) -> dict[str, Any] | None:
+    """The confirmation this task is currently blocked on, if any."""
+    broker = _get_task_permission_broker(task_id)
+    if broker is None:
+        return None
+    pending = broker.pending()
+    return pending.to_payload() if pending is not None else None
+
+
+def _clear_task_permission(task_id: str) -> None:
+    with _task_permission_lock:
+        _task_permission_brokers.pop(task_id, None)
 
 
 def _register_task_stop(task_id: str) -> threading.Event:
@@ -114,6 +158,13 @@ class RunTaskRequest(BaseModel):
         default=DEFAULT_MODE,
         description="Legacy agent mode (build / ask / plan); used when agent_id is omitted.",
     )
+    permission_mode: str | None = Field(
+        default=None,
+        description=(
+            "Optional override for tool confirmation (ask / auto_approve / deny_all); "
+            "omit to use the global config."
+        ),
+    )
     stream: bool = False
 
 
@@ -141,6 +192,9 @@ class TaskListItemResponse(BaseModel):
     updated_at: datetime
     event_count: int
     result: str | None = None
+    # Present while the task is blocked on a confirmation, so a task waiting in
+    # the background is visible without opening it.
+    pending_permission: dict[str, Any] | None = None
 
 
 class TaskDetailResponse(BaseModel):
@@ -157,6 +211,9 @@ class TaskDetailResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     result: str | None = None
+    # Set while the task is blocked on a confirmation, so a client that (re)connects
+    # late can still render the dialog without replaying the whole event stream.
+    pending_permission: dict[str, Any] | None = None
     events: list[dict[str, Any]]
 
 
@@ -200,6 +257,58 @@ class MaxStepsConfigResponse(BaseModel):
 
     max_steps: int
     source: str
+
+
+class PermissionModeConfigRequest(BaseModel):
+    """Global tool permission mode request."""
+
+    mode: str = Field(description="ask / auto_approve / deny_all")
+
+
+class PermissionModeConfigResponse(BaseModel):
+    """Global tool permission mode response."""
+
+    mode: str
+    source: str
+
+
+class PermissionRuleItem(BaseModel):
+    """One persisted allow rule."""
+
+    tool: str
+    target: str
+    kind: str = ""
+    created_at: str = ""
+
+
+class PermissionRuleListResponse(BaseModel):
+    """Persisted allow rules."""
+
+    rules: list[PermissionRuleItem]
+    path: str
+
+
+class PermissionRuleRequest(BaseModel):
+    """Add a persisted allow rule without going through a dialog."""
+
+    tool: str = Field(min_length=1, description="Tool name, e.g. exec.")
+    target: str = Field(min_length=1, description="The exact target shown in the dialog.")
+
+
+class PermissionDecisionRequest(BaseModel):
+    """Answer to a pending permission request."""
+
+    allowed: bool = Field(description="Whether the tool call may run.")
+    scope: str = Field(default="once", description="once / session")
+
+
+class PermissionDecisionResponse(BaseModel):
+    """Result of answering a permission request."""
+
+    task_id: str
+    request_id: str
+    allowed: bool
+    scope: str
 
 
 class RetentionConfigResponse(BaseModel):
@@ -560,6 +669,13 @@ def _resolve_max_steps(request: RunTaskRequest) -> int:
     return _get_global_max_steps()
 
 
+def _resolve_permission_mode(request: RunTaskRequest) -> PermissionMode:
+    """Resolve the confirmation mode for one task: explicit override, else global."""
+    if request.permission_mode:
+        return normalize_mode(request.permission_mode)
+    return _agent_permission_mode
+
+
 def _resolve_session_base_dir(session_id: str | None) -> str | None:
     """Return the workspace root path bound to a session, if any."""
     if not session_id:
@@ -612,6 +728,16 @@ def _run_task(
 
     def _sink(_: str, event: TaskEvent) -> None:
         monitor_store.append_event(task_id, event)
+        # A task waiting on a confirmation is still in flight, but it must not look
+        # like it is thinking - the UI shows "waiting for you" (ADR 0006 D10).
+        if event.category is EventCategory.PERMISSION_REQUEST:
+            monitor_store.set_task_status(task_id, TaskStatus.WAITING)
+        elif event.category is EventCategory.PERMISSION_DECISION:
+            monitor_store.set_task_status(task_id, TaskStatus.RUNNING)
+
+    def _permission_event(category: str, title: str, data: dict[str, Any]) -> None:
+        """Bridge the broker's audit events onto this task's event sink."""
+        _sink(task_id, _build_event(task_id, EventCategory(category), title, data))
 
     _emit_debug(
         _sink,
@@ -641,6 +767,17 @@ def _run_task(
     ).start()
 
     try:
+        permission_broker = PermissionBroker(
+            task_id=task_id,
+            emit=_permission_event,
+            mode=_resolve_permission_mode(request),
+            base_dir=base_dir,
+            should_stop=stop_event.is_set if stop_event is not None else None,
+            # One shared store, so the management API and every task agree on
+            # which rules exist.
+            rules=permission_rule_store,
+        )
+        _register_task_permission(task_id, permission_broker)
         result = run_react_loop(
             user_query=request.query,
             provider_name=provider,
@@ -656,6 +793,7 @@ def _run_task(
             base_dir=base_dir,
             agent_config=agent_config,
             should_stop=stop_event.is_set if stop_event is not None else None,
+            permission_broker=permission_broker,
         )
         if stop_event is not None and stop_event.is_set():
             _emit_debug(_sink, task_id, "Task stopped", {"result": result})
@@ -672,6 +810,12 @@ def _run_task(
         )
         monitor_store.finish_task(task_id, success=False)
     finally:
+        active_broker = _get_task_permission_broker(task_id)
+        if active_broker is not None:
+            # Release anything still waiting, so no thread stays blocked until the
+            # timeout after the run is already over.
+            active_broker.cancel_all()
+        _clear_task_permission(task_id)
         _clear_task_stop(task_id)
 
 
@@ -954,7 +1098,12 @@ async def list_tasks(
     session_id: str | None = Query(None, description="Only return tasks that belong to this session."),
 ) -> TaskListResponse:
     tasks = monitor_store.list_tasks(session_id=session_id)
-    return TaskListResponse(tasks=[TaskListItemResponse(**item) for item in tasks])
+    return TaskListResponse(
+        tasks=[
+            TaskListItemResponse(**{**item, "pending_permission": _pending_permission(item["task_id"])})
+            for item in tasks
+        ]
+    )
 
 
 @app.post("/api/tasks/{task_id}/stop")
@@ -970,12 +1119,47 @@ async def stop_task(task_id: str) -> dict[str, Any]:
     return {"task_id": task_id, "stopped": stopped}
 
 
+@app.post(
+    "/api/tasks/{task_id}/permission/{request_id}",
+    response_model=PermissionDecisionResponse,
+)
+async def answer_permission(
+    task_id: str,
+    request_id: str,
+    payload: PermissionDecisionRequest,
+) -> PermissionDecisionResponse:
+    """Answer a pending confirmation, unblocking the task's waiting thread.
+
+    This is the other half of the gate: the tool call is parked inside the task
+    thread until this arrives, the deadline passes, or the task is stopped.
+    """
+    broker = _get_task_permission_broker(task_id)
+    if broker is None:
+        raise HTTPException(status_code=404, detail="Task not found or not running.")
+    # Rejected rather than coerced: mapping an unknown scope onto "once" would
+    # silently turn "always allow" into a one-off without telling anyone.
+    if payload.scope not in SCOPES:
+        raise HTTPException(
+            status_code=400, detail=f"Unknown permission scope '{payload.scope}'."
+        )
+    if not broker.resolve(request_id, payload.allowed, payload.scope):
+        raise HTTPException(status_code=409, detail="Permission request is no longer pending.")
+    return PermissionDecisionResponse(
+        task_id=task_id,
+        request_id=request_id,
+        allowed=payload.allowed,
+        scope=payload.scope,
+    )
+
+
 @app.get("/api/tasks/{task_id}", response_model=TaskDetailResponse)
 async def get_task(task_id: str) -> TaskDetailResponse:
     trace = monitor_store.get_task(task_id)
     if trace is None:
         raise HTTPException(status_code=404, detail="Task not found.")
     result = _extract_task_result(trace.get("events"))
+    broker = _get_task_permission_broker(task_id)
+    pending = broker.pending() if broker is not None else None
     return TaskDetailResponse(
         task_id=trace["task_id"],
         query=trace["query"],
@@ -988,6 +1172,7 @@ async def get_task(task_id: str) -> TaskDetailResponse:
         created_at=trace["created_at"],
         updated_at=trace["updated_at"],
         result=result,
+        pending_permission=pending.to_payload() if pending is not None else None,
         events=trace["events"],
     )
 
@@ -1004,7 +1189,9 @@ async def _iter_task_events(task_id: str):
             yield events[seen]
             seen += 1
 
-        if task["status"] != TaskStatus.RUNNING:
+        # WAITING is still in flight: if the stream stopped here, the client would
+        # never receive the confirmation request it is supposed to answer.
+        if task["status"] not in (TaskStatus.RUNNING, TaskStatus.WAITING):
             return
 
         await asyncio.sleep(0.6)
@@ -1087,7 +1274,7 @@ async def stream_task_events_ws(
                 await websocket.close(code=1008, reason="Task not found.")
                 return
 
-            if task["status"] != TaskStatus.RUNNING:
+            if task["status"] not in (TaskStatus.RUNNING, TaskStatus.WAITING):
                 await websocket.send_text(
                     json.dumps(
                         {
@@ -1148,6 +1335,14 @@ def _load_agent_max_steps_config() -> tuple[int, str]:
     if db_steps is None:
         return env_steps, "env"
     return max(1, min(db_steps, 1000)), "database"
+
+
+def _load_permission_mode_config() -> tuple[PermissionMode, str]:
+    env_mode = normalize_mode(os.getenv("PERMISSION_MODE", PermissionMode.ASK.value))
+    db_mode = monitor_store.get_permission_mode()
+    if not db_mode:
+        return env_mode, "env"
+    return normalize_mode(db_mode), "database"
 
 
 def _load_env_file() -> None:
@@ -1241,6 +1436,72 @@ async def set_max_steps_config(
     )
 
 
+@app.get("/api/admin/permission-mode", response_model=PermissionModeConfigResponse)
+async def get_permission_mode_config() -> PermissionModeConfigResponse:
+    return PermissionModeConfigResponse(
+        mode=_agent_permission_mode.value,
+        source=_agent_permission_mode_source,
+    )
+
+
+@app.put("/api/admin/permission-mode", response_model=PermissionModeConfigResponse)
+async def set_permission_mode_config(
+    payload: PermissionModeConfigRequest,
+) -> PermissionModeConfigResponse:
+    try:
+        mode = PermissionMode(payload.mode)
+    except ValueError as exc:
+        # Rejected rather than coerced: silently turning a typo into "ask" (or
+        # worse, into "auto_approve") is not something an admin API should do.
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown permission mode '{payload.mode}'.",
+        ) from exc
+    monitor_store.set_permission_mode(mode.value)
+    global _agent_permission_mode
+    global _agent_permission_mode_source
+    _agent_permission_mode = mode
+    _agent_permission_mode_source = "database"
+    return PermissionModeConfigResponse(
+        mode=_agent_permission_mode.value,
+        source=_agent_permission_mode_source,
+    )
+
+
+@app.get("/api/admin/permission-rules", response_model=PermissionRuleListResponse)
+async def list_permission_rules() -> PermissionRuleListResponse:
+    """Rules that answer "always allow" without asking again."""
+    return PermissionRuleListResponse(
+        rules=[PermissionRuleItem(**rule.to_payload()) for rule in permission_rule_store.list()],
+        path=permission_rule_store.path.as_posix(),
+    )
+
+
+@app.post("/api/admin/permission-rules", response_model=PermissionRuleItem)
+async def add_permission_rule(payload: PermissionRuleRequest) -> PermissionRuleItem:
+    tool = payload.tool.strip()
+    if not permission_rule_store.add(tool, payload.target):
+        raise HTTPException(
+            status_code=500, detail="Could not write the permission rule file."
+        )
+    for rule in permission_rule_store.list():
+        if rule.tool == tool and rule.target == payload.target:
+            return PermissionRuleItem(**rule.to_payload())
+    raise HTTPException(status_code=500, detail="The permission rule was not persisted.")
+
+
+@app.delete("/api/admin/permission-rules")
+async def delete_permission_rule(
+    tool: str = Query(min_length=1),
+    target: str = Query(min_length=1),
+) -> dict[str, Any]:
+    # Query parameters rather than a body: DELETE bodies are dropped by some
+    # proxies, and a silently dropped body would look like "rule not found".
+    if not permission_rule_store.remove(tool, target):
+        raise HTTPException(status_code=404, detail="No such permission rule.")
+    return {"removed": True, "tool": tool, "target": target}
+
+
 @app.get("/api/healthz")
 async def healthz() -> dict[str, str]:
     return {
@@ -1300,6 +1561,9 @@ def main() -> None:
     global _agent_max_steps
     global _agent_max_steps_source
     _agent_max_steps, _agent_max_steps_source = _load_agent_max_steps_config()
+    global _agent_permission_mode
+    global _agent_permission_mode_source
+    _agent_permission_mode, _agent_permission_mode_source = _load_permission_mode_config()
     parser = argparse.ArgumentParser(
         description="Run ReAct tasks with optional Web Admin mode.",
     )

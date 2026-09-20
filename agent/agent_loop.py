@@ -11,6 +11,7 @@ from agent.models import (
     LLMResponseData,
     TaskEvent,
     ToolCallData,
+    ToolOutcome,
     ToolResultData,
 )
 from agent.modes import (
@@ -25,6 +26,7 @@ from agent.provider import (
     canonicalize_provider,
     resolve_tool_provider_for_schemas,
 )
+from agent.tools.permissions import PermissionBroker
 from agent.tool_registry import ToolRegistry
 
 DEFAULT_PROVIDER = os.getenv("TOOL_SCHEMA_PROVIDER", "openai")
@@ -176,7 +178,7 @@ def _emit(
         return
 
 
-def _execute_tool(registry: ToolRegistry, name: str, arguments: Any) -> str:
+def _execute_tool(registry: ToolRegistry, name: str, arguments: Any) -> Any:
     if isinstance(arguments, str):
         try:
             arguments = json.loads(arguments)
@@ -242,6 +244,7 @@ def run_react_loop(
     base_dir: Optional[str] = None,
     agent_config: Optional[Dict[str, Any]] = None,
     should_stop: Optional[Callable[[], bool]] = None,
+    permission_broker: Optional[PermissionBroker] = None,
 ) -> str:
     _, registry, provider, request_tools = _build_runtime(
         provider_name=provider_name,
@@ -251,6 +254,18 @@ def run_react_loop(
         base_dir=base_dir,
         agent_config=agent_config,
     )
+
+    if permission_broker is not None:
+        # The registry owns the workspace root and the exec scratch root, and the
+        # broker needs both to tell a sensitive read from a scratch-output read
+        # (ADR 0006 D3/D9). Handing it over here is what makes the gate cover
+        # every tool: this registry is the one the loop dispatches through.
+        if not permission_broker.base_dir:
+            permission_broker.base_dir = registry.base_dir
+        permission_broker.extra_read_roots = tuple(permission_broker.extra_read_roots) + tuple(
+            registry.read_only_roots
+        )
+        registry.permission_broker = permission_broker
 
     if verbose:
         print(f"Provider: {provider.config.provider}")
@@ -437,8 +452,10 @@ def run_react_loop(
                 ),
             )
 
+            outcome: Any = None
             try:
-                result = _execute_tool(registry, name, args)
+                outcome = _execute_tool(registry, name, args)
+                result = outcome.model_text if isinstance(outcome, ToolOutcome) else outcome
                 tool_result_payload = ToolResultData(
                     step=step,
                     name=name,
@@ -486,6 +503,22 @@ def run_react_loop(
                     collapsed=True,
                 ),
             )
+
+            # Rich tool payloads (for the UI / external consumers) travel on their
+            # own event so the model only ever sees the short ``model_text``.
+            if isinstance(outcome, ToolOutcome) and outcome.event_category is not None:
+                _emit(
+                    event_sink,
+                    task_id,
+                    TaskEvent(
+                        task_id=task_id or "",
+                        category=outcome.event_category,
+                        title=outcome.event_title or f"{name}",
+                        data=outcome.details,
+                        collapsed=True,
+                    ),
+                )
+
             if verbose:
                 print(f"[tool:{name}] {result}")
 

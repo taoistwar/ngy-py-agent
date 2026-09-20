@@ -24,6 +24,10 @@ import {
   fetchRetentionConfig,
   fetchMaxStepsConfig,
   updateMaxStepsConfig,
+  fetchPermissionModeConfig,
+  updatePermissionModeConfig,
+  fetchPermissionRules,
+  deletePermissionRule,
   fetchSessions,
   fetchTask,
   fetchTaskEvents,
@@ -49,11 +53,18 @@ import {
   LOCALE_KEY,
   t,
 } from "./i18n"
+import PermissionPrompt from "./components/PermissionPrompt"
 import TaskRowActions from "./components/TaskRowActions"
+import TaskToolbarActions from "./components/TaskToolbarActions"
 import AgentManager from "./components/admin/AgentManager"
 import McpServerManager from "./components/admin/McpServerManager"
 import ModelManager from "./components/admin/ModelManager"
-import { MaxStepsManager, RetentionManager } from "./components/admin/SettingsPanels"
+import {
+  MaxStepsManager,
+  PermissionModeManager,
+  PermissionRulesManager,
+  RetentionManager,
+} from "./components/admin/SettingsPanels"
 import SkillManager from "./components/admin/SkillManager"
 import WorkspaceManager from "./components/admin/WorkspaceManager"
 import { PROVIDER_OPTIONS, agentDisplayName } from "./components/admin/shared"
@@ -662,19 +673,12 @@ function TaskList({
     <section className="panel session-task-panel">
       <div className="panel-titlebar">
         <h2>{translate("taskListTitle")}</h2>
-        <div className="task-toolbar-actions">
-          <button type="button" className="btn btn-compact" onClick={onRefresh}>
-            {translate("taskListRefresh")}
-          </button>
-          <button
-            type="button"
-            className="btn btn-compact btn-danger"
-            onClick={onBatchDelete}
-            disabled={selectedCount === 0}
-          >
-            {translate("taskListBatchDelete")}
-          </button>
-        </div>
+        <TaskToolbarActions
+          selectedCount={selectedCount}
+          onRefresh={onRefresh}
+          onBatchDelete={onBatchDelete}
+          translate={translate}
+        />
       </div>
       <div className="panel-body session-task-body">
         <div className="task-search-bar">
@@ -1330,6 +1334,8 @@ export default function App() {
   const [error, setError] = useState("")
   const [retentionConfig, setRetentionConfig] = useState(null)
   const [maxStepsConfig, setMaxStepsConfig] = useState(null)
+  const [permissionModeConfig, setPermissionModeConfig] = useState(null)
+  const [permissionRules, setPermissionRules] = useState(null)
   const [health, setHealth] = useState("unknown")
   const [models, setModels] = useState([])
   const [activeMenu, setActiveMenu] = useState("tasks")
@@ -2098,6 +2104,56 @@ export default function App() {
     [translate]
   )
 
+  const refreshPermissionMode = useCallback(async () => {
+    const config = await fetchPermissionModeConfig()
+    setPermissionModeConfig(config)
+    return config
+  }, [])
+
+  const updatePermissionMode = useCallback(
+    async (modeValue) => {
+      try {
+        const config = await updatePermissionModeConfig(modeValue)
+        setPermissionModeConfig(config)
+      } catch (permissionError) {
+        setError(permissionError?.message || translate("errorUnknown"))
+      }
+    },
+    [translate]
+  )
+
+  const refreshPermissionRules = useCallback(async () => {
+    const config = await fetchPermissionRules()
+    setPermissionRules(config)
+    return config
+  }, [])
+
+  const deletePermissionRuleHandler = useCallback(
+    async (tool, target) => {
+      try {
+        await deletePermissionRule(tool, target)
+        await refreshPermissionRules()
+      } catch (ruleError) {
+        setError(ruleError?.message || translate("errorUnknown"))
+      }
+    },
+    [refreshPermissionRules, translate]
+  )
+
+  // A decision unblocks the task thread, so pull the task and its events right
+  // away instead of waiting for the next poll tick.
+  const handlePermissionDecided = useCallback(() => {
+    const taskId = selectedIdRef.current
+    if (taskId) {
+      refreshTask(taskId)
+        .then((task) => loadEvents(taskId, false, task?.status))
+        .catch(() => {})
+    }
+    refreshTasks().catch(() => {})
+    // An "always allow" answer adds a rule; keep the list honest.
+    refreshPermissionRules().catch(() => {})
+  }, [loadEvents, refreshPermissionRules, refreshTask, refreshTasks])
+
   useEffect(() => {
     let cancelled = false
     const loadAll = async () => {
@@ -2151,6 +2207,10 @@ export default function App() {
     refreshMaxSteps().catch((maxStepsError) =>
       setError(maxStepsError?.message || translate("errorLoadFailed"))
     )
+    refreshPermissionMode().catch((permissionError) =>
+      setError(permissionError?.message || translate("errorLoadFailed"))
+    )
+    refreshPermissionRules().catch(() => {})
     refreshHealth().catch(() => {})
     refreshAgentMeta().catch(() => {})
 
@@ -2185,6 +2245,8 @@ export default function App() {
       }
       if (activeMenu === "config") {
         refreshMaxSteps().catch(() => {})
+        refreshPermissionMode().catch(() => {})
+        refreshPermissionRules().catch(() => {})
       }
     }, 5000)
 
@@ -2192,7 +2254,7 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [activeMenu, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshMcpServers, refreshModels, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshWorkspaces, translate])
+  }, [activeMenu, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshWorkspaces, translate])
 
   useEffect(() => {
     if (!selectedId || activeMenu !== "tasks") return
@@ -2438,6 +2500,26 @@ export default function App() {
               onRefresh={refreshMaxSteps}
               translate={translate}
             />
+            <PermissionModeManager
+              permissionModeConfig={permissionModeConfig}
+              onSave={updatePermissionMode}
+              onRefresh={() =>
+                refreshPermissionMode().catch((refreshError) =>
+                  setError(refreshError?.message || translate("errorLoadFailed"))
+                )
+              }
+              translate={translate}
+            />
+            <PermissionRulesManager
+              rules={permissionRules}
+              onDelete={deletePermissionRuleHandler}
+              onRefresh={() =>
+                refreshPermissionRules().catch((refreshError) =>
+                  setError(refreshError?.message || translate("errorLoadFailed"))
+                )
+              }
+              translate={translate}
+            />
             <RetentionManager
               retentionConfig={retentionConfig}
               onSave={updateRetention}
@@ -2462,6 +2544,11 @@ export default function App() {
           />
         )}
       </main>
+      <PermissionPrompt
+        request={selectedTask?.pending_permission}
+        onDecided={handlePermissionDecided}
+        translate={translate}
+      />
     </div>
   )
 }
