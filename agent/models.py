@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -17,6 +18,12 @@ class EventCategory(str, Enum):
     LLM_RESPONSE = "llm_response"
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
+    FILE_EDIT = "file_edit"
+    FILE_WRITE = "file_write"
+    EXEC = "exec"
+    # Permission confirmation (see docs/decisions/0006-tool-permission-confirmation.md).
+    PERMISSION_REQUEST = "permission_request"
+    PERMISSION_DECISION = "permission_decision"
     DEBUG = "debug"
     ERROR = "error"
 
@@ -25,6 +32,10 @@ class TaskStatus(str, Enum):
     """Task status."""
 
     RUNNING = "running"
+    # Blocked on a user confirmation. It is still "in flight": streaming must keep
+    # the connection open, otherwise the client never receives the very request it
+    # is supposed to answer (ADR 0006 D10).
+    WAITING = "waiting"
     SUCCESS = "success"
     FAILED = "failed"
     STOPPED = "stopped"
@@ -82,6 +93,22 @@ class ToolResultData(BaseModel):
     tool_call_id: str | None = None
     result: str
     is_error: bool = False
+
+
+@dataclass
+class ToolOutcome:
+    """Split tool result: a short text for the model and a rich payload for the UI.
+
+    Tools that need to hand structured data to the UI (or any external consumer)
+    return this instead of a plain string/dict. ``ToolRegistry.execute_tool``
+    passes it through untouched so ``agent_loop`` can route ``model_text`` into
+    the ``messages`` list while emitting ``details`` as a dedicated event.
+    """
+
+    model_text: str
+    event_category: Optional[EventCategory] = None
+    event_title: str = ""
+    details: Dict[str, Any] = field(default_factory=dict)
 
 
 class AgentTaskTrace(BaseModel):

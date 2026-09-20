@@ -3,12 +3,33 @@
 Each :class:`ToolSpec` binds a model-facing name and JSON schema to the callable
 that implements it. ``ToolRegistry`` consumes these specs, so adding a tool means
 adding one entry here plus the implementation module next to it.
+
+A new tool must also declare its ``permission`` kind. The default is ``"none"``,
+which means "never ask the user" - correct for pure lookups, and a silent hole for
+anything that touches the filesystem, so state the kind explicitly.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence
 
-from agent.tools import code_tools, file_read_tool, finance_tools, time_tools, weather_tools
+from agent.tools import (
+    code_tools,
+    exec_tool,
+    file_edit_tool,
+    file_read_tool,
+    file_write_tool,
+    finance_tools,
+    time_tools,
+    weather_tools,
+)
+from agent.tools.permissions import (
+    PERMISSION_EXEC,
+    PERMISSION_NONE,
+    PERMISSION_READ,
+    PERMISSION_WRITE,
+)
+from agent.tools.read_ledger import ReadLedger
 
 
 @dataclass(frozen=True)
@@ -19,6 +40,13 @@ class ToolSpec:
     handler: Callable[..., Any]
     description: str
     parameters: Dict[str, Any]
+    # Confirmation kind, see ``agent/tools/permissions.py``. ``none`` means the
+    # gate lets the call through without asking.
+    permission: str = PERMISSION_NONE
+    # Optional dry run used to enrich the confirmation dialog: it receives the
+    # call arguments and returns extra ``details`` (no side effects). A tool that
+    # can cheaply describe what it is about to do should provide one.
+    preview: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
 
 
 SPEC_GET_CURRENT_TEMPERATURE = ToolSpec(
@@ -106,6 +134,9 @@ SPEC_CODE_INTERPRETER = ToolSpec(
         },
         "required": ["code"],
     },
+    # Arbitrary code: this is one of the two tools that can reach anything on the
+    # machine, which is why it is confirmed (ADR 0006 D2).
+    permission=PERMISSION_EXEC,
 )
 
 READ_FILE_TOOL_NAME = "read_file"
@@ -116,6 +147,8 @@ def build_read_file_spec(
     max_tokens: int = 0,
     provider: str = "",
     model: str = "",
+    ledger: Optional[ReadLedger] = None,
+    extra_read_roots: Sequence[str] = (),
 ) -> ToolSpec:
     """Build the workspace scoped read tool, bound to a workspace root."""
     return ToolSpec(
@@ -125,9 +158,85 @@ def build_read_file_spec(
             max_tokens=max_tokens,
             provider=provider,
             model=model,
+            ledger=ledger,
+            extra_read_roots=extra_read_roots,
         ),
         description=file_read_tool.READ_FILE_DESCRIPTION,
         parameters=file_read_tool.READ_FILE_PARAMETERS,
+        # Reads are only confirmed for sensitive paths (ADR 0006 D3).
+        permission=PERMISSION_READ,
+    )
+
+
+EDIT_FILE_TOOL_NAME = "edit_file"
+
+
+def build_edit_file_spec(
+    base_dir: Optional[str] = None,
+    ledger: Optional[ReadLedger] = None,
+    extra_read_roots: Sequence[str] = (),
+) -> ToolSpec:
+    """Build the workspace scoped edit tool, bound to a workspace root."""
+    return ToolSpec(
+        name=EDIT_FILE_TOOL_NAME,
+        handler=file_edit_tool.make_edit_file_tool(
+            base_dir=base_dir, ledger=ledger, extra_read_roots=extra_read_roots
+        ),
+        description=file_edit_tool.EDIT_FILE_DESCRIPTION,
+        parameters=file_edit_tool.EDIT_FILE_PARAMETERS,
+        permission=PERMISSION_WRITE,
+        # Shows the diff before the user decides (ADR 0006 D11).
+        preview=file_edit_tool.make_edit_preview(
+            base_dir=base_dir, extra_read_roots=extra_read_roots
+        ),
+    )
+
+
+WRITE_FILE_TOOL_NAME = "write_file"
+
+
+def build_write_file_spec(
+    base_dir: Optional[str] = None,
+    ledger: Optional[ReadLedger] = None,
+    extra_read_roots: Sequence[str] = (),
+) -> ToolSpec:
+    """Build the workspace scoped write tool, bound to a workspace root."""
+    return ToolSpec(
+        name=WRITE_FILE_TOOL_NAME,
+        handler=file_write_tool.make_write_file_tool(
+            base_dir=base_dir, ledger=ledger, extra_read_roots=extra_read_roots
+        ),
+        description=file_write_tool.WRITE_FILE_DESCRIPTION,
+        parameters=file_write_tool.WRITE_FILE_PARAMETERS,
+        permission=PERMISSION_WRITE,
+    )
+
+
+EXEC_TOOL_NAME = "exec"
+
+
+def build_exec_spec(
+    base_dir: Optional[str] = None,
+    session_id: str = "",
+    max_tokens: int = 0,
+    output_directory: Optional[Path] = None,
+) -> ToolSpec:
+    """Build the shell execution tool.
+
+    The description is written for the shell this machine actually has, so the
+    model is told which dialect to write in (see ``docs/decisions/0005-exec-tool.md``).
+    """
+    return ToolSpec(
+        name=EXEC_TOOL_NAME,
+        handler=exec_tool.make_exec_tool(
+            base_dir=base_dir,
+            session_id=session_id,
+            max_tokens=max_tokens,
+            output_directory=output_directory,
+        ),
+        description=exec_tool.build_exec_description(),
+        parameters=exec_tool.EXEC_PARAMETERS,
+        permission=PERMISSION_EXEC,
     )
 
 

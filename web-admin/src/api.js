@@ -256,6 +256,57 @@ export async function stopTask(taskId) {
   })
 }
 
+export async function fetchPermissionModeConfig() {
+  return requestJson(`${API_BASE}/api/admin/permission-mode`)
+}
+
+export async function updatePermissionModeConfig(mode) {
+  return requestJson(`${API_BASE}/api/admin/permission-mode`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ mode }),
+  })
+}
+
+export async function fetchPermissionRules() {
+  return requestJson(`${API_BASE}/api/admin/permission-rules`)
+}
+
+export async function createPermissionRule(tool, target) {
+  return requestJson(`${API_BASE}/api/admin/permission-rules`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ tool, target }),
+  })
+}
+
+export async function deletePermissionRule(tool, target) {
+  const query = new URLSearchParams({ tool, target }).toString()
+  return requestJson(`${API_BASE}/api/admin/permission-rules?${query}`, {
+    method: "DELETE",
+  })
+}
+
+// Answer a pending tool confirmation. ``scope`` is "once", "session" or "always":
+// session allows the same tool + target for the rest of the task, always also
+// remembers it on disk.
+export async function answerPermission(taskId, requestId, allowed, scope = "once") {
+  return requestJson(
+    `${API_BASE}/api/tasks/${taskId}/permission/${encodeURIComponent(requestId)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ allowed, scope }),
+    }
+  )
+}
+
 export async function fetchTaskEvents(taskId, { offset, limit }) {
   const query = new URLSearchParams({
     offset: String(offset),

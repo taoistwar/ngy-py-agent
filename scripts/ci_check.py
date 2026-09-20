@@ -60,6 +60,11 @@ def main() -> None:
     )
     run(["uv", "run", "python", "main.py", "--help"], cwd=ROOT)
 
+    # ``test/`` is intentionally not a package, so the files are run one by one
+    # instead of using ``unittest discover``.
+    for test_file in sorted((ROOT / "test").rglob("*_test.py")):
+        run(["uv", "run", "python", str(test_file.relative_to(ROOT))], cwd=ROOT)
+
     npm_status = run(["npm", "ci"], cwd=WEB_ADMIN, check=False)
     if npm_status != 0:
         print("npm ci failed, fallback to npm install for local environment.")

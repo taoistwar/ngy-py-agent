@@ -50,6 +50,7 @@ export function getLocaleOptions(locale) {
 
 const TASK_STATUS_TEXT_KEYS = {
   running: "statusRunning",
+  waiting: "statusWaiting",
   pending: "statusPending",
   in_progress: "statusInProgress",
   processing: "statusProcessing",
@@ -61,7 +62,17 @@ const TASK_STATUS_TEXT_KEYS = {
   unknown: "statusUnknown",
 }
 
-const TASK_RUNNING_STATUS_SET = new Set(["running", "pending", "in_progress", "processing", "started"])
+// "waiting" is a blocked-on-the-user state, but the task is still in flight:
+// polling must continue, otherwise the UI freezes exactly when it needs to show
+// the confirmation dialog (see ADR 0006 D10).
+const TASK_RUNNING_STATUS_SET = new Set([
+  "running",
+  "waiting",
+  "pending",
+  "in_progress",
+  "processing",
+  "started",
+])
 
 function normalizeTaskStatus(status) {
   return String(status || "").toLowerCase().trim().replace(/\s+/g, "_")
@@ -80,6 +91,9 @@ export function getTaskStatusClass(status) {
   const normalized = normalizeTaskStatus(status)
   if (normalized === "success" || normalized === "failed" || normalized === "stopped") {
     return normalized
+  }
+  if (normalized === "waiting") {
+    return "waiting"
   }
   if (TASK_RUNNING_STATUS_SET.has(normalized)) {
     return "running"
