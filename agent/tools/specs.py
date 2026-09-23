@@ -16,8 +16,8 @@ from typing import Any, Callable, Dict, Optional, Sequence
 from agent.tools import (
     exec_tool,
     file_edit_tool,
-    file_read_tool,
     file_write_tool,
+    read_file,
     write_stdin_tool,
 )
 from agent.tools.code_interpreter import code_interpreter
@@ -160,7 +160,7 @@ def build_read_file_spec(
     """Build the workspace scoped read tool, bound to a workspace root."""
     return ToolSpec(
         name=READ_FILE_TOOL_NAME,
-        handler=file_read_tool.make_read_file_tool(
+        handler=read_file.make_read_file_tool(
             base_dir=base_dir,
             max_tokens=max_tokens,
             provider=provider,
@@ -168,8 +168,8 @@ def build_read_file_spec(
             ledger=ledger,
             extra_read_roots=extra_read_roots,
         ),
-        description=file_read_tool.READ_FILE_DESCRIPTION,
-        parameters=file_read_tool.READ_FILE_PARAMETERS,
+        description=read_file.READ_FILE_DESCRIPTION,
+        parameters=read_file.READ_FILE_PARAMETERS,
         # Reads are only confirmed for sensitive paths (ADR 0006 D3).
         permission=PERMISSION_READ,
     )
