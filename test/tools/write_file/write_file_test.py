@@ -2,7 +2,7 @@
 
 Run from the repository root::
 
-    uv run python test/tools/file_write_tool_test.py -v
+    uv run python test/tools/write_file/write_file_test.py -v
 """
 
 import os
@@ -16,15 +16,15 @@ from pathlib import Path
 
 # ``test/`` is intentionally not a package, so the repository root is added to
 # the import path here instead of adding a ``test/__init__.py``.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from agent.models import EventCategory  # noqa: E402
 from agent.tools.file_access import FileAccessConfig  # noqa: E402
 from agent.tools.read_file import make_read_file_tool  # noqa: E402
-from agent.tools.file_write_tool import make_write_file_tool  # noqa: E402
 from agent.tools.read_ledger import ReadLedger  # noqa: E402
+from agent.tools.write_file import make_write_file_tool  # noqa: E402
 
 
 class WriteFileToolTest(unittest.TestCase):
