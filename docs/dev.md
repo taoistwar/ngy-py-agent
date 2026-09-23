@@ -249,7 +249,7 @@ npm run i18n:check
 
 详见 [ADR 0006](decisions/0006-tool-permission-confirmation.md)。改动这条链路时最容易踩的三个点：
 
-- **门禁写在 `ToolRegistry.execute_tool` 这个唯一收口上**，不要写进各个工具内部（工具拿不到 `EventSink`，而且按工具加门禁的默认结局是漏掉某个工具）。新增工具时必须在 `ToolSpec.permission` 里声明种类，默认 `none`＝永不询问。
+- **门禁写在 `ToolRegistry.execute_tool` 这个唯一收口上**，不要写进各个工具内部（工具拿不到 `EventSink`，而且按工具加门禁的默认结局是漏掉某个工具）。新增工具时必须在**该工具包内 `spec.py`** 的 `ToolSpec.permission` 里声明种类，默认 `none`＝永不询问；工具清单与顺序由 `agent/tools/catalog.py` 统一决定。
 - **`TaskStatus.WAITING` 仍属"进行中"**：`/events/stream`、WebSocket 循环与前端 `isTaskRunningStatus` 都必须把它当作在飞行中。否则事件流会在用户最需要看到确认请求的那一刻断掉（这个坑已踩过一次）。
 - **scope 不做降级**：未知取值返回 400。把 `always` 静默降级成 `once` 会让用户以为已经长期允许了。
 

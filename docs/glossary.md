@@ -17,9 +17,11 @@
 
 | 术语 | 定义 | 位置 |
 | --- | --- | --- |
-| **ToolSpec** | 工具的声明式定义：模型可见的 `name`、`description`、JSON Schema `parameters`、绑定的 `handler`，以及**权限种类** `permission`。 | `agent/tools/specs.py` |
+| **ToolSpec** | 工具的声明式定义：模型可见的 `name`、`description`、JSON Schema `parameters`、绑定的 `handler`，以及**权限种类** `permission`。 | `agent/tools/spec.py` |
 | **工具包（tool package）** | 一个模型可见工具 = 一个包，**包名 = 工具名**（`exec_command/`、`write_stdin/`、`read_file/`…）。`__init__.py` 只做对外面（名称常量、`*_DESCRIPTION`、`*_PARAMETERS`、工厂），实现按职责分文件（`description.py`、`errors.py`、主题模块、`tool.py`）。共享基础设施（`permissions`、`file_access`、`process_store`…）留在 `agent/tools/` 根。 | `agent/tools/__init__.py` |
 | **ToolRegistry** | 工具注册表：注册工具、把 schema 适配成各 provider 格式、按名分发调用。 | `agent/tools/registry.py` |
+| **ToolBindings（工具绑定）** | 一次运行绑给工具的东西：`base_dir`、`session_id`（输出目录作用域）、`task_id`、`max_tokens`、`provider`/`model`、`output_directory`、`ledger`、`extra_read_roots`。每个工具包的 `build_spec(bindings)` 自取所需，所以新增工具不必给 registry 加参数。 | `agent/tools/bindings.py` |
+| **工具目录（catalog）** | 内置工具的**唯一清单**，决定模型看到哪些工具、顺序如何：`build_all_specs(bindings)` 遍历各工具包的 `spec.py`。新增工具 = 新增一个包 + 在 `_BUILDERS` 加一行。 | `agent/tools/catalog.py` |
 | **ToolOutcome** | **工具结果分流契约**。工具回调可返回它，携带 `model_text`（给模型）与可选事件类别/标题 + `details`（给 UI/外部消费者）。`execute_tool` 对其原样透传，由 `agent_loop` 拆分。 | `agent/models.py` |
 | **双通道（dual channel）** | 一次工具调用产生两份输出：给**模型**的精简文本、给 **UI/外部消费者**的结构化记录。二者不再共用同一条消息。见 [ADR 0001](decisions/0001-file-edit-tool.md)。 | `agent/agent_loop.py` |
 | **`model_text`** | `ToolOutcome` 中回填进 `messages`（`role="tool"`）的文本，是模型实际"看到"的内容。 | `agent/models.py` |
@@ -111,7 +113,7 @@
 | 术语 | 定义 | 位置 |
 | --- | --- | --- |
 | **P1 交互式确认** | 工具调用前问用户"能不能执行"的第一层权限。**协作式确认，不是安全边界**：一旦放行，被放行的动作不受任何新增限制（`exec_command` 放行一次即等于放行任意文件写入）。与 [ADR 0005](decisions/0005-exec-tool.md) 的 L1/L2/L3 是两条正交的轴：P 轴管"问不问"，L 轴管"能做到什么"。 | [ADR 0006](decisions/0006-tool-permission-confirmation.md) |
-| **权限种类（permission kind）** | 工具声明的确认类别：`none`（从不询问）、`read`（仅敏感路径询问）、`write`、`exec`。在 `ToolSpec.permission` 声明，默认 `none`。 | `agent/tools/specs.py` |
+| **权限种类（permission kind）** | 工具声明的确认类别：`none`（从不询问）、`read`（仅敏感路径询问）、`write`、`exec`。在 `ToolSpec.permission` 声明，默认 `none`。 | `agent/tools/spec.py` |
 | **确认范围（scope）** | 一次允许能记多久：`once` / `session` / `always`。工具可用 `ToolSpec.scopes` 收窄自己接受的种类（`write_stdin` 只给 once/session，因为目标是一次性会话 id）；对话框只渲染列出的按钮，API 对越界取值返回 400。 | [ADR 0008](decisions/0008-write-stdin-tool.md) |
 | **门禁（gate）** | 权限判定本身。做在 `ToolRegistry.execute_tool` 这个**唯一收口**上，因此覆盖面是"全部工具"，而不是"我记得加过的那几个"。 | `agent/tools/registry.py` |
 | **PermissionBroker** | 一个任务一个的权限代理：判定是否需要询问、发 `permission_request` 事件、阻塞该任务线程等待答复，并回收结果。由 `agent_loop` 注入 registry（工具自己拿不到 `EventSink`）。 | `agent/tools/permissions.py` |
@@ -123,7 +125,7 @@
 | **权限规则（permission rule）** | 一条 `always` 决定的持久化记录，**刻意做窄**：一个工具 + 一个精确目标，不接受 `Bash(git push:*)` 这类模式。存在 `data/permission_rules.json`（`PERMISSION_RULES_CONFIG` 改路径）。文件缺失或损坏一律表示"没有规则"（即重新询问），**绝不表示"允许"**。 | `agent/tools/permission_rules.py` |
 | **`persistent_rule`** | 命中一条权限规则、因而无需询问的原因。 | `agent/tools/permissions.py` |
 | **规则写盘失败** | 调用照常放行，但 `scope` 退回 `once`：不声称一个并未写入的长期许可。 | `agent/tools/permissions.py` |
-| **预览（`preview` / dry run）** | `ToolSpec.preview`：接收调用参数、**无副作用**地返回给对话框用的补充 `details`。`edit_file` 用它给出**写入前**的 `gitDiff`（复用 `prepare_edit`，不需要第二条实现路径）。预览失败不构成拒绝，工具执行时会报准确错误。 | `agent/tools/specs.py`、`agent/tools/edit_file/` |
+| **预览（`preview` / dry run）** | `ToolSpec.preview`：接收调用参数、**无副作用**地返回给对话框用的补充 `details`。`edit_file` 用它给出**写入前**的 `gitDiff`（复用 `prepare_edit`，不需要第二条实现路径）。预览失败不构成拒绝，工具执行时会报准确错误。 | `agent/tools/spec.py`、`agent/tools/edit_file/` |
 | **待确认（pending permission）** | 正在被等待的请求。`GET /api/tasks/{id}` 的 `pendingPermission` 字段给出它，因此断线重连的客户端也能渲染弹窗。 | `main.py` |
 | **`WAITING`（任务状态）** | 任务被确认请求阻塞。它**仍属"进行中"**：事件推流与前端轮询都必须继续，否则客户端恰恰收不到那条需要它答复的请求。 | `agent/models.py` |
 | **决策原因（reason）** | 审计用的判定结果：`not_required` / `auto_approved` / `deny_all` / `policy_denied` / `session_rule` / `user_allowed` / `user_denied` / `timeout` / `stopped` / `broker_error`。 | `agent/tools/permissions.py` |

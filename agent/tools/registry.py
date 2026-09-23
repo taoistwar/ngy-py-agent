@@ -5,6 +5,8 @@ import json
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from agent.models import EventCategory, ToolOutcome
+from agent.tools.bindings import ToolBindings
+from agent.tools.catalog import build_all_specs
 from agent.tools.code_interpreter import code_interpreter as _code_interpreter
 from agent.tools.convert_currency import convert_currency as _convert_currency
 from agent.tools.get_current_temperature import (
@@ -19,14 +21,6 @@ from agent.tools.permissions import (
     PermissionDenial,
 )
 from agent.tools.read_ledger import ReadLedger
-from agent.tools.specs import (
-    DEFAULT_TOOL_SPECS,
-    build_edit_file_spec,
-    build_exec_spec,
-    build_read_file_spec,
-    build_write_file_spec,
-    build_write_stdin_spec,
-)
 
 
 class ToolRegistry:
@@ -89,50 +83,21 @@ class ToolRegistry:
 
     def _register_default_tools(self, enabled_tools: list[str] | None = None):
         """Register default tools. Pass enabled_tools to restrict the set."""
-        specs = list(DEFAULT_TOOL_SPECS)
-        specs.append(
-            build_read_file_spec(
-                base_dir=self.base_dir,
-                max_tokens=self.max_tokens,
-                provider=self.provider,
-                model=self.model,
-                ledger=self.read_ledger,
-                extra_read_roots=self.read_only_roots,
-            )
-        )
-        specs.append(
-            build_edit_file_spec(
-                base_dir=self.base_dir,
-                ledger=self.read_ledger,
-                extra_read_roots=self.read_only_roots,
-            )
-        )
-        specs.append(
-            build_write_file_spec(
-                base_dir=self.base_dir,
-                ledger=self.read_ledger,
-                extra_read_roots=self.read_only_roots,
-            )
-        )
-        specs.append(
-            build_exec_spec(
-                base_dir=self.base_dir,
-                session_id=self.session_id,
-                max_tokens=self.max_tokens,
-                output_directory=self.output_directory,
-                task_id=self.task_id,
-            )
-        )
-        specs.append(
-            build_write_stdin_spec(
-                max_tokens=self.max_tokens,
-                task_id=self.task_id,
-                workspace=self.base_dir or "",
-                output_directory=self.output_directory,
-            )
+        # One description of what this run is bound to, handed to every tool; each
+        # tool takes the parts it needs (see agent/tools/bindings.py).
+        bindings = ToolBindings(
+            base_dir=self.base_dir,
+            session_id=self.session_id,
+            task_id=self.task_id,
+            max_tokens=self.max_tokens,
+            provider=self.provider,
+            model=self.model,
+            output_directory=self.output_directory,
+            ledger=self.read_ledger,
+            extra_read_roots=self.read_only_roots,
         )
 
-        for spec in specs:
+        for spec in build_all_specs(bindings):
             self.register_tool(
                 name=spec.name,
                 function=spec.handler,
