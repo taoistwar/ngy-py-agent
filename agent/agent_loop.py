@@ -23,17 +23,22 @@ from agent.modes import (
     build_tool_registry_from_names,
 )
 from agent.provider import (
+    DEFAULT_PROVIDER,
     ProviderConfig,
     build_provider,
     canonicalize_provider,
     resolve_tool_provider_for_schemas,
 )
+from agent.tool_registry import ToolRegistry
 from agent.tools import process_store
 from agent.tools.file_access import default_workspace_root
 from agent.tools.permissions import PermissionBroker
-from agent.tool_registry import ToolRegistry
 
-DEFAULT_PROVIDER = os.getenv("TOOL_SCHEMA_PROVIDER", "openai")
+# The provider to run when the caller does not name one. The environment variable
+# keeps its historical name (it started as the tool-schema selection switch) and the
+# fallback is the provider module's default, so there is one place that says what
+# "not configured" means.
+TOOL_SCHEMA_PROVIDER = os.getenv("TOOL_SCHEMA_PROVIDER") or DEFAULT_PROVIDER
 DEFAULT_USER_QUERY = "What's the current time and weather in Vancouver?"
 DEFAULT_MAX_STEPS = int(os.getenv("REACT_MAX_STEPS", "8"))
 
@@ -209,7 +214,7 @@ def _build_runtime(
     agent_config: Optional[Dict[str, Any]] = None,
     task_id: str = "",
 ) -> tuple[str, ToolRegistry, Any, Optional[List[Dict[str, Any]]]]:
-    provider_name = canonicalize_provider(provider_name or DEFAULT_PROVIDER)
+    provider_name = canonicalize_provider(provider_name or TOOL_SCHEMA_PROVIDER)
     registry_options = {
         "base_dir": base_dir,
         "max_tokens": int(getattr(provider_config, "max_input_tokens", 0) or 0),
