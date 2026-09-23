@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, Optional, Sequence
 
 from agent.tools import (
     edit_file,
-    exec_tool,
+    exec_command,
     read_file,
     write_file,
     write_stdin_tool,
@@ -219,7 +219,7 @@ def build_write_file_spec(
     )
 
 
-EXEC_TOOL_NAME = exec_tool.EXEC_TOOL_NAME
+EXEC_TOOL_NAME = exec_command.EXEC_TOOL_NAME
 
 
 def build_exec_spec(
@@ -238,15 +238,15 @@ def build_exec_spec(
     """
     return ToolSpec(
         name=EXEC_TOOL_NAME,
-        handler=exec_tool.make_exec_tool(
+        handler=exec_command.make_exec_tool(
             base_dir=base_dir,
             session_id=session_id,
             max_tokens=max_tokens,
             output_directory=output_directory,
             task_id=task_id,
         ),
-        description=exec_tool.build_exec_description(),
-        parameters=exec_tool.EXEC_PARAMETERS,
+        description=exec_command.build_exec_description(),
+        parameters=exec_command.EXEC_PARAMETERS,
         permission=PERMISSION_EXEC,
     )
 
