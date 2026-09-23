@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence
 
 from agent.tools import (
+    edit_file,
     exec_tool,
-    file_edit_tool,
     file_write_tool,
     read_file,
     write_stdin_tool,
@@ -186,14 +186,14 @@ def build_edit_file_spec(
     """Build the workspace scoped edit tool, bound to a workspace root."""
     return ToolSpec(
         name=EDIT_FILE_TOOL_NAME,
-        handler=file_edit_tool.make_edit_file_tool(
+        handler=edit_file.make_edit_file_tool(
             base_dir=base_dir, ledger=ledger, extra_read_roots=extra_read_roots
         ),
-        description=file_edit_tool.EDIT_FILE_DESCRIPTION,
-        parameters=file_edit_tool.EDIT_FILE_PARAMETERS,
+        description=edit_file.EDIT_FILE_DESCRIPTION,
+        parameters=edit_file.EDIT_FILE_PARAMETERS,
         permission=PERMISSION_WRITE,
         # Shows the diff before the user decides (ADR 0006 D11).
-        preview=file_edit_tool.make_edit_preview(
+        preview=edit_file.make_edit_preview(
             base_dir=base_dir, extra_read_roots=extra_read_roots
         ),
     )

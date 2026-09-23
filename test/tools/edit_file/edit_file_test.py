@@ -2,7 +2,7 @@
 
 Run from the repository root::
 
-    uv run python test/tools/file_edit_tool_test.py -v
+    uv run python test/tools/edit_file/edit_file_test.py -v
 """
 
 import codecs
@@ -18,13 +18,14 @@ from pathlib import Path
 
 # ``test/`` is intentionally not a package, so the repository root is added to
 # the import path here instead of adding a ``test/__init__.py``.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from agent.models import EventCategory, ToolOutcome  # noqa: E402
+from agent.tools.edit_file import make_edit_file_tool  # noqa: E402
 from agent.tools.file_access import FileAccessConfig  # noqa: E402
-from agent.tools.file_edit_tool import CONTEXT_LINES, make_edit_file_tool  # noqa: E402
+from agent.tools.file_patch import CONTEXT_LINES  # noqa: E402
 
 
 class EditFileToolTest(unittest.TestCase):
@@ -365,17 +366,17 @@ class EditFileToolTest(unittest.TestCase):
     def test_concurrent_change_is_detected_before_writing(self):
         from unittest import mock
 
-        import agent.tools.file_edit_tool as module
+        import agent.tools.edit_file.replace as replace_module
 
         self.write_text("race.txt", "alpha\n")
-        original_splice = module._splice_bytes
+        original_splice = replace_module.splice_bytes
 
         def splice_then_someone_else_writes(*args, **kwargs):
             result = original_splice(*args, **kwargs)
             self.write_text("race.txt", "overwritten by another process\n")
             return result
 
-        with mock.patch.object(module, "_splice_bytes", splice_then_someone_else_writes):
+        with mock.patch.object(replace_module, "splice_bytes", splice_then_someone_else_writes):
             details = self.tool("race.txt", "alpha", "beta").details
 
         self.assertEqual(details["reason"], "file_changed")

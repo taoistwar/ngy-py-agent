@@ -26,7 +26,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from agent.models import ToolOutcome  # noqa: E402
 from agent.tools.file_access import DEFAULT_WORKSPACE_ENV, FileAccessConfig  # noqa: E402
-from agent.tools.file_edit_tool import EditFileError, make_edit_preview  # noqa: E402
+from agent.tools.edit_file import EditFileError, make_edit_preview  # noqa: E402
 from agent.tools.permission_rules import PermissionRuleStore  # noqa: E402
 from agent.tools.permissions import (  # noqa: E402
     PERMISSION_EXEC,
