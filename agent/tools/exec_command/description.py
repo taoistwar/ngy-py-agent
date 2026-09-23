@@ -42,6 +42,25 @@ def _dialect_hint(shell: Any) -> str:
     )
 
 
+def _tty_hint(shell: Any) -> str:
+    """What a pseudo terminal buys the model, and what it costs it."""
+    hint = (
+        "'tty' attaches the command to a pseudo terminal instead of plain pipes, so a program "
+        "that checks for a terminal (colours, progress bars, prompts) behaves as it would for a "
+        "person. It costs the separate stderr section - a terminal merges stderr into stdout - "
+        "and every line comes back ending in a carriage return. A 'tty' command in the foreground "
+        "cannot be answered, so pair it with 'run_in_background' when you need to reply to a "
+        "prompt. "
+    )
+    if shell.family in (FAMILY_POWERSHELL, FAMILY_CMD):
+        hint += (
+            "On Windows the terminal prints a short handshake of escape sequences before the "
+            "command's own output, and a newline you type is delivered as Enter. "
+        )
+    return hint
+
+
+
 def build_exec_description(shell: Optional[Any] = None) -> str:
     """The model-facing description, written for the shell this machine has."""
     if shell is None:
@@ -65,6 +84,7 @@ def build_exec_description(shell: Optional[Any] = None) -> str:
         "'description' of what the command "
         "does: the user is shown it when confirming the command, and it is recorded for the audit "
         "trail. "
+        f"{_tty_hint(shell)}"
         "'dangerouslyDisableSandbox' only skips the extra containment layer (integrity level); "
         "resource limits and process-tree termination always stay on."
     )
@@ -101,6 +121,12 @@ EXEC_PARAMETERS: Dict[str, Any] = {
                 "Start the command and return immediately instead of waiting. The result carries "
                 "the pid, a session_id (pass it to write_stdin to interact) and the log path. The "
                 "command is stopped when the task ends. Defaults to false."
+            ),
+        },
+        "tty": {
+            "type": "boolean",
+            "description": (
+                "True allocates a PTY for the command; false or omitted uses plain pipes."
             ),
         },
         "dangerouslyDisableSandbox": {

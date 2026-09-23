@@ -21,6 +21,13 @@ output went); the UI gets the structured record through an ``exec`` event. A com
 started with ``run_in_background`` hands back a ``session_id`` that ``write_stdin``
 can type into.
 
+``tty=True`` runs the command on a pseudo terminal instead of pipes, so a program that
+checks for one behaves as it would for a person (see ``docs/decisions/0009-exec-tty.md``).
+The terminal itself is :mod:`agent.tools.pty_session` (Windows ConPTY via ``pywinpty``,
+POSIX ``pty``); a terminal has no separate stderr, ends its lines with CRLF, and has to
+be read on a thread, which is what :mod:`~agent.tools.exec_command.tty` does for a
+foreground command.
+
 One tool, one package, named after the tool the model sees (see ``AGENTS.md``).
 The run itself is in :mod:`~agent.tools.exec_command.runtime`, the constraint
 reporting in :mod:`~agent.tools.exec_command.containment`, the rendering in

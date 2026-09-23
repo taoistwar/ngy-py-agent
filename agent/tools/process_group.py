@@ -27,7 +27,10 @@ import os
 import signal
 import subprocess
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Sequence
+from pathlib import Path
+from typing import Any, Dict, Optional, Sequence, Tuple
+
+from agent.tools import pty_session
 
 WINDOWS = os.name == "nt"
 
@@ -106,20 +109,83 @@ def _env_int(name: str, default: int) -> int:
 
 @dataclass
 class RunningCommand:
-    """A started command plus the handle needed to stop its whole tree."""
+    """A started command plus the handle needed to stop its whole tree.
 
-    process: subprocess.Popen
+    ``process`` is the ``Popen`` for every pipe command and for a POSIX terminal
+    command. A Windows terminal command has none: ConPTY is created by ``pywinpty``,
+    which hands back a terminal rather than a ``Popen``, and pid/liveness/exit code
+    are answered from that terminal instead. Consumers never look at either field
+    directly - they use the methods below, so both shapes behave the same.
+    """
+
+    process: Optional[subprocess.Popen]
     kind: str
     pgid: Optional[int] = None
     job: Optional[int] = None
     limits: Dict[str, Any] = field(default_factory=dict)
+    terminal: Optional["pty_session.PtyTerminal"] = None
+    reader: Optional["pty_session.PtyReader"] = None
+    sink: Any = None
 
     @property
     def pid(self) -> int:
-        return int(self.process.pid)
+        if self.process is not None:
+            return int(self.process.pid)
+        return int(self.terminal.pid)
+
+    @property
+    def returncode(self) -> Optional[int]:
+        """The exit code once the command is gone; ``None`` while it runs."""
+        if self.process is not None:
+            return self.process.returncode
+        return self.terminal.exit_code()
 
     def poll(self) -> Optional[int]:
-        return self.process.poll()
+        if self.process is not None:
+            return self.process.poll()
+        return self.terminal.exit_code()
+
+    def wait(self, timeout: Optional[float] = None) -> bool:
+        """Wait for the command; ``False`` when ``timeout`` runs out first."""
+        if self.process is not None:
+            try:
+                self.process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                return False
+            return True
+        return self.terminal.wait(timeout or 0.0)
+
+    def has_stdin(self) -> bool:
+        """Whether anything can be typed into this command at all."""
+        if self.terminal is not None:
+            return True
+        return self.process is not None and self.process.stdin is not None
+
+    def write_input(self, data: bytes) -> None:
+        """Type into the command: the terminal, or the stdin pipe.
+
+        One entry point on purpose. A terminal command has no ``process.stdin``, so
+        leaving the choice to consumers would give them two code paths and a wrong
+        answer on one of them (ADR 0009).
+        """
+        if self.terminal is not None:
+            self.terminal.write(data)
+            return
+        stream = self.process.stdin if self.process is not None else None
+        if stream is None:
+            raise OSError("This command has no writable stdin.")
+        stream.write(data)
+        stream.flush()
+
+    def close_input(self) -> None:
+        """Close the stdin pipe. A terminal is closed with the command, not alone."""
+        stream = self.process.stdin if self.process is not None else None
+        if stream is None:
+            return
+        try:
+            stream.close()
+        except OSError:  # pragma: no cover - platform specific
+            pass
 
     def stop(self) -> None:
         """Stop the command and everything it started.
@@ -136,6 +202,9 @@ class RunningCommand:
         if self.kind == KIND_WINDOWS_JOB and self.job:  # pragma: no cover - platform specific
             _KERNEL32.TerminateJobObject(_handle(self.job), 1)
             return
+        if self.terminal is not None:  # pragma: no cover - platform specific
+            self.terminal.terminate()
+            return
         try:
             self.process.terminate()
         except OSError:
@@ -151,6 +220,9 @@ class RunningCommand:
             return
         if self.kind == KIND_WINDOWS_JOB and self.job:  # pragma: no cover - platform specific
             _KERNEL32.TerminateJobObject(_handle(self.job), 1)
+            return
+        if self.terminal is not None:  # pragma: no cover - platform specific
+            self.terminal.terminate()
             return
         try:
             self.process.kill()
@@ -173,11 +245,23 @@ class RunningCommand:
         self.stop()
 
     def release(self) -> None:
-        """Close the OS handle without stopping anything.
+        """Close the OS handles without stopping anything.
 
         A Windows job is created with ``KILL_ON_JOB_CLOSE``, so releasing it kills
         the survivors: background commands deliberately keep their handle instead.
+
+        A terminal is released in a fixed order, because closing it is also what ends
+        the blocked read: drain the tail first (the command may have printed its last
+        line and exited, leaving the bytes buffered), then close the terminal, then
+        join the reader. Skipping the drain silently truncates the log.
         """
+        if self.reader is not None:
+            self.reader.settle()
+        if self.terminal is not None:
+            self.terminal.close()
+        if self.reader is not None:
+            self.reader.join()
+            self.reader = None
         if self.kind == KIND_WINDOWS_JOB and self.job:  # pragma: no cover - platform specific
             _KERNEL32.CloseHandle(_handle(self.job))
             self.job = None
@@ -227,6 +311,21 @@ def _assign_to_job(job: int, pid: int) -> bool:  # pragma: no cover - platform s
         _KERNEL32.CloseHandle(_handle(handle))
 
 
+def _attach_job(pid: int) -> Tuple[Optional[int], Dict[str, Any]]:
+    """Put ``pid`` in a capped job, or give up.
+
+    Shared by the pipe path and the ConPTY path: a terminal command must be capped
+    and killable as a tree exactly like every other command (ADR 0009 keeps L1).
+    """
+    job, limits = _create_job()
+    if not job:  # pragma: no cover - platform specific
+        return None, {}
+    if _assign_to_job(job, pid):
+        return job, limits
+    _KERNEL32.CloseHandle(_handle(job))
+    return None, {}
+
+
 def _spawn(
     argv: Sequence[str],
     cwd: Optional[str],
@@ -239,7 +338,6 @@ def _spawn(
     # to type into the command later (see ``process_store``).
     stdin_target = subprocess.DEVNULL if stdin is None else stdin
     if WINDOWS:  # pragma: no cover - platform specific
-        job, limits = _create_job()
         process = subprocess.Popen(
             list(argv),
             cwd=cwd,
@@ -249,10 +347,9 @@ def _spawn(
             stderr=stderr,
             creationflags=CREATE_NO_WINDOW,
         )
+        job, limits = _attach_job(process.pid)
         if job:
-            if _assign_to_job(job, process.pid):
-                return RunningCommand(process=process, kind=KIND_WINDOWS_JOB, job=job, limits=limits)
-            _KERNEL32.CloseHandle(_handle(job))
+            return RunningCommand(process=process, kind=KIND_WINDOWS_JOB, job=job, limits=limits)
         return RunningCommand(process=process, kind=KIND_PLAIN)
 
     process = subprocess.Popen(
@@ -301,6 +398,91 @@ def start_with_log(
         handle.close()
 
 
+def _attach_reader(
+    terminal: "pty_session.PtyTerminal", sink: Any
+) -> "pty_session.PtyReader":
+    """Start reading ``terminal`` on its own thread and remember it on the command."""
+    reader = pty_session.PtyReader(terminal, sink)
+    terminal.reader = reader
+    return reader
+
+
+def _running_from_terminal(
+    terminal: "pty_session.PtyTerminal", sink: Any
+) -> RunningCommand:
+    """Wrap a terminal in a :class:`RunningCommand`, capped and killable as a tree.
+
+    On POSIX the terminal's child *is* the ``Popen``, so the usual process-group path
+    applies unchanged. On Windows there is no ``Popen`` at all, so the command is
+    identified by pid and either joins a job or falls back to a plain (uncapped)
+    command - the same fallback the pipe path takes when a job cannot be created.
+    """
+    reader = _attach_reader(terminal, sink)
+    if WINDOWS:  # pragma: no cover - platform specific
+        job, limits = _attach_job(terminal.pid)
+        if job:
+            return RunningCommand(
+                process=None,
+                kind=KIND_WINDOWS_JOB,
+                job=job,
+                limits=limits,
+                terminal=terminal,
+                reader=reader,
+                sink=sink,
+            )
+        return RunningCommand(process=None, kind=KIND_PLAIN, terminal=terminal, reader=reader, sink=sink)
+
+    child = terminal.child
+    try:
+        pgid: Optional[int] = os.getpgid(int(child.pid))
+    except OSError:  # pragma: no cover - the child is already gone
+        pgid = int(child.pid)
+    return RunningCommand(
+        process=child,
+        kind=KIND_POSIX,
+        pgid=pgid,
+        terminal=terminal,
+        reader=reader,
+        sink=sink,
+    )
+
+
+def start_pty(
+    argv: Sequence[str],
+    cwd: Optional[str] = None,
+    env: Optional[Dict[str, str]] = None,
+) -> RunningCommand:
+    """Start ``argv`` on a pseudo terminal, keeping its output in memory.
+
+    The foreground shape: nothing is written to a log, the caller reads
+    ``command.sink.bytes()`` once it has released the command.
+    """
+    terminal = pty_session.spawn(argv, cwd=cwd, env=env)
+    return _running_from_terminal(terminal, pty_session.BytesSink())
+
+
+def start_pty_with_log(
+    argv: Sequence[str],
+    stdout_path: str,
+    cwd: Optional[str] = None,
+    env: Optional[Dict[str, str]] = None,
+) -> RunningCommand:
+    """Start ``argv`` on a pseudo terminal with output appended to ``stdout_path``.
+
+    A terminal cannot be redirected into a file the way a pipe can, so a reader
+    thread pumps the master into the log. This is the one place a command output is
+    read on a thread, and only for terminal sessions (ADR 0009 revises ADR 0008 D3
+    for exactly this case).
+    """
+    log_path = Path(stdout_path)
+    # Created before the command starts, exactly like the pipe path: the path is
+    # handed to the model, so it must exist even before anything is printed.
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.touch(exist_ok=True)
+    terminal = pty_session.spawn(argv, cwd=cwd, env=env)
+    return _running_from_terminal(terminal, pty_session.FileSink(log_path))
+
+
 def interrupt(
     command: RunningCommand, grace_seconds: float = INTERRUPT_GRACE_SECONDS
 ) -> None:
@@ -310,9 +492,7 @@ def interrupt(
     not allowed to stay alive after the model asked it to stop.
     """
     command.interrupt()
-    try:
-        command.process.wait(timeout=grace_seconds)
-    except subprocess.TimeoutExpired:
+    if not command.wait(grace_seconds):
         command.kill()
 
 

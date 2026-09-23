@@ -236,20 +236,10 @@ def sweep() -> int:
 
 
 def _release(session: Session) -> None:
-    _close_stdin(session)
+    session.command.close_input()
     try:
         session.command.release()
     except Exception:  # noqa: BLE001  # pragma: no cover - defensive
-        pass
-
-
-def _close_stdin(session: Session) -> None:
-    stream = session.command.process.stdin
-    if stream is None:
-        return
-    try:
-        stream.close()
-    except OSError:  # pragma: no cover - platform specific
         pass
 
 

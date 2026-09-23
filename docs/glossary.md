@@ -84,7 +84,7 @@
 | 术语 | 定义 | 位置 |
 | --- | --- | --- |
 | **`exec_command`** | 在平台 shell 里执行一条命令的工具。shell 按平台选择（Windows `pwsh` → Windows PowerShell → `cmd`；macOS `zsh` → `bash` → `sh`；Linux `bash` → `sh`），**永不选 Windows 的 WSL `bash`**。 | `agent/tools/shell_platform.py` |
-| **`write_stdin`** | 往 `exec_command` 留下的**会话**里打字并取回新输出。空 `chars` 只轮询；`chars` 为 Ctrl-C（`\u0003`）表示打断；其余写入 stdin。结果里有 `session_id` 即"还活着"，有 `exit_code` 即"已结束"。 | [ADR 0008](decisions/0008-write-stdin-tool.md) |
+| **`write_stdin`** | 往 `exec_command` 留下的**会话**里打字并取回新输出。空 `chars` 只轮询；`chars` 为 Ctrl-C（`\u0003`）表示打断（带外投递，不写进流）；其余写入 stdin（`tty` 会话则写进终端）。结果里有 `session_id` 即"还活着"，有 `exit_code` 即"已结束"。 | [ADR 0008](decisions/0008-write-stdin-tool.md) |
 | **会话（session）/ `process_store`** | `run_in_background` 启动的活进程仓库：以**会话 `session_id`** 为键持有进程树句柄、日志路径与"已读字节偏移"。`exec_command` 写、`write_stdin` 读；命令退出即移除并释放句柄与管道；**归属按 `task_id + workspace`**（`session_id` 当 capability 用，跨任务/跨工作区一律按未知处理），每任务上限 8、TTL 30 分钟，任务结束时由循环停止本任务会话。**它与"输出目录作用域"的 `session_id` 同名但不是一个概念**：后者是 run/task 作用域（`output_root_path(base_dir, scope)`），用于给每次运行分一个输出目录。两个词不要互相代入。 | `agent/tools/process_store.py` |
 | **containment（约束层）** | `exec_command` 对命令实际施加的限制：进程树终止 + 资源上限。**不是安全边界**，命令仍能读写进程用户碰得到的任何路径。结果里的 `containment.note` 固定说明这一点。 | [ADR 0005](decisions/0005-exec-tool.md) |
 | **L1（资源与进程树）** | Windows：Job Object（`KILL_ON_JOB_CLOSE` + 进程数上限 + job 内存上限）；POSIX：新会话 + `killpg`。POSIX 侧没有内存上限。始终生效。 | `agent/tools/process_group.py` |
@@ -96,6 +96,11 @@
 | **只读附加根（`extra_read_roots`）** | 工作空间之外**可读但不可写**的目录，目前就是输出根。这是 [ADR 0001](decisions/0001-file-edit-tool.md) D3"读得到就能改"的显式例外；全局策略仍作用于它。 | `agent/tools/file_access.py` |
 | **`read_only_root`** | 试图写入只读附加根时的拒绝原因。 | `agent/tools/file_access.py` |
 | **`interrupted`** | `exec_command` 结果里表示命令**因超时被打断**的标记。它**不等于**"用户停止"：`stop` 是协作式的，杀不掉正在执行的命令。 | [ADR 0005](decisions/0005-exec-tool.md) |
+| **`tty`（伪终端）** | `exec_command` 的参数：`true` 时命令挂在**伪终端**上而不是管道，程序看到的 `isatty()` 为真（颜色、进度条、提示、"没有终端就拒绝运行"的 CLI）。代价：stderr 并入 stdout（结果里 `stderr` 恒空、`tty: true`）、行尾是 CRLF（模型文本归一为 LF，**落盘保留原始字节**）、前台 tty 无法被回答、尺寸固定 24×80、无 ANSI 剥离。 | [ADR 0009](decisions/0009-exec-tty.md) |
+| **`tty_unavailable`** | 本机拿不到终端时拒绝 `tty` 调用的原因（Windows 缺 `pywinpty`、POSIX 无 `pty` 模块、ConPTY 分配失败）。**不静默退回管道**：退回会让程序与模型对"它看到了什么"产生分歧。 | `agent/tools/pty_session.py` |
+| **`pty_session`（终端契约）** | 伪终端基础层：spawn、读字节、写字节、存活与退出码、关闭。它**不**判定死活也不杀进程——那仍是 `process_group`（Job Object / 进程组）的唯一权威。Windows 走 `pywinpty`（ConPTY），POSIX 走标准库 `pty` 且**不设控制终端**。 | `agent/tools/pty_session.py` |
+| **泵线程（reader / pump thread）** | 把终端输出搬进既有日志文件的读线程。终端 `read` 无超时、子进程退出后也不会结束，所以出口顺序固定：`settle`（排干尾巴）→ `close`（结束阻塞读）→ `join`。**只有 tty 会话有它**，管道会话没有（定向修订 [ADR 0008](decisions/0008-write-stdin-tool.md) D3）。 | [ADR 0009](decisions/0009-exec-tty.md) |
+| **输入归一化（Windows）** | tty 写路径把 `\n`（含 `\r\n`）转成 `\r`：实测 ConPTY 只认 `\r` 是回车，`\n` 不提交那一行。 | `agent/tools/pty_session.py` |
 
 ## 文件编码
 

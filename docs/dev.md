@@ -221,9 +221,21 @@ npm run i18n:check
 - `interrupted` **只表示超时**。`stop` 是协作式的，杀不掉正在执行的命令，所以它不代表"用户停止"。
 - 说明页：`docs/tools/exec/eli5-not-a-sandbox.html`。
 
+### exec_command 的 tty（伪终端）
+
+- `tty=true` 把命令挂到伪终端：Windows 走 `pywinpty`（ConPTY），POSIX 走标准库 `pty`（`agent/tools/pty_session.py`）。**不要**静默退回管道：拿不到终端就报 `tty_unavailable`，否则模型会一直以为程序看到了 TTY。
+- POSIX **不设控制终端**：唯一入口是 `preexec_fn`，而本项目拒绝在线程模型里用它（见上文）。副作用是 Ctrl-C 的投递方式：`\u0003` 一律走带外 `killpg`，**不要**照抄参考实现"tty 就原样写 `\u0003`"——没有控制终端时它在 POSIX 上不产生 SIGINT。
+- **读必须在线程里**：终端的 `read` 两个平台都没有超时，而且子进程退出后**不会**结束（除非对端被关闭）。`PtyReader` 负责读，`RunningCommand.release()` 的顺序固定为 `settle()`（排干尾巴）→ `terminal.close()`（这才是结束阻塞读的手段）→ `join()`。少任何一步就是丢日志尾部或泄漏线程。
+- 管道命令仍然没有 reader 线程，只有 tty 会话有泵线程（对 [ADR 0008](decisions/0008-write-stdin-tool.md) D3 的定向修订）。
+- 输入收口在 `RunningCommand.has_stdin()` / `write_input()`：tty 命令没有 `process.stdin`，`write_stdin` 不要直接摸流。
+- Windows 的输入归一化（`pty_session.normalize_windows_input`）：`\n` 转 `\r`。实测 `\n` 在 ConPTY 下不是回车，程序收不到那一行。
+- 模型看到的文本把 `\r\n` 归一成 `\n`；**落盘的文件保留原始字节**（`exec_command/runtime._render_foreground_text`）——文件声称是命令的输出，就该是命令的字节。
+- L1 不变：tty 命令照样按 pid 挂 Job Object（拿不到 job 就退化成 `KIND_PLAIN`，与管道路径一致），`containment` 报告一字未改。
+- 已知限制：不剥离 ANSI（ConPTY 起步的握手转义与 pwsh 的标题序列会出现在输出里）、尺寸固定 24×80、无 resize、Windows 上终端输出由 `pywinpty` 按 UTF-8 解码（不过本仓库的编码探测）。取舍与实测记录见 [ADR 0009](decisions/0009-exec-tty.md)。
+
 ### write_stdin：把还活着的命令当成一台没挂的电话
 
-- `exec_command` 的 `run_in_background` 现在返回 `session_id`，且 stdin 是**管道**（不再是 `DEVNULL`）；输出仍然写日志文件。
+- `exec_command` 的 `run_in_background` 现在返回 `session_id`，且 stdin 是**管道**（不再是 `DEVNULL`）；输出仍然写日志文件。`tty=true` 的会话是**伪终端**：输入走终端、输出由泵线程写进同一个日志文件（见上一节）。
 - `write_stdin` 只做三件事：按 `session_id` 找进程 → 可选写入 `chars` → 等 `yield_time_ms` 收新输出。空 `chars` 是轮询，`chars` 为 `\u0003` 是打断。
 - 输出按**日志文件增量**返回（`process_store` 记已读偏移），不要另建内存缓冲：日志就是这一路输出的唯一通道。
 - 命令退出即 `retire` 会话并释放句柄与管道；"已结束还能继续打字"不要放行。
@@ -233,7 +245,7 @@ npm run i18n:check
 - **会话是任务级的**：`run_react_loop` 的收尾包装器在任务结束时 `stop_task`，另有 `atexit` 硬停兜底；每任务上限 8（先 sweep 僵尸再计数，超限**拒绝**新启而不是杀旧会话），TTL 30 分钟。
 - `chars` 为 `\u0003`（Ctrl-C）时走 `process_group.interrupt`：POSIX 发 SIGINT，3 秒没退再 SIGKILL；Windows 由 Job 终止。
 - 输出超预算**落盘并返回 `persistedOutputPath`**，而不是只截断，与 ADR 0005 D4/D8 一致。
-- 已知限制：**没有 PTY**，需要终端的程序不会真的交互；原理与取舍见 [ADR 0008](decisions/0008-write-stdin-tool.md)。
+- 已知限制：**管道会话**里需要终端的程序不会真的交互（`top`、密码提示、行编辑）；要终端就显式用 `tty=true`，不要把管道行为说成 TTY。原理与取舍见 [ADR 0008](decisions/0008-write-stdin-tool.md) 与 [ADR 0009](decisions/0009-exec-tty.md)。
 
 ### 大输出与只读附加根
 
@@ -269,3 +281,4 @@ npm run i18n:check
   - [ADR 0006 工具权限确认（P1 交互式确认）](decisions/0006-tool-permission-confirmation.md)
   - [ADR 0007 未绑定会话的相对路径基目录](decisions/0007-default-workspace.md)
   - [ADR 0008 `write_stdin` 工具与"还活着的会话"](decisions/0008-write-stdin-tool.md)
+  - [ADR 0009 `exec_command` 的 `tty`（伪终端）](decisions/0009-exec-tty.md)

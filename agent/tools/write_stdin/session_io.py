@@ -25,16 +25,19 @@ def decode_output(raw: bytes) -> str:
 
 
 def write_to_session(session: process_store.Session, chars: str) -> None:
-    stream = session.command.process.stdin
-    if stream is None:
+    """Type ``chars`` in through the command's single input entry point.
+
+    A terminal session has no stdin pipe, so the stream is never reached for
+    directly (ADR 0009): both shapes fail the same way, as ``write_failed``.
+    """
+    if not session.command.has_stdin():
         raise WriteStdinError(
             "This session has no writable stdin.",
             reason="no_stdin",
             session_id=session.process_id,
         )
     try:
-        stream.write(chars.encode("utf-8"))
-        stream.flush()
+        session.command.write_input(chars.encode("utf-8"))
     except (OSError, ValueError) as exc:
         raise WriteStdinError(
             f"Could not write to the session: {exc}",

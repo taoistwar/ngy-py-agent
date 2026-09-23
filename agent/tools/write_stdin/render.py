@@ -93,5 +93,8 @@ def render(
         "output_truncated": truncated,
         "persistedOutputPath": persisted,
         "output_bytes": len(rendered.encode("utf-8", errors="replace")),
+        # A terminal session echoes what is typed into it and merges stderr, so a
+        # consumer reading `output` benefits from knowing which shape it is.
+        "tty": session.command.terminal is not None,
     }
     return model_text, details

@@ -142,6 +142,7 @@ class ExecToolTest(unittest.TestCase):
             {"command": ""},
             {"command": "x", "timeout": "soon"},
             {"command": "x", "run_in_background": "yes"},
+            {"command": "x", "tty": "yes"},
             {"command": "x", "dangerouslyDisableSandbox": "yes"},
             {"command": "x", "description": 5},
         )

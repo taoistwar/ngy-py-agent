@@ -61,6 +61,7 @@ def make_exec_tool(
         timeout: Any = None,
         description: Any = None,
         run_in_background: Any = None,
+        tty: Any = None,
         dangerouslyDisableSandbox: Any = None,
     ) -> ToolOutcome:
         try:
@@ -69,6 +70,7 @@ def make_exec_tool(
                 timeout,
                 description,
                 run_in_background,
+                tty,
                 dangerouslyDisableSandbox,
                 base_dir,
                 session_id,
