@@ -6,12 +6,10 @@ import argparse
 import asyncio
 import json
 import os
-import sqlite3
 import threading
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, List
-from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -20,6 +18,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from uvicorn import run as uvicorn_run
 
+from agent import skills as skill_library
 from agent.agent_loop import DEFAULT_MAX_STEPS, DEFAULT_USER_QUERY, run_react_loop
 from agent.models import (
     EventCategory,
@@ -27,7 +26,14 @@ from agent.models import (
     TaskEvent,
     TaskStatus,
 )
-from agent import skills as skill_library
+from agent.modes import (
+    DEFAULT_MODE,
+    MODE_CONFIGS,
+    SKILLS,
+    VALID_MODES,
+    list_available_skills,
+    list_available_tools,
+)
 from agent.provider import ProviderConfig, build_provider, canonicalize_provider
 from agent.tools.permission_rules import PermissionRuleStore
 from agent.tools.permissions import (
@@ -39,14 +45,6 @@ from agent.tools.permissions import (
 from mcp_api import router as mcp_router
 from mcp_store import MCP_TRANSPORTS
 from task_store import TASK_RETENTION_DEFAULT_DAYS, monitor_store
-from agent.modes import (
-    DEFAULT_MODE,
-    MODE_CONFIGS,
-    SKILLS,
-    VALID_MODES,
-    list_available_skills,
-    list_available_tools,
-)
 
 ROOT_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = ROOT_DIR / "web-admin"
@@ -634,7 +632,7 @@ def _summarize_session_title(
         )
         message = response.choices[0].message
         content = message.get("content") if isinstance(message, dict) else getattr(message, "content", None)
-    except Exception:
+    except Exception:  # noqa: BLE001 - a title is a convenience; fall back to the query
         return _fallback_session_title(query)
 
     title = str(content or "").strip().strip('"').strip("'").strip()
@@ -801,7 +799,7 @@ def _run_task(
         else:
             _emit_debug(_sink, task_id, "Task finished", {"result": result})
             monitor_store.finish_task(task_id, success=True, result=result)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - a failed task must still be recorded as failed
         _emit_debug(
             _sink,
             task_id,
@@ -1313,7 +1311,7 @@ async def stream_task_events_ws(
             await asyncio.sleep(0.6)
     except WebSocketDisconnect:
         return
-    except Exception:
+    except Exception:  # noqa: BLE001 - a streaming failure closes the socket, not the server
         await websocket.close(code=1011, reason="Internal server error while streaming task events.")
         return
 

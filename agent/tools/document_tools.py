@@ -44,5 +44,5 @@ def parse_pdf(url: str) -> Dict:
             "content": text_content[:5],  # Limit to first 5 pages
             "success": True,
         }
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - the caller's contract is an error payload
         return {"error": str(e), "success": False}

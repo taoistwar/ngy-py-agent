@@ -1,4 +1,5 @@
 import os
+
 import ollama
 
 
@@ -21,7 +22,7 @@ def ollama_models():
     client = ollama.Client(host=host)
     try:
         response = client.list()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - any client failure means "not reachable"
         print(f"Failed to connect to Ollama at {host}: {exc}")
         return
 

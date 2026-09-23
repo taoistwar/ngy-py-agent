@@ -11,7 +11,12 @@ Backend selection:
 
 When no tokenizer can be loaded the count degrades to a documented byte
 estimate so the agent keeps working offline.
+
+Every ``except`` below is that rule: a tokenizer library that is missing, broken
+or unhappy with a model name means "no counter", never a failed turn.
 """
+
+# ruff: noqa: BLE001
 
 import math
 import os

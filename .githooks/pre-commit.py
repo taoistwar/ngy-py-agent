@@ -11,7 +11,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 CHECK_EXTS = {
     ".md",
     ".py",

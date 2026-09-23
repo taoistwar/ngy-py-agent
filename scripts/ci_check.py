@@ -3,11 +3,10 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
-import os
-
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB_ADMIN = ROOT / "web-admin"

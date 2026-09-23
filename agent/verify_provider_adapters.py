@@ -1,3 +1,7 @@
+# ruff: noqa: BLE001
+# A diagnostic sweep: each probe is wrapped so one broken provider prints its error
+# and the run continues to the next.
+
 import argparse
 import json
 import os
@@ -233,7 +237,7 @@ def _parse_tool_call_from_content(content: str) -> Optional[dict[str, Any]]:
 
     try:
         payload = json.loads(text)
-    except Exception:
+    except (ValueError, TypeError):
         return None
 
     if not isinstance(payload, dict):
