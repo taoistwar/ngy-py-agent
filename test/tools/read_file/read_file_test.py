@@ -2,7 +2,7 @@
 
 Run from the repository root::
 
-    uv run python test/tools/file_read_tool_test.py -v
+    uv run python test/tools/read_file/read_file_test.py -v
 """
 
 import codecs
@@ -15,12 +15,12 @@ from pathlib import Path
 
 # ``test/`` is intentionally not a package, so the repository root is added to
 # the import path here instead of adding a ``test/__init__.py``.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from agent.tools.file_access import FileAccessConfig  # noqa: E402
-from agent.tools.file_read_tool import (  # noqa: E402
+from agent.tools.read_file import (  # noqa: E402
     MAX_FULL_READ_BYTES,
     make_read_file_tool,
 )

@@ -22,7 +22,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from agent.models import EventCategory  # noqa: E402
 from agent.tools.file_access import FileAccessConfig  # noqa: E402
-from agent.tools.file_read_tool import make_read_file_tool  # noqa: E402
+from agent.tools.read_file import make_read_file_tool  # noqa: E402
 from agent.tools.file_write_tool import make_write_file_tool  # noqa: E402
 from agent.tools.read_ledger import ReadLedger  # noqa: E402
 

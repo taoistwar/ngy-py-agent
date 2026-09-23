@@ -1,28 +1,12 @@
-"""Workspace scoped file reading tool.
+"""Implementation of the ``read_file`` tool: resolve, check, read, report.
 
-Reading is bounded on four axes so a single call can never blow up the model
-context:
-
-- the path must resolve inside the workspace root (``base_dir``),
-- only text files are readable (a BOM is recognised as text; otherwise NUL bytes
-  in the head mean binary),
-- the raw bytes are capped (``max_size_bytes`` when reading to the end of file,
-  ``min(max_size_bytes, budget * 4)`` when a line range is requested),
-- the returned text must pass the three step token budget check.
-
-The encoding is **never guessed silently**: decoding uses ``encoding`` (default
-UTF-8) or the byte order mark when the file has one, and a failure is reported
-with the candidate encodings that would decode the bytes so the model can retry
-(see ``docs/decisions/0002-file-encoding.md``).
-
-Line endings are deliberately **preserved** (``\\r\\n`` / ``\\n`` / ``\\r``) instead
-of being normalized to ``\\n``: stripping the ``N<TAB>`` prefixes from the output
-must reproduce the file bytes exactly, otherwise ``edit_file``'s strict byte
-matching could never succeed on CRLF files (see
-``docs/decisions/0001-file-edit-tool.md``).
+The tool's promise is documented in :mod:`agent.tools.read_file` (the package
+docstring), the description and schema in
+:mod:`agent.tools.read_file.description`, the line handling in
+:mod:`agent.tools.read_file.lines`, and the error type in
+:mod:`agent.tools.read_file.errors`.
 """
 
-import io
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -32,93 +16,26 @@ from agent.tools.file_access import (
     load_access_config,
     resolve_read_path,
 )
+from agent.tools.read_file.description import MAX_FULL_READ_BYTES
+from agent.tools.read_file.errors import ReadFileError
+from agent.tools.read_file.lines import (
+    _format_lines,
+    _normalize_line_range,
+    _read_slice,
+    _read_to_end,
+)
 from agent.tools.read_ledger import DEFAULT_LEDGER, ReadLedger
 from agent.tools.text_encoding import (
     BINARY_SNIFF_BYTES,
     DEFAULT_ENCODING,
-    REASON_DECODE_FAILED,
     DecodeError,
     canonical_encoding,
     detect_bom,
     looks_binary,
     suggest_encodings,
 )
-from agent.tools.text_lines import split_line_ending
 from agent.tools.token_budget import check_text, resolve_max_tokens
 from agent.tools.tokenizers import MAX_BYTES_PER_TOKEN, get_token_counter
-
-# Hard ceiling for the "read to the end of file" path.
-MAX_FULL_READ_BYTES = 256 * 1024
-
-# Line numbers are always emitted and deliberately have no opt-out switch: the
-# model cannot see the real line numbers, so a numberless read turns every later
-# "change line N" reference into guesswork. Saving tokens is not worth that.
-LINE_NUMBER_SEPARATOR = "\t"
-
-READ_FILE_DESCRIPTION = (
-    "Read a text file. Paths are resolved against the workspace root when the session "
-    "has one and can never escape it; a global allow/deny policy always applies on top. "
-    "Returns the requested line range, each line prefixed with its 1-based line number "
-    "followed by a single tab. Omit 'limit' to "
-    "read from 'offset' to the end of the file (rejected when the file is larger than "
-    "256KB). Provide 'limit' to read a specific number of lines; the returned text is "
-    "rejected when it exceeds the output token budget, so prefer small ranges and "
-    "continue with a new 'offset' when needed. Decoding uses 'encoding' (default UTF-8) "
-    "or the file's byte order mark when it has one; when the bytes cannot be decoded you "
-    "get an error listing candidate encodings, so retry with the right 'encoding'. The "
-    "result reports the 'encoding' that worked - pass the same value to edit_file. "
-    "Original line endings are preserved, so "
-    "the text with the 'N<TAB>' prefixes stripped can be passed verbatim to edit_file "
-    "as 'old_string'."
-)
-
-READ_FILE_PARAMETERS: Dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "file_path": {
-            "type": "string",
-            "description": (
-                "Path to the file, relative to the workspace root (absolute paths are "
-                "accepted only when they stay inside the workspace)."
-            ),
-        },
-        "offset": {
-            "type": "integer",
-            "minimum": 0,
-            "description": ("1-based line number to start from. Defaults to 1; 0 is treated as 1."),
-        },
-        "limit": {
-            "type": "integer",
-            "minimum": 0,
-            "description": (
-                "Number of lines to read. Omit it (or pass 0) to read from 'offset' to the end of the file."
-            ),
-        },
-        "encoding": {
-            "type": "string",
-            "description": (
-                "Text encoding used to decode the file (required). Use UTF-8 unless you have "
-                "a reason not to. A byte order mark always wins over this value. When "
-                "decoding fails the error lists candidate encodings; retry with the one "
-                "that fits."
-            ),
-        },
-    },
-    "required": ["file_path", "encoding"],
-}
-
-
-class ReadFileError(Exception):
-    """Raised when a read request cannot be served."""
-
-    def __init__(self, message: str, **details: Any) -> None:
-        super().__init__(message)
-        self.message = message
-        self.details = {key: value for key, value in details.items() if value is not None}
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {"error": self.message, **self.details}
-
 
 def _display_path(path: Path, root: Optional[Path]) -> str:
     if root is None:
@@ -198,127 +115,6 @@ def _resolve_encoding(head: bytes, encoding: Any, display: str) -> Tuple[str, in
             path=display,
             suggested_encodings=suggest_encodings(head),
         ) from None
-
-
-def _iter_text_lines(path: Path, encoding: str, skip: int):
-    """Stream decoded lines, splitting on ``\\r\\n`` / ``\\n`` / ``\\r`` only."""
-    with open(path, "rb") as handle:
-        if skip:
-            handle.seek(skip)
-        with io.TextIOWrapper(handle, encoding=encoding, errors="strict", newline="") as reader:
-            yield from reader
-
-
-def _decode_failure(exc: UnicodeDecodeError, encoding: str, head: bytes, display: str) -> DecodeError:
-    return DecodeError(
-        f"Cannot decode the file as {encoding}; retry with the correct 'encoding'.",
-        reason=REASON_DECODE_FAILED,
-        path=display,
-        encoding=encoding,
-        byte_offset=exc.start,
-        suggested_encodings=suggest_encodings(head),
-    )
-
-
-def _normalize_line_range(offset: Any, limit: Any) -> Tuple[int, Optional[int]]:
-    try:
-        start = int(offset) if offset is not None else 1
-    except (TypeError, ValueError):
-        raise ReadFileError("'offset' must be an integer.") from None
-    try:
-        count = int(limit) if limit is not None else None
-    except (TypeError, ValueError):
-        raise ReadFileError("'limit' must be an integer.") from None
-    start = max(start, 1)
-    if count is not None and count <= 0:
-        count = None
-    return start, count
-
-
-def _read_slice(
-    path: Path,
-    encoding: str,
-    skip: int,
-    start: int,
-    count: int,
-    byte_limit: int,
-    head: bytes,
-    display: str,
-) -> Tuple[List[str], bool, int, int]:
-    """Read ``count`` lines from ``start``.
-
-    Returns ``(lines, has_more, used_bytes, scanned_lines)``. Each entry in
-    ``lines`` keeps its original line ending.
-    """
-    selected: List[str] = []
-    used = 0
-    has_more = False
-    scanned = 0
-    try:
-        for number, raw in enumerate(_iter_text_lines(path, encoding, skip), 1):
-            scanned = number
-            if number < start:
-                continue
-            if len(selected) >= count:
-                has_more = True
-                break
-            used += len(raw.encode(encoding))
-            if used > byte_limit:
-                raise ReadFileError(
-                    "Requested line range is too large to return in one call; narrow 'offset'/'limit' and try again.",
-                    byte_limit=byte_limit,
-                )
-            selected.append(raw)
-    except UnicodeDecodeError as exc:
-        raise _decode_failure(exc, encoding, head, display) from exc
-    return selected, has_more, used, scanned
-
-
-def _read_to_end(
-    path: Path,
-    encoding: str,
-    skip: int,
-    start: int,
-    byte_limit: int,
-    head: bytes,
-    display: str,
-) -> Tuple[List[str], int, int]:
-    """Read from ``start`` to the end of file, rejecting oversized files upfront."""
-    try:
-        size = path.stat().st_size
-    except OSError as exc:
-        raise ReadFileError(f"Cannot stat file: {exc}", path=path.as_posix()) from exc
-    if size > byte_limit:
-        raise ReadFileError(
-            "File is too large to read as a whole; request an explicit 'limit' or a narrower 'offset'.",
-            file_bytes=size,
-            byte_limit=byte_limit,
-        )
-    try:
-        lines = list(_iter_text_lines(path, encoding, skip))
-    except UnicodeDecodeError as exc:
-        raise _decode_failure(exc, encoding, head, display) from exc
-    total_lines = len(lines)
-    if start > 1:
-        lines = lines[start - 1 :]
-    return lines, sum(len(line.encode(encoding)) for line in lines), total_lines
-
-
-def _format_lines(lines: List[str], start: int) -> str:
-    """Number every line while keeping its original line ending intact.
-
-    The prefix is ``N<TAB>``; the ending is re-emitted verbatim. Stripping the
-    prefixes from the returned text therefore reproduces the file bytes exactly,
-    which is what lets ``edit_file`` do strict byte matching (see ADR 0001).
-    """
-    if not lines:
-        return ""
-    width = len(str(start + len(lines) - 1))
-    parts = []
-    for number, raw in enumerate(lines, start):
-        content, ending = split_line_ending(raw)
-        parts.append(f"{number:>{width}}{LINE_NUMBER_SEPARATOR}{content}{ending}")
-    return "".join(parts)
 
 
 def _build_result(
