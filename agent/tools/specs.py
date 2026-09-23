@@ -16,8 +16,8 @@ from typing import Any, Callable, Dict, Optional, Sequence
 from agent.tools import (
     edit_file,
     exec_tool,
-    file_write_tool,
     read_file,
+    write_file,
     write_stdin_tool,
 )
 from agent.tools.code_interpreter import code_interpreter
@@ -210,11 +210,11 @@ def build_write_file_spec(
     """Build the workspace scoped write tool, bound to a workspace root."""
     return ToolSpec(
         name=WRITE_FILE_TOOL_NAME,
-        handler=file_write_tool.make_write_file_tool(
+        handler=write_file.make_write_file_tool(
             base_dir=base_dir, ledger=ledger, extra_read_roots=extra_read_roots
         ),
-        description=file_write_tool.WRITE_FILE_DESCRIPTION,
-        parameters=file_write_tool.WRITE_FILE_PARAMETERS,
+        description=write_file.WRITE_FILE_DESCRIPTION,
+        parameters=write_file.WRITE_FILE_PARAMETERS,
         permission=PERMISSION_WRITE,
     )
 

@@ -1,20 +1,9 @@
-"""Workspace scoped file writing tool: create a file, or replace it entirely.
+"""Implementation of the ``write_file`` tool: guard, encode, write atomically.
 
-The tool always writes the **whole** file. It never appends: to append, anchor
-``edit_file`` on the file's last line, which keeps the write small, keeps the
-concurrency check, and stays idempotent when a call is retried.
-
-Replacing an existing file requires proof that the model has seen its current
-content: a full ``read_file`` of that file (from line 1, without ``limit``)
-recorded for this run, plus the bytes on disk still being the ones that were read.
-A file that was never read can therefore never be destroyed. When the content
-being replaced is not known, the call is rejected instead of guessing.
-
-Encoding works like the other two tools: ``encoding`` decides, a byte order mark
-outranks it, and existing line endings and the BOM are preserved. Failures are
-reported to the model as text so it can correct itself, while the UI receives the
-full record through a ``file_write`` event (see
-``docs/decisions/0004-file-write-tool.md``).
+The tool's promise is documented in :mod:`agent.tools.write_file` (the package
+docstring); the description and schema live in
+:mod:`agent.tools.write_file.description`, the error type in
+:mod:`agent.tools.write_file.errors`.
 """
 
 from __future__ import annotations
@@ -23,76 +12,18 @@ import stat
 from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
-from agent.models import EventCategory, ToolOutcome
-from agent.tools.file_access import (
-    AccessDenied,
-    FileAccessConfig,
-    load_access_config,
-    resolve_write_path,
-)
+from agent.tools.file_access import FileAccessConfig, resolve_write_path
 from agent.tools.file_bytes import DEFAULT_NEW_FILE_MODE, write_bytes_atomic
 from agent.tools.file_patch import build_git_diff, build_hunks, whole_file_hunk
-from agent.tools.read_ledger import DEFAULT_LEDGER, ReadLedger
+from agent.tools.read_ledger import ReadLedger
 from agent.tools.text_encoding import (
     DEFAULT_ENCODING,
-    DecodeError,
-    EncodeError,
     canonical_encoding,
     decode_file_bytes,
     encode_text,
 )
 from agent.tools.text_lines import apply_line_ending, dominant_line_ending, split_lines
-
-WRITE_FILE_DESCRIPTION = (
-    "Create a text file or replace its entire content. Paths resolve against the workspace "
-    "root and can never escape it; the global allow/deny policy applies on top. The whole "
-    "file is written - nothing is appended, and the previous content is gone. Overwriting an "
-    "existing file is only allowed after read_file has read that file in full in this task "
-    "(line 1, no 'limit') and the file has not changed since; otherwise the call is rejected, "
-    "so a file you have never seen can never be destroyed. The parent directory must already "
-    "exist. Content is encoded with 'encoding' (required); a byte order mark and the existing "
-    "line endings are preserved, and a new file is written with LF line endings and mode 0644. "
-    "The write is atomic. To change part of a file use edit_file; to append, anchor edit_file "
-    "on the file's last line."
-)
-
-WRITE_FILE_PARAMETERS: Dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "file_path": {
-            "type": "string",
-            "description": "Path to the file, relative to the workspace root.",
-        },
-        "content": {
-            "type": "string",
-            "description": (
-                "The complete new content of the file. It replaces whatever was there; an "
-                "empty string empties the file."
-            ),
-        },
-        "encoding": {
-            "type": "string",
-            "description": (
-                "Text encoding used to encode the content (required). Use UTF-8 unless the "
-                "file needs something else. A byte order mark always wins over this value."
-            ),
-        },
-    },
-    "required": ["file_path", "content", "encoding"],
-}
-
-
-class WriteFileError(Exception):
-    """Raised when a write request cannot be served."""
-
-    def __init__(self, message: str, reason: str, **details: Any) -> None:
-        super().__init__(message)
-        self.message = message
-        self.reason = reason
-        self.details = {key: value for key, value in details.items() if value is not None}
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {"error": self.message, "reason": self.reason, **self.details}
+from agent.tools.write_file.errors import WriteFileError
 
 
 def _display_path(path: Path, root: Optional[Path]) -> str:
@@ -161,7 +92,7 @@ def _guard_against_blind_overwrite(
         )
 
 
-def _write_file_impl(
+def write_file_impl(
     file_path: str,
     content: str,
     encoding: Any,

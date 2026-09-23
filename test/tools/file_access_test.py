@@ -27,8 +27,8 @@ from agent.tools.file_access import (  # noqa: E402
     resolve_write_path,
 )
 from agent.tools.read_file import make_read_file_tool  # noqa: E402
-from agent.tools.file_write_tool import make_write_file_tool  # noqa: E402
 from agent.tools.read_ledger import ReadLedger  # noqa: E402
+from agent.tools.write_file import make_write_file_tool  # noqa: E402
 
 
 class FileAccessPolicyTest(unittest.TestCase):
