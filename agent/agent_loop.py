@@ -26,6 +26,7 @@ from agent.provider import (
     canonicalize_provider,
     resolve_tool_provider_for_schemas,
 )
+from agent.tools.file_access import default_workspace_root
 from agent.tools.permissions import PermissionBroker
 from agent.tool_registry import ToolRegistry
 
@@ -152,10 +153,17 @@ def _tool_fallback_parse(content: str) -> Optional[Tuple[str, Dict[str, Any], st
 
 
 def _with_base_dir(prompt: str, base_dir: Optional[str]) -> str:
-    """Append the workspace root so relative paths resolve against that folder."""
+    """Append the working directory so relative paths resolve against that folder."""
     directory = (base_dir or "").strip()
     if not directory:
-        return prompt
+        # An unbound session still resolves relative paths somewhere, and the model
+        # has to know where that is before it writes a file into it.
+        return (
+            f"{prompt}\n\n## Working directory\n"
+            "This session has no workspace bound, so relative file paths resolve against "
+            f"{default_workspace_root().as_posix()}. Use an absolute path when you need a "
+            "specific location."
+        )
     return (
         f"{prompt}\n\n## Working directory\n"
         f"All project tasks run inside the workspace root folder: {directory}\n"

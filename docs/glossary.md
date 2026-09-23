@@ -8,7 +8,8 @@
 | --- | --- | --- |
 | **ReAct 循环** | Agent 的主循环：请求模型 → 解析工具调用 → 执行工具 → 把结果回填到消息列表 → 继续，直到模型不再调用工具或达到步数上限。 | `agent/agent_loop.py` |
 | **`base_dir` / 工作空间根** | 当前会话绑定的本地根目录。相对路径以它为基准解析，且不得逃出该目录。为空表示**未绑定会话（unbound session）**。 | `agent/tools/file_access.py` |
-| **未绑定会话** | 没有 `base_dir` 的会话。此时只剩下全局 `file_access` 策略生效，文件工具默认可以访问工作空间之外。 | `agent/tools/file_access.py` |
+| **未绑定会话** | 没有 `base_dir` 的会话。此时只剩下全局 `file_access` 策略生效，文件工具默认可以访问工作空间之外；**相对路径以"会话默认目录"为起点**。 | `agent/tools/file_access.py` |
+| **会话默认目录（`default_workspace`）** | 未绑定会话里相对路径的起点：`<程序启动路径>/data/default_workspace`（`DEFAULT_WORKSPACE_DIR` 可覆盖）。**是基目录不是边界**——`..` 仍可离开，全局策略照旧生效。写入按需创建它，读取不创建。 | [ADR 0007](decisions/0007-default-workspace.md) |
 | **token 预算** | 单次工具输出允许占用的 token 上限，超限即报错而非截断。`read_file` 依赖它防止撑爆上下文。 | `agent/tools/token_budget.py` |
 | **行号前缀** | `read_file` 输出中每行开头的 `N<分隔符>`，分隔符是**制表符**。模型看不到真实行号，因此永远带前缀、不提供关闭开关。 | `agent/tools/file_read_tool.py` |
 

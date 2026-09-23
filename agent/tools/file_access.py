@@ -4,6 +4,9 @@ Two layers of confinement are applied together:
 
 - **Workspace root** - when the session is bound to a workspace (``base_dir``),
   paths resolve against it and may never leave it.
+- **Session default** - when the session is *not* bound, a relative path starts in
+  ``<program start>/data/default_workspace`` rather than the process working
+  directory (see :func:`default_workspace_root`). It is a base, not a boundary.
 - **Global policy** - applied in every case, bound or not:
 
   * ``deny_dirs``: these directories and everything below them are off limits.
@@ -30,6 +33,10 @@ from typing import Any, Dict, Optional, Sequence, Tuple
 
 CONFIG_ENV = "FILE_ACCESS_CONFIG"
 DEFAULT_CONFIG_PATH = "data/file_access.json"
+
+# Where a relative path starts when the session has no workspace bound.
+DEFAULT_WORKSPACE_DIRNAME = "data/default_workspace"
+DEFAULT_WORKSPACE_ENV = "DEFAULT_WORKSPACE_DIR"
 
 REASON_DENY_DIR = "deny_dir"
 REASON_DENY_FILE = "deny_file"
@@ -152,6 +159,33 @@ def _workspace_root(base_dir: Optional[str]) -> Optional[Path]:
     return _normalize(Path(text)) if text else None
 
 
+def default_workspace_root(create: bool = False) -> Path:
+    """Base directory for relative paths when no workspace is bound.
+
+    The anchor is the directory the program was started from. This exists because
+    without it a relative path from an unbound session lands in whatever the
+    process happens to be sitting in - in practice the repository root, so the
+    model's scratch files end up mixed into the project tree.
+
+    This is a **base, not a ceiling**: an unbound session still has no workspace
+    boundary, so ``..`` can leave this folder. Only the starting point changes.
+
+    ``create`` is passed by writes so the folder exists on first use. Reads do not
+    create it, so a missing folder keeps reporting "not found" instead of
+    materialising a tree as a side effect of looking.
+    """
+    override = (os.getenv(DEFAULT_WORKSPACE_ENV) or "").strip()
+    root = Path(override).expanduser() if override else Path.cwd() / DEFAULT_WORKSPACE_DIRNAME
+    if create:
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # The caller reports the real failure (with a proper reason) when it
+            # actually touches the file.
+            pass
+    return _normalize(root)
+
+
 def _normalized_roots(extra_read_roots: Sequence[Any]) -> Tuple[Path, ...]:
     roots = []
     for item in extra_read_roots or ():
@@ -167,6 +201,7 @@ def _resolve_path(
     config: Optional[FileAccessConfig],
     action: str,
     extra_read_roots: Sequence[Any] = (),
+    create_default: bool = False,
 ) -> Tuple[Path, Optional[Path]]:
     """Resolve ``file_path`` and enforce the workspace root, extra roots and policy.
 
@@ -180,7 +215,12 @@ def _resolve_path(
     root = _workspace_root(base_dir)
     candidate = Path(file_path)
     if not candidate.is_absolute():
-        candidate = (root or Path.cwd()) / candidate
+        if root is not None:
+            candidate = root / candidate
+        else:
+            # Unbound session: relative paths start in the session default rather
+            # than the process working directory.
+            candidate = default_workspace_root(create=create_default) / candidate
     resolved = _normalize(candidate)
 
     if any(is_within(resolved, extra) for extra in _normalized_roots(extra_read_roots)):
@@ -210,9 +250,10 @@ def resolve_read_path(
     base_dir: Optional[str] = None,
     config: Optional[FileAccessConfig] = None,
     extra_read_roots: Sequence[Any] = (),
+    create_default: bool = False,
 ) -> Tuple[Path, Optional[Path]]:
     """Resolve ``file_path`` for reading, including the additional read roots."""
-    return _resolve_path(file_path, base_dir, config, "read", extra_read_roots)
+    return _resolve_path(file_path, base_dir, config, "read", extra_read_roots, create_default)
 
 
 def resolve_write_path(
@@ -220,6 +261,7 @@ def resolve_write_path(
     base_dir: Optional[str] = None,
     config: Optional[FileAccessConfig] = None,
     extra_read_roots: Sequence[Any] = (),
+    create_default: bool = False,
 ) -> Tuple[Path, Optional[Path]]:
     """Resolve ``file_path`` for writing.
 
@@ -227,5 +269,11 @@ def resolve_write_path(
     (see ``docs/decisions/0001-file-edit-tool.md``) - with one exception: the
     additional read roots are refused, because they are scratch output rather than
     project content (see ``docs/decisions/0005-exec-tool.md``).
+
+    ``create_default`` stays opt-in and is passed only by ``write_file``, i.e. by
+    the one tool that actually creates a file: resolving must not materialise a
+    directory as a side effect, or merely *deciding* (the permission broker
+    resolves too) would leave an empty folder behind - including for calls that
+    are refused.
     """
-    return _resolve_path(file_path, base_dir, config, "modified", extra_read_roots)
+    return _resolve_path(file_path, base_dir, config, "modified", extra_read_roots, create_default)

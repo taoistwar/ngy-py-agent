@@ -5,6 +5,7 @@ Run from the repository root::
     uv run python test/tools/file_access_test.py -v
 """
 
+import os
 import sys
 import tempfile
 import unittest
@@ -17,12 +18,17 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from agent.tools.file_access import (  # noqa: E402
+    DEFAULT_WORKSPACE_ENV,
     AccessDenied,
     FileAccessConfig,
     enforce_policy,
     load_access_config,
     resolve_read_path,
+    resolve_write_path,
 )
+from agent.tools.file_read_tool import make_read_file_tool  # noqa: E402
+from agent.tools.file_write_tool import make_write_file_tool  # noqa: E402
+from agent.tools.read_ledger import ReadLedger  # noqa: E402
 
 
 class FileAccessPolicyTest(unittest.TestCase):
@@ -113,6 +119,108 @@ class FileAccessPolicyTest(unittest.TestCase):
         config = load_access_config(self.root / "nope.json")
 
         self.assertEqual(config, FileAccessConfig())
+
+
+class DefaultWorkspaceTest(unittest.TestCase):
+    """Where a relative path starts when the session has no workspace bound."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.workspace = self.root / "default_workspace"
+        # Point the session default at a temporary folder: a test must never write
+        # into the real one, which sits next to the repository.
+        self._previous = os.environ.get(DEFAULT_WORKSPACE_ENV)
+        os.environ[DEFAULT_WORKSPACE_ENV] = str(self.workspace)
+
+    def tearDown(self):
+        if self._previous is None:
+            os.environ.pop(DEFAULT_WORKSPACE_ENV, None)
+        else:
+            os.environ[DEFAULT_WORKSPACE_ENV] = self._previous
+        self._tmp.cleanup()
+
+    def test_relative_read_resolves_into_the_session_default(self):
+        self.workspace.mkdir(parents=True)
+        (self.workspace / "notes.txt").write_text("hi", encoding="utf-8")
+
+        path, root = resolve_read_path("notes.txt", base_dir="")
+
+        self.assertEqual(path, (self.workspace / "notes.txt").resolve())
+        self.assertIsNone(root, "the default is a base, not a workspace ceiling")
+
+    def test_a_bound_workspace_still_wins(self):
+        bound = self.root / "bound"
+        bound.mkdir()
+
+        path, root = resolve_read_path("notes.txt", base_dir=str(bound))
+
+        self.assertEqual(path, (bound / "notes.txt").resolve())
+        self.assertEqual(root, bound.resolve())
+
+    def test_resolving_alone_never_creates_it(self):
+        # Regression: the permission broker resolves the target too (to show it in
+        # the dialog), so a lookup that created the folder left an empty directory
+        # behind - for reads, and even for calls that were refused.
+        resolve_read_path("notes.txt", base_dir="")
+        resolve_write_path("notes.txt", base_dir="")
+
+        self.assertFalse(self.workspace.exists(), "looking must not materialise a tree")
+
+    def test_the_write_tool_creates_it_on_demand(self):
+        path, _ = resolve_write_path("notes.txt", base_dir="", create_default=True)
+
+        self.assertTrue(self.workspace.is_dir())
+        self.assertEqual(path, (self.workspace / "notes.txt").resolve())
+
+    def test_absolute_paths_are_unaffected(self):
+        target = self.root / "absolute.txt"
+
+        path, _ = resolve_read_path(str(target), base_dir="")
+
+        self.assertEqual(path, target.resolve())
+
+
+class DefaultWorkspaceRoundTripTest(unittest.TestCase):
+    """The bug this exists for: a file written by an unbound session must be readable.
+
+    Before the session default existed, ``write_file("test.py")`` from a session
+    without a workspace landed in the process working directory (in practice the
+    repository root), so the model's scratch file ended up mixed into the project.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.workspace = self.root / "default_workspace"
+        self._previous = os.environ.get(DEFAULT_WORKSPACE_ENV)
+        os.environ[DEFAULT_WORKSPACE_ENV] = str(self.workspace)
+
+    def tearDown(self):
+        if self._previous is None:
+            os.environ.pop(DEFAULT_WORKSPACE_ENV, None)
+        else:
+            os.environ[DEFAULT_WORKSPACE_ENV] = self._previous
+        self._tmp.cleanup()
+
+    def test_write_then_read_stays_inside_the_session_default(self):
+        ledger = ReadLedger()
+        write = make_write_file_tool(base_dir=None, ledger=ledger)
+        read = make_read_file_tool(base_dir=None, ledger=ledger)
+
+        written = write("test.py", "print('hi')", "utf-8")
+        self.assertTrue(written.details["success"])
+        self.assertTrue(
+            (self.workspace / "test.py").is_file(),
+            "a relative write must land in the session default",
+        )
+        # Asserted on the reported path rather than on ``Path.cwd()``: the working
+        # directory is whatever the test runner was started in, and asserting
+        # about it makes the test depend on the machine it runs on.
+        self.assertEqual(written.details["file_path"], (self.workspace / "test.py").as_posix())
+
+        back = read("test.py")
+        self.assertIn("print", back["content"])
 
 
 if __name__ == "__main__":
