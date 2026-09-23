@@ -27,7 +27,7 @@ import os
 import signal
 import subprocess
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 WINDOWS = os.name == "nt"
 
@@ -56,7 +56,6 @@ _PROCESS_TERMINATE = 0x0001
 
 if WINDOWS:  # pragma: no cover - platform specific
     import ctypes
-    import ctypes.wintypes as wt
 
     _KERNEL32 = ctypes.WinDLL("kernel32", use_last_error=True)
 

@@ -239,7 +239,7 @@ def _release(session: Session) -> None:
     _close_stdin(session)
     try:
         session.command.release()
-    except Exception:  # pragma: no cover - defensive
+    except Exception:  # noqa: BLE001  # pragma: no cover - defensive
         pass
 
 
@@ -263,7 +263,7 @@ def _stop_all_at_exit() -> None:
     for session in list_sessions():
         try:
             session.command.kill()
-        except Exception:  # pragma: no cover - teardown
+        except Exception:  # noqa: BLE001  # pragma: no cover - teardown
             pass
 
 

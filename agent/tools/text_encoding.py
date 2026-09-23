@@ -126,7 +126,7 @@ def _charset_normalizer_candidates(raw: bytes) -> List[Tuple[str, Optional[float
     """Ranked candidates from charset-normalizer, or ``[]`` when unavailable."""
     try:
         from charset_normalizer import from_bytes
-    except Exception:
+    except Exception:  # noqa: BLE001 - the dependency is optional
         return []
 
     try:
@@ -140,7 +140,7 @@ def _charset_normalizer_candidates(raw: bytes) -> List[Tuple[str, Optional[float
             confidence = None if chaos is None else round(max(0.0, 1.0 - float(chaos)), 3)
             collected.append((str(encoding), confidence))
         return collected
-    except Exception:
+    except Exception:  # noqa: BLE001 - ranking is best effort: no candidates on any failure
         return []
 
 

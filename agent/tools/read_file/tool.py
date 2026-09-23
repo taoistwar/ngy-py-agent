@@ -37,6 +37,7 @@ from agent.tools.text_encoding import (
 from agent.tools.token_budget import check_text, resolve_max_tokens
 from agent.tools.tokenizers import MAX_BYTES_PER_TOKEN, get_token_counter
 
+
 def _display_path(path: Path, root: Optional[Path]) -> str:
     if root is None:
         return path.as_posix()

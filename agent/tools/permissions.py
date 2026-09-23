@@ -448,7 +448,7 @@ class PermissionBroker:
             # error once it is allowed to run, so this only costs a missing block.
             try:
                 extra = preview(dict(arguments))
-            except Exception:
+            except Exception:  # noqa: BLE001 - a broken preview must not block the dialog
                 extra = None
             if isinstance(extra, dict):
                 details.update(extra)
@@ -613,7 +613,7 @@ class PermissionBroker:
             return
         try:
             self._emit(category, title, data)
-        except Exception:
+        except Exception:  # noqa: BLE001 - never break the call path (see below)
             # Event emission must never break the call path (same rule as _emit
             # in agent_loop).
             return

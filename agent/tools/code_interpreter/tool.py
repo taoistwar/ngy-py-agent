@@ -90,7 +90,7 @@ def code_interpreter(code: str) -> Dict:
     except SyntaxError as e:
         error_msg = f"Syntax Error on line {e.lineno}: {e.msg}\n{e.text}"
         return {"error": error_msg, "error_type": "SyntaxError", "success": False}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - arbitrary user code: report, never crash
         import traceback
 
         error_trace = traceback.format_exc()
