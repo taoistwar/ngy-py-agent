@@ -26,6 +26,8 @@ import json
 import os
 import re
 import tempfile
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -76,6 +78,16 @@ def ensure_dir(directory: Path) -> Path:
 def output_root(base_dir: Optional[str] = None, scope: Optional[str] = None) -> Path:
     """Like :func:`output_root_path`, but creates the directory."""
     return ensure_dir(output_root_path(base_dir, scope))
+
+
+def new_stem(prefix: str = "") -> str:
+    """A collision-resistant name stem shared by everything that persists output.
+
+    Timestamp first so a directory listing is chronological, plus a short random
+    suffix so two commands in the same second cannot collide.
+    """
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return f"{prefix}{stamp}-{uuid.uuid4().hex[:6]}"
 
 
 def persist_text(directory: Path, name: str, text: str) -> Path:

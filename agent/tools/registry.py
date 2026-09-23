@@ -2,13 +2,14 @@
 
 import copy
 import json
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from agent.models import EventCategory, ToolOutcome
 from agent.tools import code_tools, finance_tools, time_tools, weather_tools
 from agent.tools.output_store import output_root_path
 from agent.tools.permissions import (
     PERMISSION_NONE,
+    SCOPES,
     PermissionBroker,
     PermissionDenial,
 )
@@ -19,6 +20,7 @@ from agent.tools.specs import (
     build_exec_spec,
     build_read_file_spec,
     build_write_file_spec,
+    build_write_stdin_spec,
 )
 
 
@@ -55,6 +57,7 @@ class ToolRegistry:
         provider: str = "",
         model: str = "",
         session_id: str = "",
+        task_id: str = "",
         permission_broker: Optional[PermissionBroker] = None,
     ):
         self.base_dir = base_dir
@@ -62,6 +65,9 @@ class ToolRegistry:
         self.provider = provider
         self.model = model
         self.session_id = session_id
+        # Stamped on every background session this registry's tools start, and the
+        # capability ``write_stdin`` checks before touching one.
+        self.task_id = task_id
         # ``None`` keeps the historical behaviour (everything runs). agent_loop
         # assigns the broker after building the registry, because the registry is
         # built before the task identity exists (see ADR 0006 D1).
@@ -109,6 +115,15 @@ class ToolRegistry:
                 session_id=self.session_id,
                 max_tokens=self.max_tokens,
                 output_directory=self.output_directory,
+                task_id=self.task_id,
+            )
+        )
+        specs.append(
+            build_write_stdin_spec(
+                max_tokens=self.max_tokens,
+                task_id=self.task_id,
+                workspace=self.base_dir or "",
+                output_directory=self.output_directory,
             )
         )
 
@@ -119,6 +134,7 @@ class ToolRegistry:
                 description=spec.description,
                 parameters=spec.parameters,
                 permission=spec.permission,
+                scopes=spec.scopes,
                 preview=spec.preview,
             )
 
@@ -135,20 +151,23 @@ class ToolRegistry:
         description: str,
         parameters: Dict,
         permission: str = PERMISSION_NONE,
+        scopes: Optional[Sequence[str]] = None,
         preview: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
     ):
         """Register a new tool.
 
         ``permission`` is the confirmation kind (``agent/tools/permissions.py``).
         It defaults to ``none``, i.e. never confirmed, so a tool that touches the
-        filesystem must say so explicitly. ``preview`` is an optional side-effect
-        free dry run used to fill in the confirmation dialog.
+        filesystem must say so explicitly. ``scopes`` narrows the answers the
+        dialog may offer. ``preview`` is an optional side-effect free dry run used
+        to fill in the confirmation dialog.
         """
         self.tools[name] = {
             "function": function,
             "description": description,
             "parameters": parameters,
             "permission": permission or PERMISSION_NONE,
+            "scopes": tuple(scopes or SCOPES),
             "preview": preview,
         }
 
@@ -301,7 +320,13 @@ class ToolRegistry:
         if kind == PERMISSION_NONE:
             return None
         try:
-            return broker.check(name, kind, arguments, preview=self.tools[name].get("preview"))
+            return broker.check(
+                name,
+                kind,
+                arguments,
+                preview=self.tools[name].get("preview"),
+                scopes=self.tools[name].get("scopes"),
+            )
         except Exception as exc:
             return PermissionDenial(
                 model_text=(

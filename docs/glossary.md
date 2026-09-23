@@ -76,12 +76,14 @@
 | **`content_changed`** | 覆盖时新内容是否与旧内容不同。内容相同**仍然写入**（不做"没变就不写"的优化），此字段只是如实报告。 | [ADR 0004](decisions/0004-file-write-tool.md) |
 | **`write_bytes_atomic`** | 通过同目录临时文件 + `os.replace` 完成写入、并在交换前带上目标权限的共用实现。**硬链接不会跟随**。 | `agent/tools/file_bytes.py` |
 
-## 命令执行（`exec`）
+## 命令执行（`exec_command`）
 
 | 术语 | 定义 | 位置 |
 | --- | --- | --- |
-| **`exec`** | 在平台 shell 里执行一条命令的工具。shell 按平台选择（Windows `pwsh` → Windows PowerShell → `cmd`；macOS `zsh` → `bash` → `sh`；Linux `bash` → `sh`），**永不选 Windows 的 WSL `bash`**。 | `agent/tools/shell_platform.py` |
-| **containment（约束层）** | `exec` 对命令实际施加的限制：进程树终止 + 资源上限。**不是安全边界**，命令仍能读写进程用户碰得到的任何路径。结果里的 `containment.note` 固定说明这一点。 | [ADR 0005](decisions/0005-exec-tool.md) |
+| **`exec_command`** | 在平台 shell 里执行一条命令的工具。shell 按平台选择（Windows `pwsh` → Windows PowerShell → `cmd`；macOS `zsh` → `bash` → `sh`；Linux `bash` → `sh`），**永不选 Windows 的 WSL `bash`**。 | `agent/tools/shell_platform.py` |
+| **`write_stdin`** | 往 `exec_command` 留下的**会话**里打字并取回新输出。空 `chars` 只轮询；`chars` 为 Ctrl-C（`\u0003`）表示打断；其余写入 stdin。结果里有 `session_id` 即"还活着"，有 `exit_code` 即"已结束"。 | [ADR 0008](decisions/0008-write-stdin-tool.md) |
+| **会话（session）/ `process_store`** | `run_in_background` 启动的活进程仓库：以**会话 `session_id`** 为键持有进程树句柄、日志路径与"已读字节偏移"。`exec_command` 写、`write_stdin` 读；命令退出即移除并释放句柄与管道；**归属按 `task_id + workspace`**（`session_id` 当 capability 用，跨任务/跨工作区一律按未知处理），每任务上限 8、TTL 30 分钟，任务结束时由循环停止本任务会话。**它与"输出目录作用域"的 `session_id` 同名但不是一个概念**：后者是 run/task 作用域（`output_root_path(base_dir, scope)`），用于给每次运行分一个输出目录。两个词不要互相代入。 | `agent/tools/process_store.py` |
+| **containment（约束层）** | `exec_command` 对命令实际施加的限制：进程树终止 + 资源上限。**不是安全边界**，命令仍能读写进程用户碰得到的任何路径。结果里的 `containment.note` 固定说明这一点。 | [ADR 0005](decisions/0005-exec-tool.md) |
 | **L1（资源与进程树）** | Windows：Job Object（`KILL_ON_JOB_CLOSE` + 进程数上限 + job 内存上限）；POSIX：新会话 + `killpg`。POSIX 侧没有内存上限。始终生效。 | `agent/tools/process_group.py` |
 | **L2（完整性级别）** | 把命令的令牌降到低完整性，使它写不进未被授权的路径。机制**已验证可用**，但**未启用**：单独开启会让普通命令连临时目录都写不了，需先解决工作空间 ACL 授权与撤销。 | [ADR 0005](decisions/0005-exec-tool.md) |
 | **L3（能力隔离）** | AppContainer / micro VM 级别的默认拒绝。未实现；Windows Sandbox 在开发机上是未启用的可选功能，且面向交互式桌面。 | [ADR 0005](decisions/0005-exec-tool.md) |
@@ -90,7 +92,7 @@
 | **输出根（output root）** | `<temp>/ngy-py-agent/output/<workspace>/<scope>`，每次运行一个目录。由 `EXEC_OUTPUT_DIR` 覆盖。 | `agent/tools/output_store.py` |
 | **只读附加根（`extra_read_roots`）** | 工作空间之外**可读但不可写**的目录，目前就是输出根。这是 [ADR 0001](decisions/0001-file-edit-tool.md) D3"读得到就能改"的显式例外；全局策略仍作用于它。 | `agent/tools/file_access.py` |
 | **`read_only_root`** | 试图写入只读附加根时的拒绝原因。 | `agent/tools/file_access.py` |
-| **`interrupted`** | `exec` 结果里表示命令**因超时被打断**的标记。它**不等于**"用户停止"：`stop` 是协作式的，杀不掉正在执行的命令。 | [ADR 0005](decisions/0005-exec-tool.md) |
+| **`interrupted`** | `exec_command` 结果里表示命令**因超时被打断**的标记。它**不等于**"用户停止"：`stop` 是协作式的，杀不掉正在执行的命令。 | [ADR 0005](decisions/0005-exec-tool.md) |
 
 ## 文件编码
 
@@ -107,8 +109,9 @@
 
 | 术语 | 定义 | 位置 |
 | --- | --- | --- |
-| **P1 交互式确认** | 工具调用前问用户"能不能执行"的第一层权限。**协作式确认，不是安全边界**：一旦放行，被放行的动作不受任何新增限制（`exec` 放行一次即等于放行任意文件写入）。与 [ADR 0005](decisions/0005-exec-tool.md) 的 L1/L2/L3 是两条正交的轴：P 轴管"问不问"，L 轴管"能做到什么"。 | [ADR 0006](decisions/0006-tool-permission-confirmation.md) |
+| **P1 交互式确认** | 工具调用前问用户"能不能执行"的第一层权限。**协作式确认，不是安全边界**：一旦放行，被放行的动作不受任何新增限制（`exec_command` 放行一次即等于放行任意文件写入）。与 [ADR 0005](decisions/0005-exec-tool.md) 的 L1/L2/L3 是两条正交的轴：P 轴管"问不问"，L 轴管"能做到什么"。 | [ADR 0006](decisions/0006-tool-permission-confirmation.md) |
 | **权限种类（permission kind）** | 工具声明的确认类别：`none`（从不询问）、`read`（仅敏感路径询问）、`write`、`exec`。在 `ToolSpec.permission` 声明，默认 `none`。 | `agent/tools/specs.py` |
+| **确认范围（scope）** | 一次允许能记多久：`once` / `session` / `always`。工具可用 `ToolSpec.scopes` 收窄自己接受的种类（`write_stdin` 只给 once/session，因为目标是一次性会话 id）；对话框只渲染列出的按钮，API 对越界取值返回 400。 | [ADR 0008](decisions/0008-write-stdin-tool.md) |
 | **门禁（gate）** | 权限判定本身。做在 `ToolRegistry.execute_tool` 这个**唯一收口**上，因此覆盖面是"全部工具"，而不是"我记得加过的那几个"。 | `agent/tools/registry.py` |
 | **PermissionBroker** | 一个任务一个的权限代理：判定是否需要询问、发 `permission_request` 事件、阻塞该任务线程等待答复，并回收结果。由 `agent_loop` 注入 registry（工具自己拿不到 `EventSink`）。 | `agent/tools/permissions.py` |
 | **无应答即拒绝（fail closed）** | 没人答复（超时，默认 120 秒）等于**拒绝**，不是放行。反向会让"用户不在电脑前"变成"默认放行一切"。 | [ADR 0006](decisions/0006-tool-permission-confirmation.md) |

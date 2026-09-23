@@ -299,7 +299,7 @@ class PermissionDecisionRequest(BaseModel):
     """Answer to a pending permission request."""
 
     allowed: bool = Field(description="Whether the tool call may run.")
-    scope: str = Field(default="once", description="once / session")
+    scope: str = Field(default="once", description="once / session / always, as offered by the tool")
 
 
 class PermissionDecisionResponse(BaseModel):
@@ -1141,6 +1141,17 @@ async def answer_permission(
     if payload.scope not in SCOPES:
         raise HTTPException(
             status_code=400, detail=f"Unknown permission scope '{payload.scope}'."
+        )
+    # A tool may offer fewer answers than the global set (``write_stdin`` cannot take
+    # a standing rule). Refuse the answer it does not accept rather than downgrading.
+    offered = broker.request_scopes(request_id)
+    if offered is not None and payload.scope not in offered:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"This tool does not accept the '{payload.scope}' scope; "
+                f"choose one of: {', '.join(offered)}."
+            ),
         )
     if not broker.resolve(request_id, payload.allowed, payload.scope):
         raise HTTPException(status_code=409, detail="Permission request is no longer pending.")

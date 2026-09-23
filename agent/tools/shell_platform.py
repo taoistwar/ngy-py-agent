@@ -1,4 +1,4 @@
-"""Which shell ``exec`` runs, and how the command string reaches it.
+"""Which shell ``exec_command`` runs, and how the command string reaches it.
 
 The model has to write commands in a concrete dialect (``$env:FOO`` is not
 ``$FOO``), so the chosen shell is part of the tool contract: it is named in the
@@ -43,7 +43,7 @@ FAMILY_CMD = "cmd"
 
 @dataclass(frozen=True)
 class Shell:
-    """A concrete shell that ``exec`` can drive."""
+    """A concrete shell that ``exec_command`` can drive."""
 
     family: str
     executable: str
@@ -108,7 +108,7 @@ def _posix_candidates(system: str) -> Tuple[Tuple[str, str, str], ...]:
 
 @functools.lru_cache(maxsize=4)
 def detect_shell() -> Optional[Shell]:
-    """The shell ``exec`` will use on this machine, or ``None`` when there is none."""
+    """The shell ``exec_command`` will use on this machine, or ``None`` when there is none."""
     system = platform.system()
     if system == WINDOWS:
         return _first_available(_windows_candidates())

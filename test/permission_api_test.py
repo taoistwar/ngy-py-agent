@@ -32,6 +32,7 @@ from agent.models import TaskStatus  # noqa: E402
 from agent.tools.permission_rules import PermissionRuleStore  # noqa: E402
 from agent.tools.permissions import (  # noqa: E402
     PERMISSION_EXEC,
+    SCOPE_ONCE,
     PermissionBroker,
     PermissionMode,
 )
@@ -82,7 +83,7 @@ class PermissionApiTest(unittest.TestCase):
         box = {}
 
         def runner():
-            box["result"] = broker.check("exec", PERMISSION_EXEC, {"command": command})
+            box["result"] = broker.check("exec_command", PERMISSION_EXEC, {"command": command})
 
         thread = threading.Thread(target=runner)
         thread.start()
@@ -148,10 +149,43 @@ class PermissionApiTest(unittest.TestCase):
 
         rules = self.client.get("/api/admin/permission-rules").json()["rules"]
         self.assertEqual(len(rules), 1)
-        self.assertEqual(rules[0]["tool"], "exec")
+        self.assertEqual(rules[0]["tool"], "exec_command")
         self.assertEqual(rules[0]["target"], pending.target)
 
     # -------------------------------------------------------------- mode config
+
+    def test_a_scope_the_tool_refuses_is_rejected_by_the_api(self):
+        broker = self.register_broker()
+        box = {}
+
+        def runner():
+            box["result"] = broker.check(
+                "write_stdin",
+                PERMISSION_EXEC,
+                {"session_id": "abc123", "chars": "x\n"},
+                scopes=(SCOPE_ONCE,),
+            )
+
+        thread = threading.Thread(target=runner)
+        thread.start()
+        deadline = time.monotonic() + 5.0
+        pending = None
+        while time.monotonic() < deadline:
+            pending = broker.pending()
+            if pending is not None:
+                break
+            time.sleep(0.01)
+        self.assertIsNotNone(pending)
+
+        refused = self.decide("task-1", pending.request_id, allowed=True, scope="always")
+
+        self.assertEqual(refused.status_code, 400)
+        # Refused rather than applied: the task is still parked.
+        self.assertIsNotNone(broker.pending())
+        # A scope the tool does accept still works.
+        accepted = self.decide("task-1", pending.request_id, allowed=True, scope="once")
+        self.assertEqual(accepted.status_code, 200)
+        thread.join(timeout=5.0)
 
     def test_an_unknown_scope_is_rejected_rather_than_downgraded_to_once(self):
         broker = self.register_broker()
@@ -189,25 +223,25 @@ class PermissionApiTest(unittest.TestCase):
         self.assertEqual(self.client.get("/api/admin/permission-rules").json()["rules"], [])
 
         created = self.client.post(
-            "/api/admin/permission-rules", json={"tool": "exec", "target": "git status"}
+            "/api/admin/permission-rules", json={"tool": "exec_command", "target": "git status"}
         )
         self.assertEqual(created.status_code, 200)
-        self.assertEqual(created.json()["tool"], "exec")
+        self.assertEqual(created.json()["tool"], "exec_command")
 
         # Adding it twice must not duplicate it.
         self.client.post(
-            "/api/admin/permission-rules", json={"tool": "exec", "target": "git status"}
+            "/api/admin/permission-rules", json={"tool": "exec_command", "target": "git status"}
         )
         self.assertEqual(len(self.client.get("/api/admin/permission-rules").json()["rules"]), 1)
 
         removed = self.client.delete(
-            "/api/admin/permission-rules", params={"tool": "exec", "target": "git status"}
+            "/api/admin/permission-rules", params={"tool": "exec_command", "target": "git status"}
         )
         self.assertEqual(removed.status_code, 200)
         self.assertEqual(self.client.get("/api/admin/permission-rules").json()["rules"], [])
 
         again = self.client.delete(
-            "/api/admin/permission-rules", params={"tool": "exec", "target": "git status"}
+            "/api/admin/permission-rules", params={"tool": "exec_command", "target": "git status"}
         )
         self.assertEqual(again.status_code, 404)
 

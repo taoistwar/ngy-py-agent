@@ -44,6 +44,9 @@ JOB_MEMORY_LIMIT_MB_ENV = "EXEC_JOB_MEMORY_LIMIT_MB"
 # Keeps a headless agent from popping console windows on Windows.
 CREATE_NO_WINDOW = 0x08000000
 
+# How long a command may take to honour an interrupt before it is forced down.
+INTERRUPT_GRACE_SECONDS = 3.0
+
 _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
 _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
 _JOB_OBJECT_LIMIT_ACTIVE_PROCESS = 0x00000008
@@ -155,6 +158,21 @@ class RunningCommand:
         except OSError:
             pass
 
+    def interrupt(self) -> None:
+        """Ask the command to stop the way Ctrl-C would.
+
+        POSIX gets a real ``SIGINT`` to the whole process group, so a program may
+        run its own cleanup. Windows has no signal for a job, so the tree is
+        terminated - the same hard stop as :meth:`stop`.
+        """
+        if self.kind == KIND_POSIX and self.pgid:
+            try:
+                os.killpg(self.pgid, signal.SIGINT)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+            return
+        self.stop()
+
     def release(self) -> None:
         """Close the OS handle without stopping anything.
 
@@ -216,14 +234,18 @@ def _spawn(
     env: Optional[Dict[str, str]],
     stdout: Any,
     stderr: Any,
+    stdin: Any = None,
 ) -> RunningCommand:
+    # ``None`` means "no input at all"; a pipe is only wired up when a caller wants
+    # to type into the command later (see ``process_store``).
+    stdin_target = subprocess.DEVNULL if stdin is None else stdin
     if WINDOWS:  # pragma: no cover - platform specific
         job, limits = _create_job()
         process = subprocess.Popen(
             list(argv),
             cwd=cwd,
             env=env,
-            stdin=subprocess.DEVNULL,
+            stdin=stdin_target,
             stdout=stdout,
             stderr=stderr,
             creationflags=CREATE_NO_WINDOW,
@@ -238,7 +260,7 @@ def _spawn(
         list(argv),
         cwd=cwd,
         env=env,
-        stdin=subprocess.DEVNULL,
+        stdin=stdin_target,
         stdout=stdout,
         stderr=stderr,
         start_new_session=True,
@@ -264,17 +286,35 @@ def start_with_log(
     stdout_path: str,
     cwd: Optional[str] = None,
     env: Optional[Dict[str, str]] = None,
+    stdin: Any = None,
 ) -> RunningCommand:
     """Start ``argv`` with output appended straight to ``stdout_path``.
 
     Used for background commands: nothing is piped back, so the process cannot
-    stall on a full pipe buffer once the caller stops reading.
+    stall on a full pipe buffer once the caller stops reading. Pass
+    ``stdin=subprocess.PIPE`` to keep the command's input open for
+    :mod:`agent.tools.write_stdin_tool`.
     """
     handle = open(stdout_path, "ab", buffering=0)
     try:
-        return _spawn(argv, cwd, env, handle, subprocess.STDOUT)
+        return _spawn(argv, cwd, env, handle, subprocess.STDOUT, stdin=stdin)
     finally:
         handle.close()
+
+
+def interrupt(
+    command: RunningCommand, grace_seconds: float = INTERRUPT_GRACE_SECONDS
+) -> None:
+    """Ctrl-C a command and escalate when it ignores the hint.
+
+    A program is allowed to catch ``SIGINT`` and take a moment to clean up; it is
+    not allowed to stay alive after the model asked it to stop.
+    """
+    command.interrupt()
+    try:
+        command.process.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        command.kill()
 
 
 def describe_group(command: RunningCommand) -> Dict[str, Any]:

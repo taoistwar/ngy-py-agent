@@ -207,9 +207,9 @@ npm run i18n:check
 - 相关取舍见 [ADR 0004](decisions/0004-file-write-tool.md)；说明页：`docs/tools/file_write/eli5-read-before-write.html`。
 - 追加**不用新工具**：把 `edit_file` 的锚点放在最后一行即可（幂等，大文件同样可行）。
 
-### exec：命令执行，以及它的 containment 到底管什么
+### exec_command：命令执行，以及它的 containment 到底管什么
 
-- `exec` 只约束**资源与进程生命周期**：Windows 用 Job Object（进程数上限 + job 内存上限 + 整树终止），POSIX 用新会话 + `killpg`。POSIX **没有**内存上限（`preexec_fn` 在线程模型里不安全），文档里不要写成有。
+- `exec_command` 只约束**资源与进程生命周期**：Windows 用 Job Object（进程数上限 + job 内存上限 + 整树终止），POSIX 用新会话 + `killpg`。POSIX **没有**内存上限（`preexec_fn` 在线程模型里不安全），文档里不要写成有。
 - 这**不是安全边界**：命令能读写进程用户碰得到的任何路径，工作空间约束对它无效。`containment.note` 就是为此存在的，不要删。
 - 低完整性（L2）**未启用**：机制已验证可用（令牌降到 Low、写入被拒），但单独开启会让普通命令连临时目录都写不了；启用前需要给工作空间加 ACL 授权与撤销路径。见 [ADR 0005](decisions/0005-exec-tool.md)。
 - Windows 上**不要**把 `bash` 加进候选：本机 `bash.exe` 是 WSL 启动器，命令会跑在另一个文件系统里。
@@ -217,6 +217,20 @@ npm run i18n:check
 - 凭据类环境变量默认不下发（纵深防御，不是边界）；`EXEC_PASS_SECRET_ENV=1` 可关闭。
 - `interrupted` **只表示超时**。`stop` 是协作式的，杀不掉正在执行的命令，所以它不代表"用户停止"。
 - 说明页：`docs/tools/exec/eli5-not-a-sandbox.html`。
+
+### write_stdin：把还活着的命令当成一台没挂的电话
+
+- `exec_command` 的 `run_in_background` 现在返回 `session_id`，且 stdin 是**管道**（不再是 `DEVNULL`）；输出仍然写日志文件。
+- `write_stdin` 只做三件事：按 `session_id` 找进程 → 可选写入 `chars` → 等 `yield_time_ms` 收新输出。空 `chars` 是轮询，`chars` 为 `\u0003` 是打断。
+- 输出按**日志文件增量**返回（`process_store` 记已读偏移），不要另建内存缓冲：日志就是这一路输出的唯一通道。
+- 命令退出即 `retire` 会话并释放句柄与管道；"已结束还能继续打字"不要放行。
+- `yield_time_ms`：轮询 5000–300000，写入 ≤30000，默认 250；`max_output_tokens` 默认 10000，还会被本次运行的输出预算再压一次。
+- 门禁目标是 `session:{session_id}`，且**不提供 always**（目标是随机会话 id，持久化规则永远匹配不上）：`ToolSpec.scopes` 收窄可选答案，前端只渲染可用按钮，API 收到越界 scope 返回 400。见 [ADR 0008](decisions/0008-write-stdin-tool.md)。
+- **归属是能力校验**：`Session` 记 `task_id + workspace`，`write_stdin` 只认本任务本工作区的会话，其余一律按未知会话回答。
+- **会话是任务级的**：`run_react_loop` 的收尾包装器在任务结束时 `stop_task`，另有 `atexit` 硬停兜底；每任务上限 8（先 sweep 僵尸再计数，超限**拒绝**新启而不是杀旧会话），TTL 30 分钟。
+- `chars` 为 `\u0003`（Ctrl-C）时走 `process_group.interrupt`：POSIX 发 SIGINT，3 秒没退再 SIGKILL；Windows 由 Job 终止。
+- 输出超预算**落盘并返回 `persistedOutputPath`**，而不是只截断，与 ADR 0005 D4/D8 一致。
+- 已知限制：**没有 PTY**，需要终端的程序不会真的交互；原理与取舍见 [ADR 0008](decisions/0008-write-stdin-tool.md)。
 
 ### 大输出与只读附加根
 
@@ -248,6 +262,7 @@ npm run i18n:check
   - [ADR 0002 文件工具的编码策略](decisions/0002-file-encoding.md)
   - [ADR 0003 `edit_file` 的写入与补丁语义](decisions/0003-edit-write-and-patch.md)
   - [ADR 0004 `write_file` 工具的设计](decisions/0004-file-write-tool.md)
-  - [ADR 0005 `exec` 工具与沙箱分层](decisions/0005-exec-tool.md)
+  - [ADR 0005 `exec_command` 工具与沙箱分层](decisions/0005-exec-tool.md)
   - [ADR 0006 工具权限确认（P1 交互式确认）](decisions/0006-tool-permission-confirmation.md)
   - [ADR 0007 未绑定会话的相对路径基目录](decisions/0007-default-workspace.md)
+  - [ADR 0008 `write_stdin` 工具与"还活着的会话"](decisions/0008-write-stdin-tool.md)

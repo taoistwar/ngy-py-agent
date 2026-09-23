@@ -1,4 +1,4 @@
-"""Tests for the exec (shell command) tool and its containment.
+"""Tests for the exec_command (shell command) tool and its containment.
 
 The commands are written per platform so the same expectations hold under
 PowerShell on Windows and bash on Linux (CI runs the latter).
@@ -74,7 +74,7 @@ class ExecToolTest(unittest.TestCase):
     def exec_cmd(self, arguments):
         """Call the tool. Named ``exec_cmd``, not ``run``: ``TestCase.run`` is how
         unittest executes the test itself."""
-        return self.registry.execute_tool("exec", arguments)
+        return self.registry.execute_tool("exec_command", arguments)
 
     def read_file(self, arguments):
         """``read_file`` returns a dict, which ``execute_tool`` hands back as JSON."""
@@ -96,11 +96,11 @@ class ExecToolTest(unittest.TestCase):
     def test_only_command_is_required(self):
         self.assertEqual(EXEC_PARAMETERS["required"], ["command"])
 
-    def test_registry_exposes_exec(self):
+    def test_registry_exposes_exec_command(self):
         schemas = {item["function"]["name"]: item for item in self.registry.get_tool_schemas("openai")}
 
-        self.assertIn("exec", schemas)
-        self.assertEqual(schemas["exec"]["function"]["parameters"]["required"], ["command"])
+        self.assertIn("exec_command", schemas)
+        self.assertEqual(schemas["exec_command"]["function"]["parameters"]["required"], ["command"])
 
     # --- running commands --------------------------------------------------
 
@@ -250,6 +250,8 @@ class ExecToolTest(unittest.TestCase):
 
         self.assertTrue(outcome.details["background"])
         self.assertIsInstance(outcome.details["pid"], int)
+        self.assertIsInstance(outcome.details["session_id"], str)
+        self.assertTrue(outcome.details["session_id"])
         log_path = Path(outcome.details["persistedOutputPath"])
         self.assertEqual(log_path.suffix, ".log")
         self.assertTrue(Path(outcome.details["pidFile"]).is_file())
