@@ -1,4 +1,4 @@
-﻿import en from "./locales/en.json"
+import en from "./locales/en.json"
 import zhCN from "./locales/zh-CN.json"
 
 export const LOCALES = ["en", "zh-CN"]

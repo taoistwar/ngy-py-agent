@@ -3,4 +3,26 @@
 line-length = 120
 
 [lint]
-ignore = ["UP035", "UP006", "UP045"]
+# The set the project actually enforces: `.github/workflows/ci.yml`,
+# `scripts/ci_check.py` and `.githooks/pre-commit.py` all run exactly this, so a
+# finding blocks a commit instead of only showing up in an editor. The rest of what
+# ruff can check is deliberately not selected — the code and docs are full of
+# Chinese punctuation (RUF001's territory), and the remaining rules have not been
+# adopted.
+select = [
+    "E4",     # imports: duplicates and misplaced imports
+    "E7",     # statements that are almost certainly a mistake
+    "E9",     # runtime errors: syntax, `raise` without an exception
+    "F",      # pyflakes: an undefined name must never reach a commit
+    "I",      # import order stays mechanical instead of a review topic
+    "BLE",    # blind `except`: allowed only where the code says why
+    "RUF012", # mutable class attribute shared between instances
+]
+ignore = [
+    # Pre-existing `x = lambda ...` test doubles in test/tools/permissions_test.py;
+    # rewriting them is unrelated to what this gate is for.
+    "E731",
+    "UP035",
+    "UP006",
+    "UP045",
+]

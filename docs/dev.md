@@ -133,6 +133,7 @@ npm run i18n:check
   - `web-admin`：安装前端依赖并执行 `npm run build`（内含 i18n 键一致性检查）。
   - `backend`：安装 `uv` 后执行 `uv sync`，再执行 `uv run python -m compileall -q main.py agent/agent_loop.py` 做语法检查，并执行 `uv run python main.py --help` 做入口参数可用性检查。
   - `backend` 测试：逐个执行 `test/**/*_test.py`（`test/` 不是包，所以不用 `unittest discover`；本地等价命令见 `scripts/ci_check.py`）。
+  - `backend` 静态检查：`uv run ruff check .`，规则集在根目录 `ruff.toml`（`E4/E7/E9/F/I/BLE/RUF012`）。**同一份规则也被 `scripts/ci_check.py` 与 `.githooks/pre-commit.py` 执行**，所以编辑器里的提示是会拦提交的：`F` 拦未定义名字与未用导入（曾扫出一段调用即 `NameError` 的残留死代码），`BLE` 要求每个宽捕获在代码里写明理由，`I` 让导入顺序不再成为讨论话题。
 - 如果后端 CLI 检查失败，优先排查：
   - 是否已执行 `uv sync`。
   - 是否新添了 CLI 参数但未在解析逻辑中添加默认值。
@@ -150,6 +151,8 @@ npm run i18n:check
 - Run the same check from web-admin directory:
   - `cd web-admin`
   - `npm run ci-check`
+- 启用提交前钩子（编码检查 + 对暂存 Python 文件跑 ruff）：
+  - `git config core.hooksPath .githooks`（只影响本仓库的这份克隆）
 
 ### Windows note
 

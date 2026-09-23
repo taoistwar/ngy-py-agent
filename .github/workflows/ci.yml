@@ -37,6 +37,8 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Sync dependencies
         run: uv sync
+      - name: Lint backend
+        run: uv run ruff check .
       - name: Compile backend
         run: uv run python -m compileall -q main.py agent/agent_loop.py
       - name: Check backend CLI entry
