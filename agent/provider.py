@@ -15,25 +15,52 @@ class ProviderDependencyError(ProviderError):
     pass
 
 
-def normalize_provider_name(name: str) -> str:
-    return (name or "openai").strip().lower().replace(" ", "_")
+# Provider names arrive as user configuration, so accept the punctuation people
+# actually write: ``openai-compatible``, ``OpenAI Compatible`` and
+# ``openai.compatible`` all name the same provider. Normalisation happens here, once;
+# every other module imports it instead of keeping its own table.
+_SEPARATOR_TO_UNDERSCORE = str.maketrans({"-": "_", ".": "_"})
+
+# What "nothing usable was configured" means, as it always has.
+DEFAULT_PROVIDER = "openai"
+
+# Spellings that mean a provider other than their own name: the runtime names people
+# know (``claude``, ``aws``, ``google``) and the OpenAI-compatible shorthand.
+PROVIDER_ALIASES = {
+    "claude": "anthropic",
+    "aws": "bedrock",
+    "google": "gemini",
+    "openai_compatible": "openai",
+}
 
 
-def canonicalize_provider(name: str) -> str:
-    provider = normalize_provider_name(name)
-    if provider in {"openai_compatible", "openai-compatible"}:
-        return "openai"
-    if provider in {"anthropic_compatible", "anthropic-compatible"}:
-        return "anthropic_compatible"
-    return provider
+def normalize_provider_name(name: Any) -> str:
+    """Normalise a provider spelling to ``lower_snake_case``; ``""`` when unusable."""
+    if not isinstance(name, str):
+        return ""
+    # ``split()`` drops surrounding blanks and collapses inner runs, so tabs and
+    # repeated spaces normalise too.
+    return "_".join(name.split()).lower().translate(_SEPARATOR_TO_UNDERSCORE)
 
 
-def resolve_tool_provider_for_schemas(name: str) -> str:
-    """Map schema output selection to provider key used by ToolRegistry."""
-    provider = canonicalize_provider(name)
-    if provider == "openai":
-        return "openai"
-    return provider
+def canonicalize_provider(name: Any) -> str:
+    """Resolve a configured spelling to the provider we build.
+
+    Blank or unusable input means "not configured" and keeps the default of OpenAI;
+    an unknown name is returned normalised rather than guessed, so the caller's
+    ``ProviderError`` names what it got.
+    """
+    key = normalize_provider_name(name) or DEFAULT_PROVIDER
+    return PROVIDER_ALIASES.get(key, key)
+
+
+def resolve_tool_provider_for_schemas(name: Any) -> str:
+    """Canonical provider name used to pick the tool-schema shape.
+
+    ``ToolRegistry`` canonicalises what it is given, so this exists only to keep the
+    spelling rules in one place for callers holding a raw configured name.
+    """
+    return canonicalize_provider(name)
 
 
 def _read_env(name: str, default: str) -> str:
@@ -573,7 +600,9 @@ class GeminiProvider(BaseProvider):
                     parsed_content = json.loads(content)
                     if not isinstance(parsed_content, dict):
                         parsed_content = {"result": parsed_content}
-                except Exception:
+                except (ValueError, TypeError):
+                    # Parsing is best effort: whatever the decoder cannot read is
+                    # passed through as opaque text instead of failing the turn.
                     parsed_content = {"result": content}
 
                 contents.append({
