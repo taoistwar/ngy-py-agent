@@ -75,7 +75,17 @@ def _load_tiktoken_counter(model: str) -> Optional[Callable[[str], int]]:
         except Exception:
             return None
 
-    return lambda text: len(encoding.encode(text, disallowed_special=()))
+    # No self-test here: ``get_encoding`` builds the BPE table up front, so a
+    # returned encoding is already known to work. It can still fail on the text
+    # itself, which is what the fallback below is for.
+    def count(text: str) -> int:
+        """Count ``text`` with tiktoken, degrading if it chokes on the input."""
+        try:
+            return len(encoding.encode(text, disallowed_special=()))
+        except Exception:
+            return estimate_tokens(text)
+
+    return count
 
 
 def _repo_root() -> Path:
@@ -115,10 +125,27 @@ def _load_local_tokenizer_counter() -> Optional[Callable[[str], int]]:
             cache_dir=str(directory),
             local_files_only=offline_only,
         )
+        # ``from_pretrained`` is content with a half-downloaded cache and only fails
+        # on the first encode. Count once here, so that "loaded but cannot count" is
+        # rejected now instead of surfacing as the exact backend in the middle of a
+        # tool call (see ``count`` below).
+        _ = tokenizer.encode("self-test", add_special_tokens=False)
     except Exception:
         return None
 
-    return lambda text: len(tokenizer.encode(text, add_special_tokens=False))
+    def count(text: str) -> int:
+        """Count ``text`` with the real tokenizer, degrading if it chokes.
+
+        The module's promise is that a broken tokenizer costs accuracy and never a
+        failed turn. The byte estimate is deliberately pessimistic, so falling back
+        here can only make the budget check stricter, never laxer.
+        """
+        try:
+            return len(tokenizer.encode(text, add_special_tokens=False))
+        except Exception:
+            return estimate_tokens(text)
+
+    return count
 
 
 def is_deepseek(provider: str, model: str) -> bool:
