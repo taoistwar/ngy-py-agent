@@ -147,7 +147,8 @@ def _tool_fallback_parse(content: str) -> Optional[Tuple[str, Dict[str, Any], st
         return None
     try:
         payload = json.loads(text)
-    except Exception:
+    except (ValueError, TypeError):
+        # Not JSON: the content was prose after all, so there is no tool call here.
         return None
     if not isinstance(payload, dict):
         return None
@@ -187,9 +188,11 @@ def _emit(
 ) -> None:
     if event_sink is None or task_id is None:
         return
+    # Deliberately broad: the sink is caller-supplied, and a failing listener must not
+    # be the thing that aborts the run.
     try:
         event_sink(task_id, event)
-    except Exception:
+    except Exception:  # noqa: BLE001
         # Event emission failures should not interrupt main flow.
         return
 
@@ -496,6 +499,8 @@ def run_react_loop(
             )
 
             outcome: Any = None
+            # Deliberately broad: a tool may raise anything, and each failure has to
+            # reach the model as a result instead of aborting the step.
             try:
                 outcome = _execute_tool(registry, name, args)
                 result = outcome.model_text if isinstance(outcome, ToolOutcome) else outcome
@@ -506,7 +511,7 @@ def run_react_loop(
                     result=result,
                     is_error=False,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 result = f"Error: {exc}"
                 tool_result_payload = ToolResultData(
                     step=step,
