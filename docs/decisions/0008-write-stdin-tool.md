@@ -116,3 +116,5 @@ Output:
 - **权限 scope**：`write_stdin` 只提供 `once`/`session`；对话框按请求携带的 `scopes` 渲染，API 对越界 scope 返回 400（不静默降级），broker 内部对直接调用者仍保守回退为 `once`。
 - **事件类别**：复用 `exec`——`write_stdin` 是同一条命令的延续，拆成两类会让"这条命令发生了什么"在时间线上断开。
 - **明确不做**：不提供"列出活会话"的工具；不支持 EOF/关闭 stdin；不修"长阻塞工具期间无法响应停止"——`exec_command` 前台最长阻塞 30 分钟且同样不检查停止信号，属既有问题，记为后续子项目。
+
+> **后续结构变更（同日，工具目录重构）**：工具声明已从 `agent/tools/specs.py` 移入**各工具包的 `spec.py`**，由 `agent/tools/catalog.py` 汇总、`agent/tools/bindings.py` 提供运行期绑定，`specs.py` 已删除。本文上方"相关"里的 `agent/tools/specs.py`，以及 D7 提到的 `write_stdin_tool.py` / `exec_tool.py`，请按 `agent/tools/spec.py`、`agent/tools/write_stdin/`、`agent/tools/exec_command/` 理解；决策内容不受影响。

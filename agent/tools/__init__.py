@@ -3,13 +3,15 @@
 The package is split so that reading one tool means reading one directory:
 
 - ``registry``: registration, provider schema adaptation and dispatch
-- ``specs``: the declarative ``ToolSpec`` list wired into the registry
+- ``spec`` / ``bindings`` / ``catalog``: the ``ToolSpec`` type, the run-scoped
+  ``ToolBindings`` tools are constructed with, and the list of built-in tools
 - ``<tool>/``: one package per model-visible tool, **named after that tool**
   (``exec_command/``, ``write_stdin/``, ``read_file/``, ``edit_file/``,
   ``write_file/``, ``code_interpreter/``, ``get_current_time/``,
   ``get_current_temperature/``, ``convert_currency/``). ``__init__.py`` holds the
-  package docstring and the public surface; the implementation is split by
-  responsibility (``description.py``, ``errors.py``, topic modules, ``tool.py``).
+  package docstring and the public surface, ``spec.py`` declares the tool to the
+  registry, and the implementation is split by responsibility
+  (``description.py``, ``errors.py``, topic modules, ``tool.py``).
 - the remaining modules (``permissions``, ``permission_rules``, ``file_access``,
   ``file_bytes``, ``file_patch``, ``read_ledger``, ``text_encoding``, ``text_lines``,
   ``tokenizers``, ``token_budget``, ``process_group``, ``process_store``,
