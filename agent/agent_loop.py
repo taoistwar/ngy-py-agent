@@ -1,4 +1,4 @@
-﻿"""ReAct execution loop."""
+"""ReAct execution loop."""
 
 import functools
 import inspect

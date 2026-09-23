@@ -1,4 +1,4 @@
-﻿"""Monitor data models for agent task events."""
+"""Monitor data models for agent task events."""
 
 from __future__ import annotations
 

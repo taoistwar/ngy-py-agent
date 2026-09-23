@@ -1,4 +1,4 @@
-﻿const API_BASE = ""
+const API_BASE = ""
 
 function toTextOrJson(response) {
   return response.text().then((text) => {

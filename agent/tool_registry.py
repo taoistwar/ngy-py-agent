@@ -1,4 +1,4 @@
-﻿"""Backwards compatible import path for the tool registry.
+"""Backwards compatible import path for the tool registry.
 
 The registry and the tool implementations moved into the :mod:`agent.tools`
 package so that each module stays small. This module is kept as a thin

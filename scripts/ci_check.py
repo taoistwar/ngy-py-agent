@@ -53,6 +53,9 @@ def main() -> None:
     require("npm")
 
     run(["uv", "sync"], cwd=ROOT)
+    # Lint before the rest: the rule set lives in ruff.toml, and a finding here is
+    # cheaper to read than a test failure caused by an undefined name.
+    run(["uv", "run", "ruff", "check", "."], cwd=ROOT)
     run(
         ["uv", "run", "python", "-m", "compileall", "-q", "main.py", "agent/agent_loop.py"],
         cwd=ROOT,
