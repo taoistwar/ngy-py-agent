@@ -2,9 +2,10 @@
 
 import copy
 import json
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Sequence
 
 from agent.models import EventCategory, ToolOutcome
+from agent.provider import canonicalize_provider
 from agent.tools.bindings import ToolBindings
 from agent.tools.catalog import build_all_specs
 from agent.tools.code_interpreter import code_interpreter as _code_interpreter
@@ -26,26 +27,31 @@ from agent.tools.read_ledger import ReadLedger
 class ToolRegistry:
     """Registry for managing available tools"""
 
-    _ADAPTERS = {
+    # Which schema shape a provider's tools are rendered in, keyed by canonical
+    # provider name (``agent.provider.canonicalize_provider``). Spellings and
+    # synonyms are resolved there, so only the shapes appear here. Annotated as a
+    # ``ClassVar`` because it is shared, read-only lookup state owned by the class
+    # rather than something an instance may set.
+    _ADAPTERS: ClassVar[Dict[str, str]] = {
         "openai": "openai",
-        "openai_compatible": "openai",
-        "openai-compatible": "openai",
         "anthropic": "anthropic",
         "anthropic_compatible": "anthropic",
-        "anthropic-compatible": "anthropic",
-        "claude": "anthropic",
         "gemini": "gemini",
-        "google": "gemini",
-        "google_generative_ai": "gemini",
-        "google-generative-ai": "gemini",
         "bedrock": "bedrock",
-        "aws": "bedrock",
         "mcp": "mcp",
     }
 
     @classmethod
-    def normalize_provider(cls, provider: str) -> str:
-        key = (provider or "openai").strip().lower()
+    def normalize_provider(cls, provider: Any) -> str:
+        """Map a configured provider name to the adapter serving its tool schema.
+
+        Spelling and synonyms are ``agent.provider``'s business, so this only decides
+        which schema shape the canonical name gets. A blank or non-string value means
+        "not configured" and keeps the long-standing default of OpenAI; an unknown
+        name is returned normalised rather than guessed, so the caller's
+        ``ValueError`` names what it got.
+        """
+        key = canonicalize_provider(provider)
         return cls._ADAPTERS.get(key, key)
 
     def __init__(
@@ -297,7 +303,9 @@ class ToolRegistry:
                 preview=self.tools[name].get("preview"),
                 scopes=self.tools[name].get("scopes"),
             )
-        except Exception as exc:
+        # Deliberately broad: any broker fault must deny the call, so narrowing this
+        # would turn an unexpected error into a silent pass (ADR 0006 D1).
+        except Exception as exc:  # noqa: BLE001
             return PermissionDenial(
                 model_text=(
                     f"Permission check failed for {name}: {exc.__class__.__name__}: {exc}\n"
