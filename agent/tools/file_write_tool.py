@@ -179,7 +179,13 @@ def _write_file_impl(
     content = _require_text(content, "content")
 
     path, root = resolve_write_path(
-        file_path, base_dir=base_dir, config=access_config, extra_read_roots=extra_read_roots
+        file_path,
+        base_dir=base_dir,
+        config=access_config,
+        extra_read_roots=extra_read_roots,
+        # The one place allowed to create the session default: a new file needs a
+        # directory to live in (ADR 0007 D4).
+        create_default=True,
     )
     display = _display_path(path, root)
     requested_encoding = _resolve_encoding(encoding, display)

@@ -10,6 +10,7 @@ answering means no, a stop beats the timeout, the static policy is never asked
 about, and a tool that cannot reach the filesystem never reaches the broker.
 """
 
+import os
 import sys
 import tempfile
 import threading
@@ -24,7 +25,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from agent.models import ToolOutcome  # noqa: E402
-from agent.tools.file_access import FileAccessConfig  # noqa: E402
+from agent.tools.file_access import DEFAULT_WORKSPACE_ENV, FileAccessConfig  # noqa: E402
 from agent.tools.file_edit_tool import EditFileError, make_edit_preview  # noqa: E402
 from agent.tools.permission_rules import PermissionRuleStore  # noqa: E402
 from agent.tools.permissions import (  # noqa: E402
@@ -153,6 +154,24 @@ class PermissionBrokerTest(unittest.TestCase):
 
         self.assertIsNone(decision)
         self.assertEqual(self.requests(), [])
+
+    def test_deciding_does_not_create_the_session_default(self):
+        # The broker resolves the target in order to show it in the dialog, and
+        # that lookup must not touch the disk - least of all when the answer is
+        # going to be "no". This was a real defect: merely deciding left an empty
+        # ``data/default_workspace`` behind, even under ``deny_all``.
+        default = self.root / "uncreated_default"
+        os.environ[DEFAULT_WORKSPACE_ENV] = str(default)
+        self.addCleanup(os.environ.pop, DEFAULT_WORKSPACE_ENV, None)
+        broker = self.make_broker(base_dir=None, mode=PermissionMode.DENY_ALL)
+
+        denial = broker.check(
+            "write_file", PERMISSION_WRITE, {"file_path": "notes.txt", "content": "x"}
+        )
+
+        self.assertIsNotNone(denial)
+        self.assertEqual(denial.details["reason"], REASON_DENY_ALL)
+        self.assertFalse(default.exists(), "a decision must not create directories")
 
     def test_auto_approve_never_asks_but_records_the_decision(self):
         broker = self.make_broker(mode=PermissionMode.AUTO_APPROVE)

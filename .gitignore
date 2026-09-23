@@ -17,3 +17,7 @@ TODO.md
 # Downloaded model assets
 data/ds-tokenizer/
 *.html
+
+# Runtime state written by the app
+data/default_workspace/
+data/permission_rules.json

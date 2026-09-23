@@ -169,6 +169,14 @@ npm run i18n:check
 - 因此：不要为了省 token 给这个行为加开关，也不要让 `_format_lines` 支持“无前缀”模式。
 - 相关说明页：`docs/tools/read_file/eli5-line-numbers.html`
 
+### 相对路径的基目录（有工作空间 vs 无工作空间）
+
+- 有工作空间：相对路径以会话绑定的工作空间根为基准，且**不得逃出**该目录。
+- 无工作空间（未绑定会话）：相对路径以**会话默认目录** `<程序启动路径>/data/default_workspace` 为基准（`DEFAULT_WORKSPACE_DIR` 可覆盖）。它是**基目录不是边界**——`..` 仍可离开，全局策略照旧生效。
+- 解析是三个文件工具**共用**的一条路径（`file_access._resolve_path`），所以三者的相对路径语义**必须一致**。不要只给某一个工具加特例：那会造成"写得进去、读不回来"。
+- 写入时按需创建默认目录（`write_file` 新建文件要求父目录存在），**读取不创建**：一次查找不该有副作用。
+- 未绑定会话的 system prompt 会明确告知该目录，别把这段文案删掉（只改解析等于修一半）。取舍见 [ADR 0007](decisions/0007-default-workspace.md)。
+
 ### read_file 保留原始换行（不要规范化）
 
 - `read_file` **不把行尾统一成 `\n`**：`N<TAB>` 之后的正文原样保留 `\r\n` / `\n` / `\r`（`agent/tools/text_lines.py` 的 `split_line_ending`）。
@@ -242,3 +250,4 @@ npm run i18n:check
   - [ADR 0004 `write_file` 工具的设计](decisions/0004-file-write-tool.md)
   - [ADR 0005 `exec` 工具与沙箱分层](decisions/0005-exec-tool.md)
   - [ADR 0006 工具权限确认（P1 交互式确认）](decisions/0006-tool-permission-confirmation.md)
+  - [ADR 0007 未绑定会话的相对路径基目录](decisions/0007-default-workspace.md)
