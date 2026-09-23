@@ -11,7 +11,6 @@ Run from the repository root::
 
 import sys
 import tempfile
-import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -124,9 +123,11 @@ class ProcessStoreTest(unittest.TestCase):
 
     def test_sweep_stops_sessions_past_the_ttl(self):
         session = self.register(task_id="task-a")
-        time.sleep(0.01)
+        # Age the session by hand: sleeping would depend on the clock's resolution,
+        # which is coarse on Windows.
+        session.created_at -= 1.0
 
-        with mock.patch.object(process_store, "SESSION_TTL_SECONDS", 0.0):
+        with mock.patch.object(process_store, "SESSION_TTL_SECONDS", 0.5):
             self.assertEqual(process_store.sweep(), 1)
 
         self.assertIsNone(process_store.get(session.process_id))
