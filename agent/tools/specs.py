@@ -2,7 +2,8 @@
 
 Each :class:`ToolSpec` binds a model-facing name and JSON schema to the callable
 that implements it. ``ToolRegistry`` consumes these specs, so adding a tool means
-adding one entry here plus the implementation module next to it.
+adding one entry here plus its package next to it (one package per tool, named after
+the tool — see ``agent/tools/__init__.py``).
 
 A new tool must also declare its ``permission`` kind. The default is ``"none"``,
 which means "never ask the user" - correct for pure lookups, and a silent hole for
