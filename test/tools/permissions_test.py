@@ -42,7 +42,9 @@ from agent.tools.permissions import (  # noqa: E402
     REASON_USER_ALLOWED,
     REASON_USER_DENIED,
     SCOPE_ALWAYS,
+    SCOPE_ONCE,
     SCOPE_SESSION,
+    SCOPES,
     PermissionBroker,
     PermissionMode,
     is_sensitive_path,
@@ -187,7 +189,7 @@ class PermissionBrokerTest(unittest.TestCase):
     def test_deny_all_refuses_without_asking(self):
         broker = self.make_broker(mode=PermissionMode.DENY_ALL)
 
-        denial = broker.check("exec", PERMISSION_EXEC, {"command": "rm -rf build"})
+        denial = broker.check("exec_command", PERMISSION_EXEC, {"command": "rm -rf build"})
 
         self.assertIsNotNone(denial)
         self.assertEqual(denial.details["reason"], REASON_DENY_ALL)
@@ -264,7 +266,7 @@ class PermissionBrokerTest(unittest.TestCase):
 
     def test_refusal_is_reported_to_the_model_instead_of_raising(self):
         broker = self.make_broker()
-        call = lambda: broker.check("exec", PERMISSION_EXEC, {"command": "git push --force"})
+        call = lambda: broker.check("exec_command", PERMISSION_EXEC, {"command": "git push --force"})
 
         thread, box = self.run_in_thread(call)
         self.answer_next_request(broker, allowed=False)
@@ -413,7 +415,7 @@ class RegistryGateTest(unittest.TestCase):
             "read_file": PERMISSION_READ,
             "edit_file": PERMISSION_WRITE,
             "write_file": PERMISSION_WRITE,
-            "exec": PERMISSION_EXEC,
+            "exec_command": PERMISSION_EXEC,
             # Without this, code_interpreter is an unrestricted bypass: it can
             # open() and subprocess.run() anything (ADR 0005 D1, ADR 0006 D2).
             "code_interpreter": PERMISSION_EXEC,
@@ -440,47 +442,47 @@ class PermissionRuleTest(unittest.TestCase):
 
     def test_missing_file_means_no_rules(self):
         self.assertEqual(self.rules.list(), [])
-        self.assertFalse(self.rules.match("exec", "ls"))
+        self.assertFalse(self.rules.match("exec_command", "ls"))
 
     def test_add_then_match(self):
-        self.assertTrue(self.rules.add("exec", "git status", "exec"))
-        self.assertTrue(self.rules.match("exec", "git status"))
+        self.assertTrue(self.rules.add("exec_command", "git status", PERMISSION_EXEC))
+        self.assertTrue(self.rules.match("exec_command", "git status"))
 
     def test_a_rule_does_not_cover_a_different_target_or_tool(self):
-        self.rules.add("exec", "git status")
+        self.rules.add("exec_command", "git status")
 
-        self.assertFalse(self.rules.match("exec", "git status --short"))
-        self.assertFalse(self.rules.match("exec", "git push --force"))
+        self.assertFalse(self.rules.match("exec_command", "git status --short"))
+        self.assertFalse(self.rules.match("exec_command", "git push --force"))
         self.assertFalse(self.rules.match("read_file", "git status"))
 
     def test_adding_a_duplicate_is_idempotent(self):
-        self.rules.add("exec", "ls")
-        self.assertTrue(self.rules.add("exec", "ls"))
+        self.rules.add("exec_command", "ls")
+        self.assertTrue(self.rules.add("exec_command", "ls"))
 
         self.assertEqual(len(self.rules.list()), 1)
 
     def test_remove_forgets_the_rule(self):
-        self.rules.add("exec", "ls")
+        self.rules.add("exec_command", "ls")
 
-        self.assertTrue(self.rules.remove("exec", "ls"))
-        self.assertFalse(self.rules.remove("exec", "ls"))
-        self.assertFalse(self.rules.match("exec", "ls"))
+        self.assertTrue(self.rules.remove("exec_command", "ls"))
+        self.assertFalse(self.rules.remove("exec_command", "ls"))
+        self.assertFalse(self.rules.match("exec_command", "ls"))
 
     def test_a_corrupt_file_degrades_to_asking_not_to_allowing(self):
         (self.root / "rules.json").write_text("{ not json", encoding="utf-8")
 
         self.assertEqual(self.rules.list(), [])
-        self.assertFalse(self.rules.match("exec", "ls"))
+        self.assertFalse(self.rules.match("exec_command", "ls"))
         # ...and it recovers on the next add instead of staying broken.
-        self.assertTrue(self.rules.add("exec", "ls"))
-        self.assertTrue(self.rules.match("exec", "ls"))
+        self.assertTrue(self.rules.add("exec_command", "ls"))
+        self.assertTrue(self.rules.match("exec_command", "ls"))
 
     def test_a_rule_survives_a_new_store_instance(self):
-        self.rules.add("exec", "ls")
+        self.rules.add("exec_command", "ls")
 
         reopened = PermissionRuleStore(self.root / "rules.json")
 
-        self.assertTrue(reopened.match("exec", "ls"))
+        self.assertTrue(reopened.match("exec_command", "ls"))
 
 
 class NoWriteRules:
@@ -537,32 +539,32 @@ class PersistentRuleBrokerTest(unittest.TestCase):
 
     def test_always_scope_persists_and_a_new_task_honours_it(self):
         broker = self.make_broker(wait_seconds=30.0)
-        call = lambda: broker.check("exec", PERMISSION_EXEC, {"command": "git status"})
+        call = lambda: broker.check("exec_command", PERMISSION_EXEC, {"command": "git status"})
 
         thread, box = self.run_in_thread(call)
         self.answer_next_request(broker, allowed=True, scope=SCOPE_ALWAYS)
         thread.join(timeout=5.0)
 
         self.assertIsNone(box["result"])
-        self.assertTrue(self.rules.match("exec", "git status"))
+        self.assertTrue(self.rules.match("exec_command", "git status"))
 
         # A fresh broker stands in for a later task: it must not ask again.
         later = self.make_broker()
-        self.assertIsNone(later.check("exec", PERMISSION_EXEC, {"command": "git status"}))
+        self.assertIsNone(later.check("exec_command", PERMISSION_EXEC, {"command": "git status"}))
         self.assertEqual(self.decisions()[-1][2]["reason"], REASON_PERSISTENT_RULE)
 
     def test_a_persisted_rule_does_not_leak_to_another_command(self):
-        self.rules.add("exec", "git status", PERMISSION_EXEC)
+        self.rules.add("exec_command", "git status", PERMISSION_EXEC)
         broker = self.make_broker()
 
-        denial = broker.check("exec", PERMISSION_EXEC, {"command": "git push --force"})
+        denial = broker.check("exec_command", PERMISSION_EXEC, {"command": "git push --force"})
 
         self.assertIsNotNone(denial, "a different command must still be asked about")
         self.assertEqual(denial.details["reason"], REASON_TIMEOUT)
 
     def test_a_rule_that_cannot_be_written_is_not_reported_as_persistent(self):
         broker = self.make_broker(wait_seconds=30.0, rules=NoWriteRules())
-        call = lambda: broker.check("exec", PERMISSION_EXEC, {"command": "git status"})
+        call = lambda: broker.check("exec_command", PERMISSION_EXEC, {"command": "git status"})
 
         thread, box = self.run_in_thread(call)
         self.answer_next_request(broker, allowed=True, scope=SCOPE_ALWAYS)
@@ -651,6 +653,102 @@ class EditPreviewTest(unittest.TestCase):
         request = [event for event in events if event[0] == "permission_request"][0]
         self.assertEqual(request[2]["tool"], "edit_file")
         self.assertNotIn("gitDiff", request[2]["details"])
+
+
+class PermissionScopeTest(unittest.TestCase):
+    """A tool may narrow which answers it accepts (ADR 0008).
+
+    ``write_stdin``'s target is a one-off session id, so a persisted "always" rule
+    could never match again. The request says so, the dialog follows, and an answer
+    the tool does not accept is never silently upgraded or downgraded.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.events = []
+        self.rules = PermissionRuleStore(self.root / "rules.json")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def make_broker(self):
+        return PermissionBroker(
+            base_dir=str(self.root),
+            rules=self.rules,
+            emit=lambda category, title, data: self.events.append((category, title, data)),
+            wait_seconds=0.3,
+        )
+
+    def decisions(self):
+        return [event for event in self.events if event[0] == "permission_decision"]
+
+    def run_in_thread(self, func):
+        box = {}
+
+        def runner():
+            box["result"] = func()
+
+        thread = threading.Thread(target=runner)
+        thread.start()
+        return thread, box
+
+    def wait_for_pending(self, broker, timeout=5.0):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            pending = broker.pending()
+            if pending is not None:
+                return pending
+            time.sleep(0.01)
+        raise AssertionError("the broker never asked")
+
+    def test_the_request_carries_the_scopes_the_tool_accepts(self):
+        broker = self.make_broker()
+        call = lambda: broker.check(
+            "write_stdin",
+            PERMISSION_EXEC,
+            {"session_id": "abc123", "chars": "x\n"},
+            scopes=(SCOPE_ONCE, SCOPE_SESSION),
+        )
+        thread, _box = self.run_in_thread(call)
+
+        pending = self.wait_for_pending(broker)
+
+        self.assertEqual(pending.scopes, (SCOPE_ONCE, SCOPE_SESSION))
+        self.assertEqual(pending.to_payload()["scopes"], [SCOPE_ONCE, SCOPE_SESSION])
+        self.assertEqual(broker.request_scopes(pending.request_id), (SCOPE_ONCE, SCOPE_SESSION))
+        self.assertTrue(broker.resolve(pending.request_id, True, SCOPE_ONCE))
+        thread.join(timeout=5.0)
+
+    def test_a_tool_without_a_narrowing_keeps_all_three(self):
+        broker = self.make_broker()
+        call = lambda: broker.check("exec_command", PERMISSION_EXEC, {"command": "ls"})
+        thread, _box = self.run_in_thread(call)
+
+        pending = self.wait_for_pending(broker)
+
+        self.assertEqual(pending.scopes, SCOPES)
+        self.assertTrue(broker.resolve(pending.request_id, True, SCOPE_ALWAYS))
+        thread.join(timeout=5.0)
+
+    def test_a_scope_the_tool_refuses_falls_back_to_once(self):
+        broker = self.make_broker()
+        call = lambda: broker.check(
+            "write_stdin",
+            PERMISSION_EXEC,
+            {"session_id": "abc123", "chars": "x\n"},
+            scopes=(SCOPE_ONCE,),
+        )
+        thread, box = self.run_in_thread(call)
+        pending = self.wait_for_pending(broker)
+
+        broker.resolve(pending.request_id, True, SCOPE_ALWAYS)
+        thread.join(timeout=5.0)
+
+        self.assertIsNone(box["result"])
+        self.assertEqual(self.decisions()[-1][2]["scope"], SCOPE_ONCE)
+        # ...and the refused "always" must not have written a standing rule.
+        self.assertEqual(self.rules.list(), [])
 
 
 if __name__ == "__main__":

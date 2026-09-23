@@ -10,7 +10,7 @@ Three points worth stating up front, because getting them wrong makes the gate
 either useless or infuriating:
 
 * It is a **cooperative confirmation, not a security boundary**. Once a call is
-  allowed, nothing new restricts it: ``exec`` is still an unrestricted shell.
+  allowed, nothing new restricts it: ``exec_command`` is still an unrestricted shell.
 * **Do not ask about what the static policy already refuses.** ``file_access``
   denials are hard denials; prompting first would imply the answer could be yes,
   and the tool would reject the call anyway. The policy runs first, silently.
@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Sequence
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 from uuid import uuid4
 
 from agent.tools import file_access
@@ -154,6 +154,10 @@ class PermissionRequest:
     summary: str
     target: str
     details: Dict[str, Any] = field(default_factory=dict)
+    # Which answers this tool accepts. A tool that cannot take a standing approval
+    # (``write_stdin``: its target is a random session id) narrows this, and the
+    # dialog only offers what is listed here (ADR 0008).
+    scopes: Tuple[str, ...] = SCOPES
     created_at: float = field(default_factory=time.time)
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
 
@@ -166,6 +170,7 @@ class PermissionRequest:
             "summary": self.summary,
             "target": self.target,
             "details": self.details,
+            "scopes": list(self.scopes),
             "created_at": self.created_at,
             "timeout_seconds": self.timeout_seconds,
         }
@@ -232,6 +237,7 @@ class PermissionBroker:
         kind: str,
         arguments: Dict[str, Any],
         preview: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+        scopes: Optional[Sequence[str]] = None,
     ) -> Optional[PermissionDenial]:
         """Return a denial when the call must not run, else ``None``.
 
@@ -273,7 +279,7 @@ class PermissionBroker:
             )
             return None
 
-        return self._ask(tool, kind, target, arguments, preview)
+        return self._ask(tool, kind, target, arguments, preview, tuple(scopes or SCOPES))
 
     def resolve(self, request_id: str, allowed: bool, scope: str = SCOPE_ONCE) -> bool:
         """Answer a pending request. Returns whether it was still pending.
@@ -289,9 +295,18 @@ class PermissionBroker:
         # not be able to turn an answer that already arrived into a refusal.
         waiter.resolved = True
         waiter.allowed = bool(allowed)
-        waiter.scope = scope if scope in SCOPES else SCOPE_ONCE
+        # A scope this tool does not accept falls back to ``once``: that is the
+        # conservative direction, and the user-facing path never reaches here
+        # because the API rejects it outright instead of pretending.
+        waiter.scope = scope if scope in waiter.request.scopes else SCOPE_ONCE
         waiter.event.set()
         return True
+
+    def request_scopes(self, request_id: str) -> Optional[Tuple[str, ...]]:
+        """Scopes a pending request accepts, or ``None`` when it is not pending."""
+        with self._lock:
+            waiter = self._waiters.get(request_id)
+        return waiter.request.scopes if waiter is not None else None
 
     def pending(self) -> Optional[PermissionRequest]:
         """The request currently being waited on, if any."""
@@ -326,8 +341,9 @@ class PermissionBroker:
         target: str,
         arguments: Dict[str, Any],
         preview: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+        scopes: Tuple[str, ...] = SCOPES,
     ) -> Optional[PermissionDenial]:
-        request = self._build_request(tool, kind, target, arguments, preview)
+        request = self._build_request(tool, kind, target, arguments, preview, scopes)
         waiter = _Waiter(event=threading.Event(), request=request)
         with self._lock:
             self._waiters[request.request_id] = waiter
@@ -391,15 +407,22 @@ class PermissionBroker:
         target: str,
         arguments: Dict[str, Any],
         preview: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+        scopes: Tuple[str, ...] = SCOPES,
     ) -> PermissionRequest:
         details: Dict[str, Any] = {"kind": kind}
         summary = f"Run {tool}"
 
-        if kind == PERMISSION_EXEC and tool == "exec":
+        if kind == PERMISSION_EXEC and tool == "exec_command":
             command = str(arguments.get("command") or "")
             summary = str(arguments.get("description") or "").strip() or f"Run command: {command}"
             details["command"] = command
             details["description"] = str(arguments.get("description") or "")
+        elif kind == PERMISSION_EXEC and tool == "write_stdin":
+            session = str(arguments.get("session_id") or "")
+            chars = str(arguments.get("chars") or "")
+            summary = f"Write to session {session}" if chars else f"Poll session {session}"
+            details["session_id"] = session
+            details["chars"] = _truncate(chars)
         elif kind == PERMISSION_EXEC:
             code = str(arguments.get("code") or "")
             summary = "Run Python code"
@@ -438,6 +461,7 @@ class PermissionBroker:
             summary=summary,
             target=target,
             details=details,
+            scopes=tuple(scopes),
             timeout_seconds=self.wait_seconds,
         )
 
@@ -466,11 +490,19 @@ class PermissionBroker:
                 return None
             return _display(path)
 
-        if tool == "exec":
+        if tool == "exec_command":
             command = arguments.get("command")
             if not isinstance(command, str) or not command.strip():
                 return None
             return command
+
+        if tool == "write_stdin":
+            session = arguments.get("session_id")
+            if not isinstance(session, str) or not session.strip():
+                return None
+            # Key on the session so one approval covers this terminal, not every
+            # future write_stdin call.
+            return f"session:{session.strip()}"
 
         if tool == "code_interpreter":
             code = arguments.get("code")
@@ -502,7 +534,7 @@ class PermissionBroker:
         except OSError:  # pragma: no cover - platform specific
             return False
         if any(file_access.is_within(path, extra) for extra in self._extra_roots()):
-            # Scratch output from ``exec`` is deliberately readable (ADR 0005 D4).
+            # Scratch output from ``exec_command`` is deliberately readable (ADR 0005 D4).
             return False
         return not file_access.is_within(path, root)
 

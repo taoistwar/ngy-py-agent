@@ -118,6 +118,7 @@ def build_tool_registry_from_names(
     max_tokens: int = 0,
     provider: str = "",
     model: str = "",
+    task_id: str = "",
 ) -> ToolRegistry:
     """Build a ToolRegistry from an explicit tool-name allow list (``None`` = all tools)."""
     options = {
@@ -125,6 +126,7 @@ def build_tool_registry_from_names(
         "max_tokens": max_tokens,
         "provider": provider,
         "model": model,
+        "task_id": task_id,
     }
     if tool_names is None:
         return ToolRegistry(**options)
@@ -137,6 +139,7 @@ def build_tool_registry(
     max_tokens: int = 0,
     provider: str = "",
     model: str = "",
+    task_id: str = "",
 ) -> ToolRegistry:
     """Build a ToolRegistry restricted to the tools allowed for ``mode``."""
     return build_tool_registry_from_names(
@@ -145,6 +148,7 @@ def build_tool_registry(
         max_tokens=max_tokens,
         provider=provider,
         model=model,
+        task_id=task_id,
     )
 
 

@@ -1,5 +1,7 @@
 ﻿"""ReAct execution loop."""
 
+import functools
+import inspect
 import json
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -26,6 +28,7 @@ from agent.provider import (
     canonicalize_provider,
     resolve_tool_provider_for_schemas,
 )
+from agent.tools import process_store
 from agent.tools.file_access import default_workspace_root
 from agent.tools.permissions import PermissionBroker
 from agent.tool_registry import ToolRegistry
@@ -204,6 +207,7 @@ def _build_runtime(
     mode: str = "build",
     base_dir: Optional[str] = None,
     agent_config: Optional[Dict[str, Any]] = None,
+    task_id: str = "",
 ) -> tuple[str, ToolRegistry, Any, Optional[List[Dict[str, Any]]]]:
     provider_name = canonicalize_provider(provider_name or DEFAULT_PROVIDER)
     registry_options = {
@@ -211,6 +215,7 @@ def _build_runtime(
         "max_tokens": int(getattr(provider_config, "max_input_tokens", 0) or 0),
         "provider": provider_name,
         "model": getattr(provider_config, "model", "") or "",
+        "task_id": task_id,
     }
     if not enable_tools:
         registry = ToolRegistry(enabled_tools=[], **registry_options)
@@ -236,6 +241,30 @@ def _build_runtime(
     return provider_name, registry, provider, tool_schemas
 
 
+def _reaps_task_sessions(func):
+    """Stop the loop's live sessions when it returns, however it returns.
+
+    The loop has several exits (a final answer, the step limit, a stop request), so
+    the reaping cannot be bolted onto one of them, and a ``finally`` inside would
+    mean re-indenting the whole body. A wrapper keeps the change local and, because
+    it sits here, every caller gets it: the API server, both CLI entry points and
+    any library driving the loop directly (ADR 0008: sessions are task scoped).
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        finally:
+            bound = inspect.signature(func).bind_partial(*args, **kwargs)
+            task_id = str(bound.arguments.get("task_id") or "")
+            if task_id:
+                process_store.stop_task(task_id)
+
+    return wrapper
+
+
+@_reaps_task_sessions
 def run_react_loop(
     user_query: Optional[str] = DEFAULT_USER_QUERY,
     provider_name: Optional[str] = None,
@@ -261,10 +290,11 @@ def run_react_loop(
         mode=mode,
         base_dir=base_dir,
         agent_config=agent_config,
+        task_id=task_id or "",
     )
 
     if permission_broker is not None:
-        # The registry owns the workspace root and the exec scratch root, and the
+        # The registry owns the workspace root and the exec_command scratch root, and the
         # broker needs both to tell a sensitive read from a scratch-output read
         # (ADR 0006 D3/D9). Handing it over here is what makes the gate cover
         # every tool: this registry is the one the loop dispatches through.

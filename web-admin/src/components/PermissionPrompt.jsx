@@ -55,6 +55,14 @@ export default function PermissionPrompt({ request, onDecided, translate }) {
     ([key, value]) => key !== "kind" && value !== "" && value !== null && value !== undefined
   )
 
+  // A tool may accept fewer answers than the usual three: write_stdin cannot take a
+  // standing rule because its target is a one-off session id, and the request says
+  // so. Fall back to the full set when the payload predates the field.
+  const offered =
+    Array.isArray(request.scopes) && request.scopes.length > 0
+      ? request.scopes
+      : ["once", "session", "always"]
+
   return (
     <Modal
       title={request.summary || request.tool}
@@ -94,22 +102,26 @@ export default function PermissionPrompt({ request, onDecided, translate }) {
           >
             {busy === "once" ? translate("permissionSending") : translate("permissionAllowOnce")}
           </button>
-          <button
-            type="button"
-            className="btn"
-            disabled={Boolean(busy)}
-            onClick={() => decide(true, "session")}
-          >
-            {busy === "session" ? translate("permissionSending") : translate("permissionAllowSession")}
-          </button>
-          <button
-            type="button"
-            className="btn"
-            disabled={Boolean(busy)}
-            onClick={() => decide(true, "always")}
-          >
-            {busy === "always" ? translate("permissionSending") : translate("permissionAllowAlways")}
-          </button>
+          {offered.includes("session") ? (
+            <button
+              type="button"
+              className="btn"
+              disabled={Boolean(busy)}
+              onClick={() => decide(true, "session")}
+            >
+              {busy === "session" ? translate("permissionSending") : translate("permissionAllowSession")}
+            </button>
+          ) : null}
+          {offered.includes("always") ? (
+            <button
+              type="button"
+              className="btn"
+              disabled={Boolean(busy)}
+              onClick={() => decide(true, "always")}
+            >
+              {busy === "always" ? translate("permissionSending") : translate("permissionAllowAlways")}
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn btn-danger"

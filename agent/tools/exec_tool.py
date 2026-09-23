@@ -26,18 +26,17 @@ import os
 import platform
 import re
 import subprocess
-import threading
 import time
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from agent.models import EventCategory, ToolOutcome
-from agent.tools import process_group
+from agent.tools import process_group, process_store
 from agent.tools.output_store import (
     describe_size,
     ensure_dir,
+    new_stem,
     output_root,
     persist_text,
     preview,
@@ -52,7 +51,7 @@ from agent.tools.shell_platform import (
 from agent.tools.text_encoding import DecodeError, decode_file_bytes, suggest_encodings
 from agent.tools.token_budget import check_text, resolve_max_tokens
 
-EXEC_TOOL_NAME = "exec"
+EXEC_TOOL_NAME = "exec_command"
 
 # ``timeout`` is expressed in milliseconds, matching the tool contract.
 DEFAULT_TIMEOUT_MS = 120_000
@@ -73,11 +72,6 @@ INTEGRITY_UNCHANGED = "unchanged"
 SECRET_ENV_PATTERN = re.compile(r"(API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|PASSWD)", re.IGNORECASE)
 PASS_SECRET_ENV_FLAG = "EXEC_PASS_SECRET_ENV"
 
-_BACKGROUND_LOCK = threading.Lock()
-# Keeps the OS handles of background commands alive: dropping them closes the job
-# handle and, with KILL_ON_JOB_CLOSE, would kill the command we want running.
-_BACKGROUND: Dict[int, process_group.RunningCommand] = {}
-
 
 class ExecError(Exception):
     """Raised when the command cannot be started or the arguments are malformed."""
@@ -92,19 +86,21 @@ class ExecError(Exception):
         return {"error": self.message, "reason": self.reason, **self.details}
 
 
-def _dialect_hint(family: str) -> str:
-    if family == FAMILY_POWERSHELL:
+def _dialect_hint(shell: Any) -> str:
+    # Name the concrete shell (bash/zsh/sh, not a generic "zsh/bash") so the model
+    # is not asked to split attention across dialects it will never see.
+    if shell.family == FAMILY_POWERSHELL:
         return (
             "The command runs in PowerShell 7+, so write PowerShell syntax: '$env:NAME' for "
             "environment variables, ';' to chain statements, and 'cmd /c' for cmd-only builtins."
         )
-    if family == FAMILY_CMD:
+    if shell.family == FAMILY_CMD:
         return (
             "The command runs in cmd.exe, so write cmd syntax: '%NAME%' for environment "
             "variables, '&&' to chain, and avoid PowerShell cmdlets."
         )
     return (
-        "The command runs in a POSIX shell (zsh/bash), so write POSIX syntax: '$NAME' for "
+        f"The command runs in {shell.display}, a POSIX shell, so write POSIX syntax: '$NAME' for "
         "environment variables, '&&' to chain, and POSIX utilities."
     )
 
@@ -119,15 +115,17 @@ def build_exec_description(shell: Optional[Any] = None) -> str:
             f"({platform.system()}), so every call will fail."
         )
     return (
-        f"Run a shell command and return its output. {_dialect_hint(shell.family)} "
+        f"Run a shell command and return its output. {_dialect_hint(shell)} "
         "The command starts in the workspace root. This tool does not confine paths: the command "
         "can read and write anywhere the process user can, so keep paths inside the workspace and "
         "use read_file/edit_file/write_file for project files. 'timeout' is in MILLISECONDS "
         "(default 120000, maximum 1800000); when it fires the whole process tree is stopped and "
         "'interrupted' is true. Output above the response budget is written to a file and the "
         "result carries a short preview plus that path, which read_file can read back. "
-        "'run_in_background' starts the command and returns immediately with its pid and log path; "
-        "nothing guarantees it is reaped later. Give a short 'description' of what the command "
+        "'run_in_background' starts the command without waiting and returns its pid, a session_id "
+        "and the log path; feed that session_id to write_stdin to type into it and read its output. "
+        "The command keeps running until it exits or the task ends, when it is stopped. Give a short "
+        "'description' of what the command "
         "does: the user is shown it when confirming the command, and it is recorded for the audit "
         "trail. "
         "'dangerouslyDisableSandbox' only skips the extra containment layer (integrity level); "
@@ -164,7 +162,8 @@ EXEC_PARAMETERS: Dict[str, Any] = {
             "type": "boolean",
             "description": (
                 "Start the command and return immediately instead of waiting. The result carries "
-                "the pid and the log path. Defaults to false."
+                "the pid, a session_id (pass it to write_stdin to interact) and the log path. The "
+                "command is stopped when the task ends. Defaults to false."
             ),
         },
         "dangerouslyDisableSandbox": {
@@ -265,11 +264,6 @@ def _foreground_text(
     return "\n".join(lines)
 
 
-def _stem() -> str:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    return f"{stamp}-{uuid.uuid4().hex[:6]}"
-
-
 def _persist_and_preview(directory: Path, stem: str, text: str) -> Tuple[str, str]:
     """Write the full text to disk and return ``(preview, path)``."""
     path = persist_text(directory, f"{stem}.txt", text)
@@ -286,6 +280,7 @@ def _exec_impl(
     session_id: str,
     max_tokens: int,
     output_directory: Optional[Path],
+    task_id: str = "",
 ) -> Tuple[str, Dict[str, Any]]:
     """Run the command; return ``(model_text, details)``."""
     if not isinstance(command, str) or not command.strip():
@@ -336,16 +331,38 @@ def _exec_impl(
     }
 
     if run_in_background:
-        stem = _stem()
+        stem = new_stem()
         log_path = directory / f"{stem}.log"
-        running = process_group.start_with_log(argv, log_path.as_posix(), cwd=cwd, env=env)
-        with _BACKGROUND_LOCK:
-            _BACKGROUND[running.pid] = running
+        # stdin is a pipe, not DEVNULL: a background command is a session that
+        # write_stdin can type into (see docs/decisions/0008-write-stdin-tool.md).
+        running = process_group.start_with_log(
+            argv, log_path.as_posix(), cwd=cwd, env=env, stdin=subprocess.PIPE
+        )
+        try:
+            session = process_store.register(
+                running,
+                log_path,
+                task_id=task_id,
+                workspace=workspace,
+                meta={"command": command, "description": description or "", "cwd": cwd},
+            )
+        except process_store.SessionLimitReached as exc:
+            # Refuse rather than kill another session: the model may still be
+            # talking to it. The command we just started goes down with the refusal.
+            running.kill()
+            running.release()
+            raise ExecError(
+                f"This task already has {exc.limit} background commands running. "
+                "Finish one with write_stdin, or stop one, before starting another.",
+                reason="too_many_sessions",
+                limit=exc.limit,
+            ) from exc
         pid_file = write_pid_file(
             directory,
             f"{stem}.pid.json",
             {
                 "pid": running.pid,
+                "session_id": session.process_id,
                 "kind": running.kind,
                 "command": command,
                 "description": description or "",
@@ -356,14 +373,16 @@ def _exec_impl(
             },
         )
         model_text = (
-            f"Started in the background (pid {running.pid}). Output is being written to "
-            f"{log_path.as_posix()}; read it with read_file when you need it. Nothing guarantees "
-            "the command is reaped when the task ends."
+            f"Started in the background (pid {running.pid}, session_id {session.process_id}). "
+            f"Output is being written to {log_path.as_posix()}; read it with read_file, or use "
+            "write_stdin to type into this session and read what it prints. It is stopped when "
+            "the task ends."
         )
         details: Dict[str, Any] = {
             "success": True,
             "background": True,
             "pid": running.pid,
+            "session_id": session.process_id,
             "stdout": "",
             "stderr": "",
             "interrupted": False,
@@ -407,7 +426,7 @@ def _exec_impl(
 
     if binary:
         _, persisted_path = _persist_and_preview(
-            directory, _stem(), _foreground_text(exit_code, stdout, stderr, interrupted, timeout_ms)
+            directory, new_stem(), _foreground_text(exit_code, stdout, stderr, interrupted, timeout_ms)
         )
         model_text = (
             f"exit_code: {exit_code if exit_code is not None else 'unknown'}\n"
@@ -424,7 +443,7 @@ def _exec_impl(
             model_text = _foreground_text(exit_code, stdout, stderr, interrupted, timeout_ms)
         else:
             preview_text, persisted_path = _persist_and_preview(
-                directory, _stem(), _foreground_text(exit_code, stdout, stderr, interrupted, timeout_ms)
+                directory, new_stem(), _foreground_text(exit_code, stdout, stderr, interrupted, timeout_ms)
             )
             model_text = (
                 f"exit_code: {exit_code if exit_code is not None else 'unknown'}\n"
@@ -466,17 +485,23 @@ def _exec_impl(
 
 def list_background() -> List[Dict[str, Any]]:
     """Background commands this process started and still holds handles for."""
-    with _BACKGROUND_LOCK:
-        items = list(_BACKGROUND.items())
-    return [{"pid": pid, "kind": command.kind, "running": command.poll() is None} for pid, command in items]
+    return [
+        {
+            "pid": session.pid,
+            "session_id": session.process_id,
+            "kind": session.command.kind,
+            "running": session.running(),
+        }
+        for session in process_store.list_sessions()
+    ]
 
 
 def stop_background(pid: int) -> bool:
     """Stop a background command and its tree; ``False`` when the pid is unknown."""
-    with _BACKGROUND_LOCK:
-        command = _BACKGROUND.pop(int(pid), None)
-    if command is None:
+    session = process_store.find_by_pid(pid)
+    if session is None:
         return False
+    command = session.command
     command.stop()
     try:
         # Give the tree a moment to actually go away, so the caller is not left
@@ -484,7 +509,7 @@ def stop_background(pid: int) -> bool:
         command.process.wait(timeout=TERMINATE_GRACE_SECONDS)
     except subprocess.TimeoutExpired:
         command.kill()
-    command.release()
+    process_store.retire(session)
     return True
 
 
@@ -493,8 +518,9 @@ def make_exec_tool(
     session_id: str = "",
     max_tokens: int = 0,
     output_directory: Optional[Path] = None,
+    task_id: str = "",
 ):
-    """Bind the exec tool to a workspace root and an output directory."""
+    """Bind the exec_command tool to a workspace root and an output directory."""
 
     def exec_command(
         command: Any = None,
@@ -514,6 +540,7 @@ def make_exec_tool(
                 session_id,
                 max_tokens,
                 output_directory,
+                task_id,
             )
         except ExecError as exc:
             payload = exc.to_dict()

@@ -22,12 +22,16 @@ from agent.tools import (
     finance_tools,
     time_tools,
     weather_tools,
+    write_stdin_tool,
 )
 from agent.tools.permissions import (
     PERMISSION_EXEC,
     PERMISSION_NONE,
     PERMISSION_READ,
     PERMISSION_WRITE,
+    SCOPE_ONCE,
+    SCOPE_SESSION,
+    SCOPES,
 )
 from agent.tools.read_ledger import ReadLedger
 
@@ -43,6 +47,9 @@ class ToolSpec:
     # Confirmation kind, see ``agent/tools/permissions.py``. ``none`` means the
     # gate lets the call through without asking.
     permission: str = PERMISSION_NONE
+    # Which confirmation answers this tool accepts. A tool whose "always" rule
+    # could never match again narrows it, and the dialog follows (ADR 0008).
+    scopes: Sequence[str] = SCOPES
     # Optional dry run used to enrich the confirmation dialog: it receives the
     # call arguments and returns extra ``details`` (no side effects). A tool that
     # can cheaply describe what it is about to do should provide one.
@@ -212,7 +219,7 @@ def build_write_file_spec(
     )
 
 
-EXEC_TOOL_NAME = "exec"
+EXEC_TOOL_NAME = exec_tool.EXEC_TOOL_NAME
 
 
 def build_exec_spec(
@@ -220,11 +227,14 @@ def build_exec_spec(
     session_id: str = "",
     max_tokens: int = 0,
     output_directory: Optional[Path] = None,
+    task_id: str = "",
 ) -> ToolSpec:
     """Build the shell execution tool.
 
     The description is written for the shell this machine actually has, so the
     model is told which dialect to write in (see ``docs/decisions/0005-exec-tool.md``).
+    ``task_id`` is stamped on every background session it starts, so the task that
+    owns them can stop them when it ends.
     """
     return ToolSpec(
         name=EXEC_TOOL_NAME,
@@ -233,10 +243,45 @@ def build_exec_spec(
             session_id=session_id,
             max_tokens=max_tokens,
             output_directory=output_directory,
+            task_id=task_id,
         ),
         description=exec_tool.build_exec_description(),
         parameters=exec_tool.EXEC_PARAMETERS,
         permission=PERMISSION_EXEC,
+    )
+
+
+WRITE_STDIN_TOOL_NAME = write_stdin_tool.WRITE_STDIN_TOOL_NAME
+
+
+def build_write_stdin_spec(
+    max_tokens: int = 0,
+    task_id: str = "",
+    workspace: str = "",
+    output_directory: Optional[Path] = None,
+) -> ToolSpec:
+    """Build the tool that types into a command ``exec_command`` left running.
+
+    It shares the process store with ``exec_command``, which is what turns the
+    ``session_id`` from a background command into something the model can talk to
+    (see ``docs/decisions/0008-write-stdin-tool.md``). ``task_id``/``workspace`` bind
+    it to the one task whose sessions it may touch.
+    """
+    return ToolSpec(
+        name=WRITE_STDIN_TOOL_NAME,
+        handler=write_stdin_tool.make_write_stdin_tool(
+            max_tokens=max_tokens,
+            task_id=task_id,
+            workspace=workspace,
+            output_directory=output_directory,
+        ),
+        description=write_stdin_tool.WRITE_STDIN_DESCRIPTION,
+        parameters=write_stdin_tool.WRITE_STDIN_PARAMETERS,
+        # Typing into a live command is the same class of risk as running one.
+        permission=PERMISSION_EXEC,
+        # Its target is a random session id, so a persisted "always" rule could
+        # never match again: offer once/session only (ADR 0008).
+        scopes=(SCOPE_ONCE, SCOPE_SESSION),
     )
 
 

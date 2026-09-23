@@ -20,7 +20,7 @@ The policy lives in a JSON file (``FILE_ACCESS_CONFIG`` to relocate it, default
 
 **Additional read roots** are a third, per-run layer: directories outside the
 workspace that may be *read* but never written (currently the persisted output
-tree of ``exec``). This is a deliberate exception to "a file you can read, you can
+tree of ``exec_command``). This is a deliberate exception to "a file you can read, you can
 edit" - scratch output is not project content. The global policy still applies on
 top, so a deny rule or a non-empty ``allow_dirs`` can keep them unreachable.
 """
