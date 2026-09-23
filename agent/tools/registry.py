@@ -5,7 +5,12 @@ import json
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from agent.models import EventCategory, ToolOutcome
-from agent.tools import code_tools, finance_tools, time_tools, weather_tools
+from agent.tools.code_interpreter import code_interpreter as _code_interpreter
+from agent.tools.convert_currency import convert_currency as _convert_currency
+from agent.tools.get_current_temperature import (
+    get_current_temperature as _get_current_temperature,
+)
+from agent.tools.get_current_time import get_current_time as _get_current_time
 from agent.tools.output_store import output_root_path
 from agent.tools.permissions import (
     PERMISSION_NONE,
@@ -344,7 +349,7 @@ class ToolRegistry:
             )
 
     # Backwards compatible aliases for the previous static-method API.
-    get_current_temperature = staticmethod(weather_tools.get_current_temperature)
-    get_current_time = staticmethod(time_tools.get_current_time)
-    convert_currency = staticmethod(finance_tools.convert_currency)
-    code_interpreter = staticmethod(code_tools.code_interpreter)
+    get_current_temperature = staticmethod(_get_current_temperature)
+    get_current_time = staticmethod(_get_current_time)
+    convert_currency = staticmethod(_convert_currency)
+    code_interpreter = staticmethod(_code_interpreter)
