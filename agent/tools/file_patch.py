@@ -2,7 +2,7 @@
 
 Both tools hand structured records to the UI, and both must emit a ``gitDiff``
 that really applies. Two rules make that hold (verified by ``git apply --check``
-in ``test/tools/file_edit_tool_test.py``):
+in ``test/tools/edit_file/edit_file_test.py``):
 
 - a hunk reports **whole lines**, never fragments of a line, and
 - ``gitDiff`` keeps the carriage return, so CRLF files still match.

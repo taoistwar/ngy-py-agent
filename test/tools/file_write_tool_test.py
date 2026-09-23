@@ -233,7 +233,7 @@ class WriteFileToolTest(unittest.TestCase):
         self.assertEqual(self.read_bytes("notes.txt"), b"second\n")
 
     def test_an_edit_after_a_full_read_keeps_the_write_unlocked(self):
-        from agent.tools.file_edit_tool import make_edit_file_tool
+        from agent.tools.edit_file import make_edit_file_tool
 
         self.write_bytes("notes.txt", b"one\ntwo\n")
         self.read_whole("notes.txt")
@@ -247,7 +247,7 @@ class WriteFileToolTest(unittest.TestCase):
         self.assertEqual(self.read_bytes("notes.txt"), b"rewritten\n")
 
     def test_an_edit_without_a_full_read_does_not_unlock_the_write(self):
-        from agent.tools.file_edit_tool import make_edit_file_tool
+        from agent.tools.edit_file import make_edit_file_tool
 
         self.write_bytes("notes.txt", b"one\ntwo\n")
         edit = make_edit_file_tool(base_dir=str(self.root), ledger=self.ledger)
