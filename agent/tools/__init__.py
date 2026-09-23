@@ -1,12 +1,21 @@
 """Built-in tool implementations for the ReAct agent.
 
-The package is split by domain so that each module stays small and focused:
+The package is split so that reading one tool means reading one directory:
 
 - ``registry``: registration, provider schema adaptation and dispatch
-- ``specs``: declarative tool definitions wired into the registry
-- ``*_tools`` / ``*_tool``: the concrete implementations
+- ``specs``: the declarative ``ToolSpec`` list wired into the registry
+- ``<tool>/``: one package per model-visible tool, **named after that tool**
+  (``exec_command/``, ``write_stdin/``, ``read_file/``, ``edit_file/``,
+  ``write_file/``, ``code_interpreter/``, ``get_current_time/``,
+  ``get_current_temperature/``, ``convert_currency/``). ``__init__.py`` holds the
+  package docstring and the public surface; the implementation is split by
+  responsibility (``description.py``, ``errors.py``, topic modules, ``tool.py``).
+- the remaining modules (``permissions``, ``permission_rules``, ``file_access``,
+  ``file_bytes``, ``file_patch``, ``read_ledger``, ``text_encoding``, ``text_lines``,
+  ``tokenizers``, ``token_budget``, ``process_group``, ``process_store``,
+  ``shell_platform``, ``output_store``) are shared infrastructure and stay at the root.
 
-Keep one tool per module. When a domain grows beyond a single tool (for example
-file read / write / edit), give each tool its own module such as
-``file_read_tool`` instead of growing a single ``file_tools`` module.
+Keep one tool per package, and name the package after the tool rather than after an
+old module name: ``file_read_tool`` is what the tool used to be called, not what the
+model calls it.
 """

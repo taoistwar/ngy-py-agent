@@ -11,13 +11,14 @@
 | **未绑定会话** | 没有 `base_dir` 的会话。此时只剩下全局 `file_access` 策略生效，文件工具默认可以访问工作空间之外；**相对路径以"会话默认目录"为起点**。 | `agent/tools/file_access.py` |
 | **会话默认目录（`default_workspace`）** | 未绑定会话里相对路径的起点：`<程序启动路径>/data/default_workspace`（`DEFAULT_WORKSPACE_DIR` 可覆盖）。**是基目录不是边界**——`..` 仍可离开，全局策略照旧生效。写入按需创建它，读取不创建。 | [ADR 0007](decisions/0007-default-workspace.md) |
 | **token 预算** | 单次工具输出允许占用的 token 上限，超限即报错而非截断。`read_file` 依赖它防止撑爆上下文。 | `agent/tools/token_budget.py` |
-| **行号前缀** | `read_file` 输出中每行开头的 `N<分隔符>`，分隔符是**制表符**。模型看不到真实行号，因此永远带前缀、不提供关闭开关。 | `agent/tools/file_read_tool.py` |
+| **行号前缀** | `read_file` 输出中每行开头的 `N<分隔符>`，分隔符是**制表符**。模型看不到真实行号，因此永远带前缀、不提供关闭开关。 | `agent/tools/read_file/lines.py` |
 
 ## 工具与结果
 
 | 术语 | 定义 | 位置 |
 | --- | --- | --- |
 | **ToolSpec** | 工具的声明式定义：模型可见的 `name`、`description`、JSON Schema `parameters`、绑定的 `handler`，以及**权限种类** `permission`。 | `agent/tools/specs.py` |
+| **工具包（tool package）** | 一个模型可见工具 = 一个包，**包名 = 工具名**（`exec_command/`、`write_stdin/`、`read_file/`…）。`__init__.py` 只做对外面（名称常量、`*_DESCRIPTION`、`*_PARAMETERS`、工厂），实现按职责分文件（`description.py`、`errors.py`、主题模块、`tool.py`）。共享基础设施（`permissions`、`file_access`、`process_store`…）留在 `agent/tools/` 根。 | `agent/tools/__init__.py` |
 | **ToolRegistry** | 工具注册表：注册工具、把 schema 适配成各 provider 格式、按名分发调用。 | `agent/tools/registry.py` |
 | **ToolOutcome** | **工具结果分流契约**。工具回调可返回它，携带 `model_text`（给模型）与可选事件类别/标题 + `details`（给 UI/外部消费者）。`execute_tool` 对其原样透传，由 `agent_loop` 拆分。 | `agent/models.py` |
 | **双通道（dual channel）** | 一次工具调用产生两份输出：给**模型**的精简文本、给 **UI/外部消费者**的结构化记录。二者不再共用同一条消息。见 [ADR 0001](decisions/0001-file-edit-tool.md)。 | `agent/agent_loop.py` |
@@ -51,15 +52,15 @@
 | **严格字节匹配（strict byte matching）** | `old_string` 必须与被编辑文件的字节**精确一致**，不做换行或空白规范化。 | [ADR 0001](decisions/0001-file-edit-tool.md) |
 | **`replace_all`** | `false`（默认）：精确替换一处，若匹配数 `>1` 则报错；`true`：替换全部匹配。 | [ADR 0001](decisions/0001-file-edit-tool.md) |
 | **`match_count`** | `old_string` 在文件中的出现次数。`0` 或多于 1（且未开 `replace_all`）都算失败。 | [ADR 0001](decisions/0001-file-edit-tool.md) |
-| **`original_file`** | 替换前文件的**解码后文本**（不含 BOM）。只发给 UI/外部消费者，**不设体量上限**（已知风险）。要按字节还原原文件，应使用记录下来的 `old_string` / `new_string` + `encoding` 反向编辑，而不是重新编码它。 | `agent/tools/file_edit_tool.py` |
-| **`structured_patch`** | 结构化改动清单：每处 hunk 含 `oldStart` / `oldLines` / `newStart` / `newLines` / `lines`。`lines` 里 `" "` 为上下文、`"-"` 为删除、`"+"` 为新增。 | `agent/tools/file_edit_tool.py` |
-| **hunk** | 一处连续的改动块（含上下文行）。多匹配时对应多个 hunk。 | `agent/tools/file_edit_tool.py` |
+| **`original_file`** | 替换前文件的**解码后文本**（不含 BOM）。只发给 UI/外部消费者，**不设体量上限**（已知风险）。要按字节还原原文件，应使用记录下来的 `old_string` / `new_string` + `encoding` 反向编辑，而不是重新编码它。 | `agent/tools/edit_file/` |
+| **`structured_patch`** | 结构化改动清单：每处 hunk 含 `oldStart` / `oldLines` / `newStart` / `newLines` / `lines`。`lines` 里 `" "` 为上下文、`"-"` 为删除、`"+"` 为新增。 | `agent/tools/edit_file/` |
+| **hunk** | 一处连续的改动块（含上下文行）。多匹配时对应多个 hunk。 | `agent/tools/edit_file/` |
 | **上下文行（context lines）** | 每个 hunk 改动行前后各保留的未改动行数，固定为 **3**（与 git 默认一致）。 | [ADR 0001](decisions/0001-file-edit-tool.md) |
 | **`newStart` 基准** | 多 hunk 时，`newStart` 按"**已应用前面 hunk 之后的新文件**"的行号计（unified diff 语义），而非原文件行号。 | [ADR 0001](decisions/0001-file-edit-tool.md) |
-| **`gitDiff`** | git 补丁格式的差异文本，**纯 Python 生成**，不依赖本机 git 可执行文件。按**整行**表示改动并保留 `\r`，因此对 LF 与 CRLF 文件都能 `git apply`（由 `git apply --check` 用例保证）。 | `agent/tools/file_edit_tool.py` |
-| **整行补丁** | 补丁的行是文件的真实整行：`-` 是受影响行的完整原文，`+` 是替换后的完整新文；同一行上的多处匹配合成一个 hunk。见 [ADR 0003](decisions/0003-edit-write-and-patch.md)。 | `agent/tools/file_edit_tool.py` |
-| **字节级拼接（byte splice）** | 写入时只替换匹配到的字节区间，其余字节原样搬运，而不是整文件解码再重编码。见 [ADR 0002](decisions/0002-file-encoding.md)。 | `agent/tools/file_edit_tool.py` |
-| **`file_changed`** | 写入前复核 `st_mtime_ns` 与 `st_size` 时发现文件已被他人改动，从而拒绝写入的原因。见 [ADR 0003](decisions/0003-edit-write-and-patch.md)。 | `agent/tools/file_edit_tool.py` |
+| **`gitDiff`** | git 补丁格式的差异文本，**纯 Python 生成**，不依赖本机 git 可执行文件。按**整行**表示改动并保留 `\r`，因此对 LF 与 CRLF 文件都能 `git apply`（由 `git apply --check` 用例保证）。 | `agent/tools/edit_file/` |
+| **整行补丁** | 补丁的行是文件的真实整行：`-` 是受影响行的完整原文，`+` 是替换后的完整新文；同一行上的多处匹配合成一个 hunk。见 [ADR 0003](decisions/0003-edit-write-and-patch.md)。 | `agent/tools/edit_file/` |
+| **字节级拼接（byte splice）** | 写入时只替换匹配到的字节区间，其余字节原样搬运，而不是整文件解码再重编码。见 [ADR 0002](decisions/0002-file-encoding.md)。 | `agent/tools/edit_file/` |
+| **`file_changed`** | 写入前复核 `st_mtime_ns` 与 `st_size` 时发现文件已被他人改动，从而拒绝写入的原因。见 [ADR 0003](decisions/0003-edit-write-and-patch.md)。 | `agent/tools/edit_file/` |
 | **BOM** | 字节序标记。识别后**优先于 `encoding` 参数**决定解码方式，并**原样保留**在写回的文件里；但会从 `read_file` 的正文中剥离。 | `agent/tools/text_encoding.py` |
 | **字节一致读取** | `read_file` 保留文件原本行尾（`\r\n` / `\n` / `\r`），使"去掉 `N<TAB>` 前缀后的拼接"与原始字节一致，从而让严格字节匹配可用。 | [ADR 0001](decisions/0001-file-edit-tool.md) |
 | **行（line）** | 只由 `\n` / `\r\n` / `\r` 终止。**不是** `str.splitlines()` 的语义（它多认 `\x0b`、`\x0c`、`\x1c`-`\x1e`、`\x85`、`\u2028`、`\u2029`），否则读取行号与补丁行号会错位。 | `agent/tools/text_lines.py` |
@@ -70,9 +71,9 @@
 | --- | --- | --- |
 | **读账本（read ledger）** | "本 run 是否持有某文件的整份内容"的记录：路径 → 最后一次完整读取（或写入）时的 `st_mtime_ns` + `st_size`。它**不是权限系统**（那个见 [ADR 0006](decisions/0006-tool-permission-confirmation.md)），只回答"这份内容我见过吗，还是它已经变了"。作用域为一个 `ToolRegistry`，即一个 run。 | `agent/tools/read_ledger.py` |
 | **读前置（read-before-write）** | 覆盖已存在文件的条件：本 run 内有一次**完整读取**（第 1 行、不带 `limit`），且指纹未变。`limit` 或 `offset > 1` 的读取**不解锁**覆盖。 | [ADR 0004](decisions/0004-file-write-tool.md) |
-| **`read_required`** | 目标文件已存在、但本 run 没有它的完整读取记录，因而拒绝覆盖的原因。 | `agent/tools/file_write_tool.py` |
-| **`parent_missing`** | 新建文件时父目录不存在的原因；错误里提示用 `code_interpreter` 建目录（工具集里没有 shell）。 | `agent/tools/file_write_tool.py` |
-| **`created`** | `file_write` 结果里区分"新建"与"覆盖"的标记；`created: true` 时不带 `original_file` 与 `gitDiff`。 | `agent/tools/file_write_tool.py` |
+| **`read_required`** | 目标文件已存在、但本 run 没有它的完整读取记录，因而拒绝覆盖的原因。 | `agent/tools/write_file/` |
+| **`parent_missing`** | 新建文件时父目录不存在的原因；错误里提示用 `code_interpreter` 建目录（工具集里没有 shell）。 | `agent/tools/write_file/` |
+| **`created`** | `file_write` 结果里区分"新建"与"覆盖"的标记；`created: true` 时不带 `original_file` 与 `gitDiff`。 | `agent/tools/write_file/` |
 | **`content_changed`** | 覆盖时新内容是否与旧内容不同。内容相同**仍然写入**（不做"没变就不写"的优化），此字段只是如实报告。 | [ADR 0004](decisions/0004-file-write-tool.md) |
 | **`write_bytes_atomic`** | 通过同目录临时文件 + `os.replace` 完成写入、并在交换前带上目标权限的共用实现。**硬链接不会跟随**。 | `agent/tools/file_bytes.py` |
 
@@ -103,7 +104,7 @@
 | **编码候选（`suggested_encodings`）** | 解码失败时给出的"能解码这些字节"的候选列表：BOM → `charset-normalizer` → 候选试探；`latin-1` 能解码任何字节，故排在最后并标注不构成证据。只作提示，**绝不自动应用**。见 [ADR 0002](decisions/0002-file-encoding.md)。 | `agent/tools/text_encoding.py` |
 | **`decode_failed`** | 用给定编码无法解码文件字节的原因；错误里带 `encoding`、`byte_offset` 与 `suggested_encodings`。取代了原先的 `unsupported_encoding`。 | `agent/tools/text_encoding.py` |
 | **`unencodable_text`** | 替换文本无法用目标编码表示（如 `😀` 之于 GBK）的原因；直接报错，不降级为 `?`。 | `agent/tools/text_encoding.py` |
-| **`encoding_mismatch`** | 字节偏移换算与原始字节对不上（编码非双射或非规范）时拒绝写入的原因。 | `agent/tools/file_edit_tool.py` |
+| **`encoding_mismatch`** | 字节偏移换算与原始字节对不上（编码非双射或非规范）时拒绝写入的原因。 | `agent/tools/edit_file/` |
 
 ## 权限确认（P1）
 
@@ -122,7 +123,7 @@
 | **权限规则（permission rule）** | 一条 `always` 决定的持久化记录，**刻意做窄**：一个工具 + 一个精确目标，不接受 `Bash(git push:*)` 这类模式。存在 `data/permission_rules.json`（`PERMISSION_RULES_CONFIG` 改路径）。文件缺失或损坏一律表示"没有规则"（即重新询问），**绝不表示"允许"**。 | `agent/tools/permission_rules.py` |
 | **`persistent_rule`** | 命中一条权限规则、因而无需询问的原因。 | `agent/tools/permissions.py` |
 | **规则写盘失败** | 调用照常放行，但 `scope` 退回 `once`：不声称一个并未写入的长期许可。 | `agent/tools/permissions.py` |
-| **预览（`preview` / dry run）** | `ToolSpec.preview`：接收调用参数、**无副作用**地返回给对话框用的补充 `details`。`edit_file` 用它给出**写入前**的 `gitDiff`（复用 `_prepare_edit`，不需要第二条实现路径）。预览失败不构成拒绝，工具执行时会报准确错误。 | `agent/tools/specs.py`、`agent/tools/file_edit_tool.py` |
+| **预览（`preview` / dry run）** | `ToolSpec.preview`：接收调用参数、**无副作用**地返回给对话框用的补充 `details`。`edit_file` 用它给出**写入前**的 `gitDiff`（复用 `prepare_edit`，不需要第二条实现路径）。预览失败不构成拒绝，工具执行时会报准确错误。 | `agent/tools/specs.py`、`agent/tools/edit_file/` |
 | **待确认（pending permission）** | 正在被等待的请求。`GET /api/tasks/{id}` 的 `pendingPermission` 字段给出它，因此断线重连的客户端也能渲染弹窗。 | `main.py` |
 | **`WAITING`（任务状态）** | 任务被确认请求阻塞。它**仍属"进行中"**：事件推流与前端轮询都必须继续，否则客户端恰恰收不到那条需要它答复的请求。 | `agent/models.py` |
 | **决策原因（reason）** | 审计用的判定结果：`not_required` / `auto_approved` / `deny_all` / `policy_denied` / `session_rule` / `user_allowed` / `user_denied` / `timeout` / `stopped` / `broker_error`。 | `agent/tools/permissions.py` |

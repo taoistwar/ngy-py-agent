@@ -12,12 +12,12 @@
   - **单个源码文件不得超过约 700 行。
     - **超过就按职责拆成子模块，不要继续往上堆：新增代码时如果目标文件已经接近这个上限，先拆再改。拆完后，记得要git commit。
   - 拆分沿用现有惯例：
-    - `foo.rs` 改成 `foo/mod.rs` 加若干 `foo/*.rs`（集成测试同理，`tests/foo_test.rs` 改成 `tests/foo/main_test.rs`）。
-    - `mod.rs` 只放文档、导入、常量、模块声明和对外 `pub use`，共享类型要单独出来；
-    - 实现按主题分文件，同一个类型的 `impl` 块可以分散在多个文件里。
-    - 子模块用 `use super::*;` 取共享项，跨模块引用按 `pub(crate)`收口，公开类型在 `mod.rs` 重新导出（公开项用 `pub use`，内部项用`pub(crate) use`）。
-    - 测试同样拆分：`mod tests { … }` 拆到 `tests/` 子目录，夹具和 mock 集中在 `tests/mod.rs`，用例按主题分文件。
-    - 测试文件名要添加 `_test`，例如`foo.rs`，测试文件名要是 `foo_test.rs`。
+    - `foo.py` 改成 `foo/__init__.py` 加若干 `foo/*.py`（测试同理，`test/tools/foo_test.py` 改成 `test/tools/foo/foo_test.py`）。
+    - `__init__.py` 只放文档、导入和对外面（`from ...tool import ...` 这类重新导出），共享类型要单独出来；
+    - 实现按主题分文件：`description.py`（描述与参数 schema）、按职责命名的主题模块、`tool.py`（工厂/入口），同一类型的实现可以分散在多个文件里。
+    - **一个工具一个包，包名 = 模型可见工具名**（`exec_command/`、`write_stdin/`、`read_file/`…），实现细节不跨包暴露；工具包只依赖共享基础设施，不反向 import 声明层。
+    - 测试同样拆分，并镜像源码布局：`test/tools/<tool>/<tool>_test.py`；跨工具的集成测试留在 `test/tools/`。
+    - 测试文件名要添加 `_test`，例如 `foo.py` 的测试叫 `foo_test.py`。
 - 业务开发时
   - 遵循模块化和单一职责原则，保持代码清晰和可维护性。
   - 先开发UI，后开发后端。
