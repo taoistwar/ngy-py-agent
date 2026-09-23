@@ -2,7 +2,7 @@
 
 Run from the repository root::
 
-    uv run python test/tools/time_tools_test.py -v
+    uv run python test/tools/get_current_time/get_current_time_test.py -v
 """
 
 import sys
@@ -11,11 +11,11 @@ from pathlib import Path
 
 # ``test/`` is intentionally not a package, so the repository root is added to
 # the import path here instead of adding a ``test/__init__.py``.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from agent.tools.time_tools import (  # noqa: E402
+from agent.tools.get_current_time import (  # noqa: E402
     TimeToolError,
     get_current_time,
 )

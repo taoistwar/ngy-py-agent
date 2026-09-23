@@ -14,16 +14,16 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence
 
 from agent.tools import (
-    code_tools,
     exec_tool,
     file_edit_tool,
     file_read_tool,
     file_write_tool,
-    finance_tools,
-    time_tools,
-    weather_tools,
     write_stdin_tool,
 )
+from agent.tools.code_interpreter import code_interpreter
+from agent.tools.convert_currency import convert_currency
+from agent.tools.get_current_temperature import get_current_temperature
+from agent.tools.get_current_time import get_current_time
 from agent.tools.permissions import (
     PERMISSION_EXEC,
     PERMISSION_NONE,
@@ -58,7 +58,7 @@ class ToolSpec:
 
 SPEC_GET_CURRENT_TEMPERATURE = ToolSpec(
     name="get_current_temperature",
-    handler=weather_tools.get_current_temperature,
+    handler=get_current_temperature,
     description="Get the current temperature for a specific location",
     parameters={
         "type": "object",
@@ -79,7 +79,7 @@ SPEC_GET_CURRENT_TEMPERATURE = ToolSpec(
 
 SPEC_GET_CURRENT_TIME = ToolSpec(
     name="get_current_time",
-    handler=time_tools.get_current_time,
+    handler=get_current_time,
     description="Get the current date and time in a specific timezone",
     parameters={
         "type": "object",
@@ -99,7 +99,7 @@ SPEC_GET_CURRENT_TIME = ToolSpec(
 
 SPEC_CONVERT_CURRENCY = ToolSpec(
     name="convert_currency",
-    handler=finance_tools.convert_currency,
+    handler=convert_currency,
     description=(
         "Convert an amount from one currency to another. You MUST use this tool to convert "
         "currencies in order to get the latest exchange rate."
@@ -123,7 +123,7 @@ SPEC_CONVERT_CURRENCY = ToolSpec(
 
 SPEC_CODE_INTERPRETER = ToolSpec(
     name="code_interpreter",
-    handler=code_tools.code_interpreter,
+    handler=code_interpreter,
     description=(
         "Execute Python code for calculations and data processing. You MUST use this tool to "
         "perform any complex calculations or data processing."

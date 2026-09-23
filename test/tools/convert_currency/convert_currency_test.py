@@ -2,7 +2,7 @@
 
 Run from the repository root::
 
-    uv run python test/tools/finance_tools_test.py -v
+    uv run python test/tools/convert_currency/convert_currency_test.py -v
 """
 
 import sys
@@ -14,11 +14,11 @@ import requests
 
 # ``test/`` is intentionally not a package, so the repository root is added to
 # the import path here instead of adding a ``test/__init__.py``.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from agent.tools.finance_tools import (  # noqa: E402
+from agent.tools.convert_currency import (  # noqa: E402
     FinanceToolError,
     convert_currency,
 )
@@ -37,7 +37,7 @@ def _rates_payload(rates):
 
 class ConvertCurrencyTest(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch("agent.tools.finance_tools.requests.get")
+        patcher = mock.patch("agent.tools.convert_currency.tool.requests.get")
         self.get = patcher.start()
         self.addCleanup(patcher.stop)
 

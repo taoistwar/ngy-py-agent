@@ -2,7 +2,7 @@
 
 Run from the repository root::
 
-    uv run python test/tools/weather_tools_test.py -v
+    uv run python test/tools/get_current_temperature/get_current_temperature_test.py -v
 """
 
 import sys
@@ -14,11 +14,11 @@ import requests
 
 # ``test/`` is intentionally not a package, so the repository root is added to
 # the import path here instead of adding a ``test/__init__.py``.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from agent.tools.weather_tools import (  # noqa: E402
+from agent.tools.get_current_temperature import (  # noqa: E402
     WeatherToolError,
     get_current_temperature,
 )
@@ -53,7 +53,7 @@ def _ok_responses():
 
 class GetCurrentTemperatureTest(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch("agent.tools.weather_tools.requests.get")
+        patcher = mock.patch("agent.tools.get_current_temperature.tool.requests.get")
         self.get = patcher.start()
         self.addCleanup(patcher.stop)
 
