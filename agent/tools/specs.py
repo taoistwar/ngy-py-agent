@@ -18,7 +18,7 @@ from agent.tools import (
     exec_command,
     read_file,
     write_file,
-    write_stdin_tool,
+    write_stdin,
 )
 from agent.tools.code_interpreter import code_interpreter
 from agent.tools.convert_currency import convert_currency
@@ -251,7 +251,7 @@ def build_exec_spec(
     )
 
 
-WRITE_STDIN_TOOL_NAME = write_stdin_tool.WRITE_STDIN_TOOL_NAME
+WRITE_STDIN_TOOL_NAME = write_stdin.WRITE_STDIN_TOOL_NAME
 
 
 def build_write_stdin_spec(
@@ -269,14 +269,14 @@ def build_write_stdin_spec(
     """
     return ToolSpec(
         name=WRITE_STDIN_TOOL_NAME,
-        handler=write_stdin_tool.make_write_stdin_tool(
+        handler=write_stdin.make_write_stdin_tool(
             max_tokens=max_tokens,
             task_id=task_id,
             workspace=workspace,
             output_directory=output_directory,
         ),
-        description=write_stdin_tool.WRITE_STDIN_DESCRIPTION,
-        parameters=write_stdin_tool.WRITE_STDIN_PARAMETERS,
+        description=write_stdin.WRITE_STDIN_DESCRIPTION,
+        parameters=write_stdin.WRITE_STDIN_PARAMETERS,
         # Typing into a live command is the same class of risk as running one.
         permission=PERMISSION_EXEC,
         # Its target is a random session id, so a persisted "always" rule could

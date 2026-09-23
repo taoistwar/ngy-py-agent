@@ -10,7 +10,7 @@ start-up under load.
 
 Run from the repository root::
 
-    uv run python test/tools/write_stdin_tool_test.py -v
+    uv run python test/tools/write_stdin/write_stdin_test.py -v
 """
 
 import os
@@ -21,14 +21,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from agent.tools import write_stdin_tool  # noqa: E402
 from agent.tools.permissions import PERMISSION_EXEC  # noqa: E402
 from agent.tools.registry import ToolRegistry  # noqa: E402
 from agent.tools.shell_platform import FAMILY_POWERSHELL, detect_shell  # noqa: E402
+from agent.tools.write_stdin import rules as rules_module  # noqa: E402
 
 # Reads exactly two lines, echoes each with a prefix, then says goodbye and exits.
 ECHO_TWICE = (
@@ -118,7 +118,7 @@ class WriteStdinTest(unittest.TestCase):
 
     def poll(self, session_id, **extra):
         """Poll with a short floor so the tests do not wait five seconds."""
-        with mock.patch.object(write_stdin_tool, "POLL_MIN_YIELD_MS", 200):
+        with mock.patch.object(rules_module, "POLL_MIN_YIELD_MS", 200):
             return self.write_stdin({"session_id": session_id, **extra})
 
     def wait_for(self, session_id, predicate, deadline_seconds=20.0, **extra):
@@ -214,7 +214,7 @@ class WriteStdinTest(unittest.TestCase):
     def test_ctrl_c_interrupts_the_command(self):
         session_id = self.start(WAIT_FOREVER)
 
-        with mock.patch.object(write_stdin_tool, "POLL_MIN_YIELD_MS", 200):
+        with mock.patch.object(rules_module, "POLL_MIN_YIELD_MS", 200):
             outcome = self.write_stdin(
                 {"session_id": session_id, "chars": "\u0003", "yield_time_ms": 5_000}
             )
@@ -269,12 +269,12 @@ class WriteStdinTest(unittest.TestCase):
 
     def test_yield_time_is_clamped_by_mode(self):
         # A poll is patient: at least five seconds, at most five minutes.
-        self.assertEqual(write_stdin_tool._effective_yield_ms(None, is_write=False), 5_000)
-        self.assertEqual(write_stdin_tool._effective_yield_ms(1, is_write=False), 5_000)
-        self.assertEqual(write_stdin_tool._effective_yield_ms(10 ** 9, is_write=False), 300_000)
+        self.assertEqual(rules_module.effective_yield_ms(None, is_write=False), 5_000)
+        self.assertEqual(rules_module.effective_yield_ms(1, is_write=False), 5_000)
+        self.assertEqual(rules_module.effective_yield_ms(10 ** 9, is_write=False), 300_000)
         # A write stays responsive: a quarter second by default, thirty at most.
-        self.assertEqual(write_stdin_tool._effective_yield_ms(None, is_write=True), 250)
-        self.assertEqual(write_stdin_tool._effective_yield_ms(10 ** 9, is_write=True), 30_000)
+        self.assertEqual(rules_module.effective_yield_ms(None, is_write=True), 250)
+        self.assertEqual(rules_module.effective_yield_ms(10 ** 9, is_write=True), 30_000)
 
 
 if __name__ == "__main__":
