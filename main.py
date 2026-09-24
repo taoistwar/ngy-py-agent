@@ -42,6 +42,11 @@ from agent.tools.permissions import (
     PermissionMode,
     normalize_mode,
 )
+from agent.tools.user_question import (
+    STATUS_ANSWERED,
+    UserQuestionBroker,
+    validate_answers,
+)
 from mcp_api import router as mcp_router
 from mcp_store import MCP_TRANSPORTS
 from task_store import TASK_RETENTION_DEFAULT_DAYS, monitor_store
@@ -110,6 +115,54 @@ def _pending_permission(task_id: str) -> dict[str, Any] | None:
 def _clear_task_permission(task_id: str) -> None:
     with _task_permission_lock:
         _task_permission_brokers.pop(task_id, None)
+
+
+# Live question brokers, one per running task, with the same lifecycle as the
+# permission pair above and for the same reason: the task's thread parks inside the
+# broker, so only a task-scoped, thread-safe handle lets the API hand it the answer
+# (ADR 0010 D1).
+_task_question_brokers: Dict[str, UserQuestionBroker] = {}
+_task_question_lock = threading.Lock()
+
+
+def _register_task_questions(task_id: str, broker: UserQuestionBroker) -> None:
+    """Track a running task's question broker so an answer can reach its waiting thread."""
+    with _task_question_lock:
+        _task_question_brokers[task_id] = broker
+
+
+def _get_task_question_broker(task_id: str) -> UserQuestionBroker | None:
+    with _task_question_lock:
+        return _task_question_brokers.get(task_id)
+
+
+def _pending_question(task_id: str) -> dict[str, Any] | None:
+    """The question batch this task is currently blocked on, if any."""
+    broker = _get_task_question_broker(task_id)
+    if broker is None:
+        return None
+    pending = broker.pending()
+    return pending.to_payload() if pending is not None else None
+
+
+def _clear_task_questions(task_id: str) -> None:
+    with _task_question_lock:
+        _task_question_brokers.pop(task_id, None)
+
+
+def _status_for_event(category: EventCategory) -> TaskStatus | None:
+    """The status an event puts its task in, or ``None`` to leave it alone.
+
+    A task parked on a confirmation **or** on an answer is still in flight, but it must
+    not look like it is thinking: the UI shows "waiting for you", and the stream stays
+    open because the client is the one who has to answer (ADR 0006 D10). Both channels
+    park the task thread the same way, so both flip the status back when they resume.
+    """
+    if category in (EventCategory.PERMISSION_REQUEST, EventCategory.USER_QUESTION):
+        return TaskStatus.WAITING
+    if category in (EventCategory.PERMISSION_DECISION, EventCategory.USER_ANSWER):
+        return TaskStatus.RUNNING
+    return None
 
 
 def _register_task_stop(task_id: str) -> threading.Event:
@@ -193,6 +246,8 @@ class TaskListItemResponse(BaseModel):
     # Present while the task is blocked on a confirmation, so a task waiting in
     # the background is visible without opening it.
     pending_permission: dict[str, Any] | None = None
+    # Same idea for the question channel: a batch the model is waiting on.
+    pending_question: dict[str, Any] | None = None
 
 
 class TaskDetailResponse(BaseModel):
@@ -212,6 +267,9 @@ class TaskDetailResponse(BaseModel):
     # Set while the task is blocked on a confirmation, so a client that (re)connects
     # late can still render the dialog without replaying the whole event stream.
     pending_permission: dict[str, Any] | None = None
+    # Same for a pending question batch: the dialog is rendered from this, not from
+    # the event stream, so a late client still sees it.
+    pending_question: dict[str, Any] | None = None
     events: list[dict[str, Any]]
 
 
@@ -307,6 +365,29 @@ class PermissionDecisionResponse(BaseModel):
     request_id: str
     allowed: bool
     scope: str
+
+
+class QuestionAnswerRequest(BaseModel):
+    """Answer to a pending question batch.
+
+    ``answers`` is keyed by question id and each value is ``{"answers": [...]}``, i.e.
+    the same shape the model is promised as output. A question the user skipped may be
+    omitted or carry an empty list (ADR 0010 D5).
+    """
+
+    answers: dict[str, Any] = Field(
+        default_factory=dict,
+        description='Answers keyed by question id, each an object with an "answers" array.',
+    )
+
+
+class QuestionAnswerResponse(BaseModel):
+    """Result of answering a pending question batch."""
+
+    task_id: str
+    request_id: str
+    status: str
+    answered_count: int
 
 
 class RetentionConfigResponse(BaseModel):
@@ -726,15 +807,17 @@ def _run_task(
 
     def _sink(_: str, event: TaskEvent) -> None:
         monitor_store.append_event(task_id, event)
-        # A task waiting on a confirmation is still in flight, but it must not look
-        # like it is thinking - the UI shows "waiting for you" (ADR 0006 D10).
-        if event.category is EventCategory.PERMISSION_REQUEST:
-            monitor_store.set_task_status(task_id, TaskStatus.WAITING)
-        elif event.category is EventCategory.PERMISSION_DECISION:
-            monitor_store.set_task_status(task_id, TaskStatus.RUNNING)
+        status = _status_for_event(event.category)
+        if status is not None:
+            monitor_store.set_task_status(task_id, status)
 
-    def _permission_event(category: str, title: str, data: dict[str, Any]) -> None:
-        """Bridge the broker's audit events onto this task's event sink."""
+    def _broker_event(category: str, title: str, data: dict[str, Any]) -> None:
+        """Bridge a broker's audit events onto this task's event sink.
+
+        One bridge for both brokers: each emits the same ``(category, title, data)``
+        shape and the category is what tells them apart, so a second copy of this
+        would only be a second place for the two to drift.
+        """
         _sink(task_id, _build_event(task_id, EventCategory(category), title, data))
 
     _emit_debug(
@@ -767,7 +850,7 @@ def _run_task(
     try:
         permission_broker = PermissionBroker(
             task_id=task_id,
-            emit=_permission_event,
+            emit=_broker_event,
             mode=_resolve_permission_mode(request),
             base_dir=base_dir,
             should_stop=stop_event.is_set if stop_event is not None else None,
@@ -775,7 +858,15 @@ def _run_task(
             # which rules exist.
             rules=permission_rule_store,
         )
+        # Its own broker, not the permission one: a question is not a gate, and the
+        # two must not be able to answer for each other (ADR 0010 D1).
+        question_broker = UserQuestionBroker(
+            task_id=task_id,
+            emit=_broker_event,
+            should_stop=stop_event.is_set if stop_event is not None else None,
+        )
         _register_task_permission(task_id, permission_broker)
+        _register_task_questions(task_id, question_broker)
         result = run_react_loop(
             user_query=request.query,
             provider_name=provider,
@@ -792,6 +883,7 @@ def _run_task(
             agent_config=agent_config,
             should_stop=stop_event.is_set if stop_event is not None else None,
             permission_broker=permission_broker,
+            user_question_broker=question_broker,
         )
         if stop_event is not None and stop_event.is_set():
             _emit_debug(_sink, task_id, "Task stopped", {"result": result})
@@ -813,7 +905,11 @@ def _run_task(
             # Release anything still waiting, so no thread stays blocked until the
             # timeout after the run is already over.
             active_broker.cancel_all()
+        active_questions = _get_task_question_broker(task_id)
+        if active_questions is not None:
+            active_questions.cancel_all()
         _clear_task_permission(task_id)
+        _clear_task_questions(task_id)
         _clear_task_stop(task_id)
 
 
@@ -1098,7 +1194,13 @@ async def list_tasks(
     tasks = monitor_store.list_tasks(session_id=session_id)
     return TaskListResponse(
         tasks=[
-            TaskListItemResponse(**{**item, "pending_permission": _pending_permission(item["task_id"])})
+            TaskListItemResponse(
+                **{
+                    **item,
+                    "pending_permission": _pending_permission(item["task_id"]),
+                    "pending_question": _pending_question(item["task_id"]),
+                }
+            )
             for item in tasks
         ]
     )
@@ -1161,6 +1263,42 @@ async def answer_permission(
     )
 
 
+@app.post(
+    "/api/tasks/{task_id}/question/{request_id}",
+    response_model=QuestionAnswerResponse,
+)
+async def answer_question(
+    task_id: str,
+    request_id: str,
+    payload: QuestionAnswerRequest,
+) -> QuestionAnswerResponse:
+    """Answer a pending question batch, unblocking the task's waiting thread.
+
+    The other half of the question channel: the tool call is parked inside the task
+    thread until this arrives, the deadline passes, or the task is stopped. Unlike a
+    permission answer, this one carries **data**, so a malformed body is refused
+    rather than coerced - an id nobody asked about, or a non-string answer, would
+    otherwise reach the model as an answer to a question it never asked.
+    """
+    broker = _get_task_question_broker(task_id)
+    if broker is None:
+        raise HTTPException(status_code=404, detail="Task not found or not running.")
+    pending = broker.pending()
+    if pending is None or pending.request_id != request_id:
+        raise HTTPException(status_code=409, detail="Question request is no longer pending.")
+    answers, error = validate_answers(pending, payload.model_dump())
+    if error is not None:
+        raise HTTPException(status_code=400, detail=error)
+    if not broker.resolve(request_id, answers or {}):
+        raise HTTPException(status_code=409, detail="Question request is no longer pending.")
+    return QuestionAnswerResponse(
+        task_id=task_id,
+        request_id=request_id,
+        status=STATUS_ANSWERED,
+        answered_count=len(answers or {}),
+    )
+
+
 @app.get("/api/tasks/{task_id}", response_model=TaskDetailResponse)
 async def get_task(task_id: str) -> TaskDetailResponse:
     trace = monitor_store.get_task(task_id)
@@ -1182,6 +1320,7 @@ async def get_task(task_id: str) -> TaskDetailResponse:
         updated_at=trace["updated_at"],
         result=result,
         pending_permission=pending.to_payload() if pending is not None else None,
+        pending_question=_pending_question(task_id),
         events=trace["events"],
     )
 

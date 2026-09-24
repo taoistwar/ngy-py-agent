@@ -33,6 +33,7 @@ from agent.tool_registry import ToolRegistry
 from agent.tools import process_store
 from agent.tools.file_access import default_workspace_root
 from agent.tools.permissions import PermissionBroker
+from agent.tools.user_question import UserQuestionBroker
 
 # The provider to run when the caller does not name one. The environment variable
 # keeps its historical name (it started as the tool-schema selection switch) and the
@@ -290,6 +291,7 @@ def run_react_loop(
     agent_config: Optional[Dict[str, Any]] = None,
     should_stop: Optional[Callable[[], bool]] = None,
     permission_broker: Optional[PermissionBroker] = None,
+    user_question_broker: Optional[UserQuestionBroker] = None,
 ) -> str:
     _, registry, provider, request_tools = _build_runtime(
         provider_name=provider_name,
@@ -312,6 +314,11 @@ def run_react_loop(
             registry.read_only_roots
         )
         registry.permission_broker = permission_broker
+
+    # The question channel, assigned the same way and read per call. Leaving it unset
+    # is a valid configuration, not an error: ``ask_user_question`` then answers
+    # "no_client" instead of blocking (ADR 0010 D4).
+    registry.user_question_broker = user_question_broker
 
     if verbose:
         print(f"Provider: {provider.config.provider}")

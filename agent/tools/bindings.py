@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Any, Callable, Optional, Sequence
 
 from agent.tools.read_ledger import ReadLedger
 
@@ -43,3 +43,8 @@ class ToolBindings:
     ledger: Optional[ReadLedger] = None
     # Extra roots the file tools may read from (the output directory).
     extra_read_roots: Sequence[str] = ()
+    # The channel a tool uses to ask the user something and wait for an answer:
+    # questions in, a ``user_question.QuestionResult`` out (``None`` = nobody can be
+    # asked). Bound as a callable because tools have no task identity and no event
+    # sink of their own, and the registry fills it per call (ADR 0010 D1).
+    ask_user: Optional[Callable[[Any], Any]] = None

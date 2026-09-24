@@ -24,6 +24,11 @@ class EventCategory(str, Enum):
     # Permission confirmation (see docs/decisions/0006-tool-permission-confirmation.md).
     PERMISSION_REQUEST = "permission_request"
     PERMISSION_DECISION = "permission_decision"
+    # A question put to the user and the answer (see docs/decisions/0010-ask-user-question.md).
+    # Same shape as the permission pair on purpose, and just as separate from it: "the
+    # user allowed this command" and "the user chose option B" are different records.
+    USER_QUESTION = "user_question"
+    USER_ANSWER = "user_answer"
     DEBUG = "debug"
     ERROR = "error"
 

@@ -268,6 +268,17 @@ npm run i18n:check
 - **`TaskStatus.WAITING` 仍属"进行中"**：`/events/stream`、WebSocket 循环与前端 `isTaskRunningStatus` 都必须把它当作在飞行中。否则事件流会在用户最需要看到确认请求的那一刻断掉（这个坑已踩过一次）。
 - **scope 不做降级**：未知取值返回 400。把 `always` 静默降级成 `once` 会让用户以为已经长期允许了。
 
+### ask_user_question：把决策交回用户（它不是权限）
+
+- 与权限确认**正交**（P 轴问"能不能做"，Q 轴问"该做什么"）：独立 broker（`agent/tools/user_question.py`）、独立事件类别（`user_question` / `user_answer`）、独立超时旋钮（`ASK_USER_TIMEOUT_SECONDS`）。**不要**把它塞进 `PermissionBroker`：那条通路只能回传布尔，而提问的答案是数据。
+- **工具拿不到 broker**（本仓库的不变量）：通道以 `ToolBindings.ask_user` 注入，`ToolRegistry.ask_user` 在**每次调用**时读本任务的 broker —— 与 `permission_broker` 的晚绑定同一个手法（registry 建得比任务身份早）。
+- **无人应答不是拒绝**：超时、任务被停止、没有客户端，三者都返回空答案 + "自行决定并说明假设"。权限那边 fail closed 是对的（沉默不能当允许），这边正好相反（沉默不能当禁止）。也不要改成参考实现的永久阻塞：无人值守的 Web 服务与 CLI 会直接挂死。
+- **数字是描述、结构才强制**（`agent/tools/ask_user_question/questions.py`）：1–3 题 / 2–3 选项 / `header` ≤ 12 字符只写在工具描述与 schema 描述里（**不要**加 `maxItems`/`maxLength`）；机器只拒绝"渲染不出来"的输入——空问题数组、缺 `id` 或 `question`、**重复 `id`**（答复是以 id 为键的字典，重复会静默错位）、没有选项、选项没有 `label`。前端按原样渲染并滚动：只截断**展示**，不截断数据。
+- 答案契约 `{"answers": {"<id>": {"answers": [...]}}}`：**不加** `user_note:` 前缀（参考实现的客户端私有编码混进模型可见契约，用户真选了同名选项就会读错）；自由文本是数组里的独立元素，`details` 另给结构化副本。
+- 前端对话框是纯表单（`web-admin/src/components/QuestionPrompt.jsx`）：每题单选 + 一个自由输入行；"其他"行由**客户端**加（模型被要求不要自己加）；**跳过 = 空答案集**，且对话框不可静默关闭（静默结局只会是超时）。
+- 新增事件类别照例要补前端两份 i18n 与 `.tag.<category>` 样式（`npm run build` 里的 i18n 校验会拦），以及 `test/tools/catalog_test.py` 的 `EXPECTED_ORDER`。
+- 已知限制：CLI 与库调用只能拿到 `no_client`（在 REPL 里真去问用户是后续子项目）；单选，不支持一题多选。取舍与实测见 [ADR 0010](decisions/0010-ask-user-question.md)。
+
 ## 13. 决策记录与术语
 
 - 设计决策（ADR）：`docs/decisions/`，命名 `NNNN-<topic>.md`。新增需要"解释为什么"的取舍时，先写 ADR 再改代码。
@@ -282,3 +293,4 @@ npm run i18n:check
   - [ADR 0007 未绑定会话的相对路径基目录](decisions/0007-default-workspace.md)
   - [ADR 0008 `write_stdin` 工具与"还活着的会话"](decisions/0008-write-stdin-tool.md)
   - [ADR 0009 `exec_command` 的 `tty`（伪终端）](decisions/0009-exec-tty.md)
+  - [ADR 0010 `ask_user_question` 工具与"提问通道"](decisions/0010-ask-user-question.md)

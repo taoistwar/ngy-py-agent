@@ -22,6 +22,7 @@ from agent.tools.permissions import (
     PermissionDenial,
 )
 from agent.tools.read_ledger import ReadLedger
+from agent.tools.user_question import STATUS_NO_CLIENT, QuestionResult, UserQuestionBroker
 
 
 class ToolRegistry:
@@ -64,6 +65,7 @@ class ToolRegistry:
         session_id: str = "",
         task_id: str = "",
         permission_broker: Optional[PermissionBroker] = None,
+        user_question_broker: Optional[UserQuestionBroker] = None,
     ):
         self.base_dir = base_dir
         self.max_tokens = max_tokens
@@ -77,6 +79,10 @@ class ToolRegistry:
         # assigns the broker after building the registry, because the registry is
         # built before the task identity exists (see ADR 0006 D1).
         self.permission_broker = permission_broker
+        # Same late-binding trick for the question channel, and for the same reason:
+        # ``ask_user`` below reads this per call, so a registry built before the task
+        # existed still answers through the broker the task installed (ADR 0010 D1).
+        self.user_question_broker = user_question_broker
         # Shared by read/edit/write, so write_file can tell whether this run has
         # already held the whole content it is about to replace.
         self.read_ledger = ReadLedger()
@@ -101,6 +107,9 @@ class ToolRegistry:
             output_directory=self.output_directory,
             ledger=self.read_ledger,
             extra_read_roots=self.read_only_roots,
+            # Bound as a method, not as the broker: the broker may not exist yet, and
+            # whether anyone can be asked is a per-call question (ADR 0010 D1).
+            ask_user=self.ask_user,
         )
 
         for spec in build_all_specs(bindings):
@@ -275,6 +284,20 @@ class ToolRegistry:
         if isinstance(result, ToolOutcome):
             return result
         return json.dumps(result) if isinstance(result, (dict, list)) else str(result)
+
+    def ask_user(self, questions: Any) -> QuestionResult:
+        """Ask the user through this run's broker, or say that nobody can be asked.
+
+        The channel tools reach through ``ToolBindings.ask_user``. With no broker bound
+        - a library caller, the CLI, a test - the answer is an explicit
+        ``no_client`` result rather than an exception or a block: the model has to be
+        told that its question went nowhere, but a run without a UI is not a failure
+        (ADR 0010 D4).
+        """
+        broker = self.user_question_broker
+        if broker is None:
+            return QuestionResult(answers={}, status=STATUS_NO_CLIENT)
+        return broker.ask(questions)
 
     def _permission_denial(
         self, name: str, arguments: Dict[str, Any]

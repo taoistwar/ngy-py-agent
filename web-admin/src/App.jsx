@@ -54,6 +54,7 @@ import {
   t,
 } from "./i18n"
 import PermissionPrompt from "./components/PermissionPrompt"
+import QuestionPrompt from "./components/QuestionPrompt"
 import TaskRowActions from "./components/TaskRowActions"
 import TaskToolbarActions from "./components/TaskToolbarActions"
 import AgentManager from "./components/admin/AgentManager"
@@ -2154,6 +2155,18 @@ export default function App() {
     refreshPermissionRules().catch(() => {})
   }, [loadEvents, refreshPermissionRules, refreshTask, refreshTasks])
 
+  // Same refresh for an answer: the task thread resumes, so the events and the
+  // pending question both change in the same instant.
+  const handleQuestionAnswered = useCallback(() => {
+    const taskId = selectedIdRef.current
+    if (taskId) {
+      refreshTask(taskId)
+        .then((task) => loadEvents(taskId, false, task?.status))
+        .catch(() => {})
+    }
+    refreshTasks().catch(() => {})
+  }, [loadEvents, refreshTask, refreshTasks])
+
   useEffect(() => {
     let cancelled = false
     const loadAll = async () => {
@@ -2547,6 +2560,11 @@ export default function App() {
       <PermissionPrompt
         request={selectedTask?.pending_permission}
         onDecided={handlePermissionDecided}
+        translate={translate}
+      />
+      <QuestionPrompt
+        request={selectedTask?.pending_question}
+        onAnswered={handleQuestionAnswered}
         translate={translate}
       />
     </div>

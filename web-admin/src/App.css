@@ -2138,6 +2138,14 @@
   background: #4c5a2f;
 }
 
+.tag.user_question {
+  background: #3f5a8a;
+}
+
+.tag.user_answer {
+  background: #2f6a5f;
+}
+
 .tag.debug,
 .tag.error {
   background: #5f4e30;
@@ -2427,4 +2435,80 @@
   color: #9fd0ff;
   font-size: 11px;
   overflow-wrap: anywhere;
+}
+
+/* Question dialog (ask_user_question). Deliberately a plain form: one radio group
+   per question plus a free-form row, because the model is told not to send an
+   "Other" option - this dialog is what supplies it. */
+.question-prompt {
+  display: grid;
+  gap: 16px;
+}
+
+.question-block {
+  display: grid;
+  gap: 8px;
+}
+
+.question-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.question-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.question-options {
+  display: grid;
+  gap: 6px;
+}
+
+.question-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(11, 18, 38, 0.55);
+  cursor: pointer;
+}
+
+.question-option-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.question-option-text strong {
+  overflow-wrap: anywhere;
+}
+
+.question-option-text em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  overflow-wrap: anywhere;
+}
+
+.question-note {
+  margin-top: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(11, 18, 38, 0.75);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.question-note:focus {
+  outline: 1px solid #4c7dff;
 }

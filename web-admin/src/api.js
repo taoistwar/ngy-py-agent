@@ -307,6 +307,22 @@ export async function answerPermission(taskId, requestId, allowed, scope = "once
   )
 }
 
+// Answer a pending question batch. ``answers`` is keyed by question id and each value
+// is ``{ answers: [...] }`` - the same shape the tool is promised as output. An empty
+// object means "skip": the model is told nobody answered and decides for itself.
+export async function answerQuestion(taskId, requestId, answers) {
+  return requestJson(
+    `${API_BASE}/api/tasks/${taskId}/question/${encodeURIComponent(requestId)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ answers }),
+    }
+  )
+}
+
 export async function fetchTaskEvents(taskId, { offset, limit }) {
   const query = new URLSearchParams({
     offset: String(offset),

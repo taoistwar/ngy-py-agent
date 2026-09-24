@@ -32,7 +32,7 @@
 | 术语 | 定义 | 位置 |
 | --- | --- | --- |
 | **EventSink** | 事件回调签名 `(task_id, TaskEvent) -> None`。工具本身拿不到它，所以结构化记录必须经 `ToolOutcome` 交回 `agent_loop` 发送。 | `agent/models.py` |
-| **TaskEvent / EventCategory** | 持久化的事件与其类别枚举。当前类别：`llm_request`、`llm_response`、`tool_call`、`tool_result`、`debug`、`error`、`file_edit`、`file_write`、`exec`、`permission_request`、`permission_decision`。 | `agent/models.py` |
+| **TaskEvent / EventCategory** | 持久化的事件与其类别枚举。当前类别：`llm_request`、`llm_response`、`tool_call`、`tool_result`、`debug`、`error`、`file_edit`、`file_write`、`exec`、`permission_request`、`permission_decision`、`user_question`、`user_answer`。 | `agent/models.py` |
 | **`file_edit` 事件** | 文件**局部替换**成功后发出的独立事件类别，承载 `original_file` / `structured_patch` / `gitDiff`，与 `tool_result` 解耦。 | [ADR 0001](decisions/0001-file-edit-tool.md) |
 | **`file_write` 事件** | 文件**整体写入**（新建或覆盖）发出的独立事件类别。不复用 `file_edit`：两者对 UI 是两件事。覆盖时带 `original_file` / `gitDiff`，新建时带 `created: true`。 | [ADR 0004](decisions/0004-file-write-tool.md) |
 | **`exec` 事件** | 命令执行发出的独立事件类别，承载 `containment`、`exit_code`、`stdout`/`stderr`（超限截断）、`persistedOutputPath` 等。 | [ADR 0005](decisions/0005-exec-tool.md) |
@@ -132,6 +132,21 @@
 | **规则写盘失败** | 调用照常放行，但 `scope` 退回 `once`：不声称一个并未写入的长期许可。 | `agent/tools/permissions.py` |
 | **预览（`preview` / dry run）** | `ToolSpec.preview`：接收调用参数、**无副作用**地返回给对话框用的补充 `details`。`edit_file` 用它给出**写入前**的 `gitDiff`（复用 `prepare_edit`，不需要第二条实现路径）。预览失败不构成拒绝，工具执行时会报准确错误。 | `agent/tools/spec.py`、`agent/tools/edit_file/` |
 | **待确认（pending permission）** | 正在被等待的请求。`GET /api/tasks/{id}` 的 `pendingPermission` 字段给出它，因此断线重连的客户端也能渲染弹窗。 | `main.py` |
-| **`WAITING`（任务状态）** | 任务被确认请求阻塞。它**仍属"进行中"**：事件推流与前端轮询都必须继续，否则客户端恰恰收不到那条需要它答复的请求。 | `agent/models.py` |
+| **`WAITING`（任务状态）** | 任务被确认请求**或提问**阻塞。它**仍属"进行中"**：事件推流与前端轮询都必须继续，否则客户端恰恰收不到那条需要它答复的请求。 | `agent/models.py` |
 | **决策原因（reason）** | 审计用的判定结果：`not_required` / `auto_approved` / `deny_all` / `policy_denied` / `session_rule` / `user_allowed` / `user_denied` / `timeout` / `stopped` / `broker_error`。 | `agent/tools/permissions.py` |
 | **`broker_error`** | 权限层自身出错。此时**拒绝**该调用（fail closed）并在文案里说明这是权限层的缺陷、重试无用——安全提示坏掉时应当响亮地失败，而不是静默全部放行。 | `agent/tools/registry.py` |
+
+## 提问通道（`ask_user_question`）
+
+与权限确认是两条**正交的轴**：P 轴问"能不能做"（无应答即拒绝），Q 轴问"该做什么"（无应答不等于禁止继续）。见 [ADR 0010](decisions/0010-ask-user-question.md)。
+
+| 术语 | 定义 | 位置 |
+| --- | --- | --- |
+| **`ask_user_question`** | 模型向用户提 1–3 个问题并等待回答的工具。**只读且阻塞**：它不能允许、禁止或改变任何东西，`permission = none`（描述里明令禁止拿它当权限闸门）。可用范围：`build`（全部工具）与 `ask`。 | `agent/tools/ask_user_question/` |
+| **提问通道（`UserQuestionBroker`）** | 一个任务一个：把问题作为 `user_question` 事件送出去，阻塞任务线程等答复，由 API 线程 `resolve()` 交付。工具拿不到它——通道以 `ToolBindings.ask_user` 注入，registry 每次调用时读取本任务的 broker。 | `agent/tools/user_question.py` |
+| **`user_question` / `user_answer`** | 提问通道的两个事件类别：前者携带问题原文（每题带 `is_other: true`），后者携带 `status`、`answers` 与 `answered_count`。`_sink` 把前者置 `WAITING`、后者置 `RUNNING`（`main._status_for_event`）。**不复用** `permission_*`：审计必须能区分"允许了命令"与"选了方案"。 | `agent/models.py` |
+| **答案契约（answers）** | `{"answers": {"<id>": {"answers": [...]}}}`：选项标签一个元素，用户输入的自由文本**另一个**元素，**不加** `user_note:` 之类的前缀。跳过的题为空数组或直接缺席。 | [ADR 0010](decisions/0010-ask-user-question.md) |
+| **"其他"行（Other）** | 自由输入项由**客户端**添加（`QuestionPrompt.jsx`），模型被要求在选项里不要自己加 "Other"。它不产生标签，只把用户输入作为答案。 | `web-admin/src/components/QuestionPrompt.jsx` |
+| **`pending_question`** | 任务详情/列表里的待答问题批（与 `pending_permission` 并列），前端 1 秒轮询它渲染对话框；答复后置空。 | `main.py` |
+| **`no_client`** | 没有客户端可问（CLI、库调用、未注入 broker）时提问结果的 `status`。**不阻塞、不抛异常、不假装问过**：模型拿到空答案并被告知自行决定。 | `agent/tools/registry.py` |
+| **提问超时（`ASK_USER_TIMEOUT_SECONDS`）** | 默认 120 秒，**独立于** `PERMISSION_TIMEOUT_SECONDS`：两人应答的语义不同（"拒绝这次调用" vs "带着假设继续"），共用一个旋钮会互相误伤。超时返回空答案 + "自行决定并说明假设"，**不是拒绝**。 | `agent/tools/user_question.py` |

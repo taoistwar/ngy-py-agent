@@ -51,7 +51,16 @@ MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
             "not perform side-effecting actions. If the question is ambiguous, state your "
             "assumptions before answering."
         ),
-        "tool_names": ["get_current_time", "code_interpreter", "read_file"],
+        # ``ask_user_question`` belongs here by name: "ask the user before guessing" is
+        # this mode's own instruction, and it is the one tool that cannot change state.
+        # ``plan`` stays tool-less on purpose - its contract is to plan, not to ask
+        # (ADR 0010 D6).
+        "tool_names": [
+            "get_current_time",
+            "code_interpreter",
+            "read_file",
+            "ask_user_question",
+        ],
         "skills": ["cite_sources"],
     },
     "plan": {

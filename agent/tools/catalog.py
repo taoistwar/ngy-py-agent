@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Callable, List, Sequence
 
+from agent.tools.ask_user_question import spec as ask_user_question
 from agent.tools.bindings import ToolBindings
 from agent.tools.code_interpreter import spec as code_interpreter
 from agent.tools.convert_currency import spec as convert_currency
@@ -33,6 +34,8 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     write_file.build_spec,
     exec_command.build_spec,
     write_stdin.build_spec,
+    # Asks rather than acts, so it sits last: it belongs to no family of tools above.
+    ask_user_question.build_spec,
 )
 
 

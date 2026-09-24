@@ -32,6 +32,7 @@ EXPECTED_ORDER = (
     "write_file",
     "exec_command",
     "write_stdin",
+    "ask_user_question",
 )
 
 
