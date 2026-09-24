@@ -24,6 +24,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.models import EventCategory, TaskStatus  # noqa: E402
 from agent.tools.user_question import (  # noqa: E402
@@ -54,15 +55,17 @@ class QuestionApiTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         root = Path(self._tmp.name)
-        self._previous_store = main.monitor_store
+        # The live state is ``app_state``'s, not ``main``'s: the routes read it there,
+        # so that is where a test has to swap it (see app_state's module docstring).
+        self._previous_store = app_state.monitor_store
         self.store = _SqliteTaskStore(root / "tasks.db")
-        main.monitor_store = self.store
+        app_state.monitor_store = self.store
         self.client = TestClient(main.app)
 
     def tearDown(self):
-        with main._task_question_lock:
-            main._task_question_brokers.clear()
-        main.monitor_store = self._previous_store
+        with app_state._task_question_lock:
+            app_state._task_question_brokers.clear()
+        app_state.monitor_store = self._previous_store
         self.store.close()
         self._tmp.cleanup()
 
@@ -70,7 +73,7 @@ class QuestionApiTest(unittest.TestCase):
 
     def register_broker(self, task_id="task-1"):
         broker = UserQuestionBroker(task_id=task_id, wait_seconds=WAIT_SECONDS)
-        main._register_task_questions(task_id, broker)
+        app_state.register_task_questions(task_id, broker)
         return broker
 
     def park(self, broker):
@@ -180,7 +183,7 @@ class QuestionApiTest(unittest.TestCase):
     # --------------------------------------------------------- waiting visibility
 
     def test_task_detail_and_list_expose_the_pending_question(self):
-        task_id = main.monitor_store.create_task("do something", "openai-compatible")
+        task_id = app_state.monitor_store.create_task("do something", "openai-compatible")
         broker = self.register_broker(task_id=task_id)
         thread, _, pending = self.park(broker)
 
@@ -203,16 +206,18 @@ class QuestionApiTest(unittest.TestCase):
 
     def test_both_channels_flip_the_task_status(self):
         # The mapping both brokers rely on: parked -> waiting, answered -> running.
-        self.assertEqual(main._status_for_event(EventCategory.USER_QUESTION), TaskStatus.WAITING)
-        self.assertEqual(main._status_for_event(EventCategory.USER_ANSWER), TaskStatus.RUNNING)
         self.assertEqual(
-            main._status_for_event(EventCategory.PERMISSION_REQUEST), TaskStatus.WAITING
+            app_state.status_for_event(EventCategory.USER_QUESTION), TaskStatus.WAITING
+        )
+        self.assertEqual(app_state.status_for_event(EventCategory.USER_ANSWER), TaskStatus.RUNNING)
+        self.assertEqual(
+            app_state.status_for_event(EventCategory.PERMISSION_REQUEST), TaskStatus.WAITING
         )
         self.assertEqual(
-            main._status_for_event(EventCategory.PERMISSION_DECISION), TaskStatus.RUNNING
+            app_state.status_for_event(EventCategory.PERMISSION_DECISION), TaskStatus.RUNNING
         )
         # Anything else leaves the status alone.
-        self.assertIsNone(main._status_for_event(EventCategory.TOOL_CALL))
+        self.assertIsNone(app_state.status_for_event(EventCategory.TOOL_CALL))
 
 
 if __name__ == "__main__":

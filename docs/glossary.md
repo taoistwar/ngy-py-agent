@@ -144,9 +144,9 @@
 | --- | --- | --- |
 | **`ask_user_question`** | 模型向用户提 1–3 个问题并等待回答的工具。**只读且阻塞**：它不能允许、禁止或改变任何东西，`permission = none`（描述里明令禁止拿它当权限闸门）。可用范围：`build`（全部工具）与 `ask`。 | `agent/tools/ask_user_question/` |
 | **提问通道（`UserQuestionBroker`）** | 一个任务一个：把问题作为 `user_question` 事件送出去，阻塞任务线程等答复，由 API 线程 `resolve()` 交付。工具拿不到它——通道以 `ToolBindings.ask_user` 注入，registry 每次调用时读取本任务的 broker。 | `agent/tools/user_question.py` |
-| **`user_question` / `user_answer`** | 提问通道的两个事件类别：前者携带问题原文（每题带 `is_other: true`），后者携带 `status`、`answers` 与 `answered_count`。`_sink` 把前者置 `WAITING`、后者置 `RUNNING`（`main._status_for_event`）。**不复用** `permission_*`：审计必须能区分"允许了命令"与"选了方案"。 | `agent/models.py` |
+| **`user_question` / `user_answer`** | 提问通道的两个事件类别：前者携带问题原文（每题带 `is_other: true`），后者携带 `status`、`answers` 与 `answered_count`。`_sink` 把前者置 `WAITING`、后者置 `RUNNING`（`app_state.status_for_event`）。**不复用** `permission_*`：审计必须能区分"允许了命令"与"选了方案"。 | `agent/models.py` |
 | **答案契约（answers）** | `{"answers": {"<id>": {"answers": [...]}}}`：选项标签一个元素，用户输入的自由文本**另一个**元素，**不加** `user_note:` 之类的前缀。跳过的题为空数组或直接缺席。 | [ADR 0010](decisions/0010-ask-user-question.md) |
 | **"其他"行（Other）** | 自由输入项由**客户端**添加（`QuestionPrompt.jsx`），模型被要求在选项里不要自己加 "Other"。它不产生标签，只把用户输入作为答案。 | `web-admin/src/components/QuestionPrompt.jsx` |
-| **`pending_question`** | 任务详情/列表里的待答问题批（与 `pending_permission` 并列），前端 1 秒轮询它渲染对话框；答复后置空。 | `main.py` |
+| **`pending_question`** | 任务详情/列表里的待答问题批（与 `pending_permission` 并列），前端 1 秒轮询它渲染对话框；答复后置空。 | `task_api.py`、`app_state.py` |
 | **`no_client`** | 没有客户端可问（CLI、库调用、未注入 broker）时提问结果的 `status`。**不阻塞、不抛异常、不假装问过**：模型拿到空答案并被告知自行决定。 | `agent/tools/registry.py` |
 | **提问超时（`ASK_USER_TIMEOUT_SECONDS`）** | 默认 120 秒，**独立于** `PERMISSION_TIMEOUT_SECONDS`：两人应答的语义不同（"拒绝这次调用" vs "带着假设继续"），共用一个旋钮会互相误伤。超时返回空答案 + "自行决定并说明假设"，**不是拒绝**。 | `agent/tools/user_question.py` |

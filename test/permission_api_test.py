@@ -27,6 +27,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.models import TaskStatus  # noqa: E402
 from agent.tools.permission_rules import PermissionRuleStore  # noqa: E402
@@ -45,25 +46,27 @@ class PermissionApiTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         root = Path(self._tmp.name)
-        self._previous_store = main.monitor_store
-        self._previous_rules = main.permission_rule_store
-        self._previous_mode = main._agent_permission_mode
-        self._previous_source = main._agent_permission_mode_source
+        # The live state is ``app_state``'s, not ``main``'s: the routes read it there,
+        # so that is where a test has to swap it (see app_state's module docstring).
+        self._previous_store = app_state.monitor_store
+        self._previous_rules = app_state.permission_rule_store
+        self._previous_mode = app_state.permission_mode
+        self._previous_source = app_state.permission_mode_source
         self.store = _SqliteTaskStore(root / "tasks.db")
         self.rules = PermissionRuleStore(root / "permission_rules.json")
-        main.monitor_store = self.store
-        main.permission_rule_store = self.rules
-        main._agent_permission_mode = PermissionMode.ASK
-        main._agent_permission_mode_source = "env"
+        app_state.monitor_store = self.store
+        app_state.permission_rule_store = self.rules
+        app_state.permission_mode = PermissionMode.ASK
+        app_state.permission_mode_source = "env"
         self.client = TestClient(main.app)
 
     def tearDown(self):
-        with main._task_permission_lock:
-            main._task_permission_brokers.clear()
-        main.monitor_store = self._previous_store
-        main.permission_rule_store = self._previous_rules
-        main._agent_permission_mode = self._previous_mode
-        main._agent_permission_mode_source = self._previous_source
+        with app_state._task_permission_lock:
+            app_state._task_permission_brokers.clear()
+        app_state.monitor_store = self._previous_store
+        app_state.permission_rule_store = self._previous_rules
+        app_state.permission_mode = self._previous_mode
+        app_state.permission_mode_source = self._previous_source
         self.store.close()
         self._tmp.cleanup()
 
@@ -73,9 +76,9 @@ class PermissionApiTest(unittest.TestCase):
         # ``rules`` must be the swapped-in store: the default one points at the
         # repository's real rule file, and a test must not write there.
         broker = PermissionBroker(
-            task_id=task_id, wait_seconds=WAIT_SECONDS, rules=main.permission_rule_store
+            task_id=task_id, wait_seconds=WAIT_SECONDS, rules=app_state.permission_rule_store
         )
-        main._register_task_permission(task_id, broker)
+        app_state.register_task_permission(task_id, broker)
         return broker
 
     def park(self, broker, command="ls"):
@@ -248,7 +251,7 @@ class PermissionApiTest(unittest.TestCase):
     # --------------------------------------------------------- waiting visibility
 
     def test_task_detail_and_list_expose_the_pending_permission(self):
-        task_id = main.monitor_store.create_task("do something", "openai-compatible")
+        task_id = app_state.monitor_store.create_task("do something", "openai-compatible")
         broker = self.register_broker(task_id=task_id)
         thread, box, pending = self.park(broker)
 
@@ -265,9 +268,9 @@ class PermissionApiTest(unittest.TestCase):
         self.assertIsNone(self.client.get(f"/api/tasks/{task_id}").json()["pending_permission"])
 
     def test_a_waiting_task_reports_the_waiting_status(self):
-        task_id = main.monitor_store.create_task("do something", "openai-compatible")
+        task_id = app_state.monitor_store.create_task("do something", "openai-compatible")
 
-        main.monitor_store.set_task_status(task_id, TaskStatus.WAITING)
+        app_state.monitor_store.set_task_status(task_id, TaskStatus.WAITING)
 
         self.assertEqual(self.client.get(f"/api/tasks/{task_id}").json()["status"], "waiting")
 

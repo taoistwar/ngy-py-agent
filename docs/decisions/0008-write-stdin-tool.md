@@ -121,3 +121,5 @@ Output:
 - **明确不做**：不提供"列出活会话"的工具；不支持 EOF/关闭 stdin；不修"长阻塞工具期间无法响应停止"——`exec_command` 前台最长阻塞 30 分钟且同样不检查停止信号，属既有问题，记为后续子项目。
 
 > **后续结构变更（同日，工具目录重构）**：工具声明已从 `agent/tools/specs.py` 移入**各工具包的 `spec.py`**，由 `agent/tools/catalog.py` 汇总、`agent/tools/bindings.py` 提供运行期绑定，`specs.py` 已删除。本文上方"相关"里的 `agent/tools/specs.py`，以及 D7 提到的 `write_stdin_tool.py` / `exec_tool.py`，请按 `agent/tools/spec.py`、`agent/tools/write_stdin/`、`agent/tools/exec_command/` 理解；决策内容不受影响。
+
+> **结构变更（2026-09-24）**：`main.py` 已按职责拆分（路由进 `task_api.py` / `workspace_api.py` / `agent_api.py` / `admin_api.py`，状态进 `app_state.py`，模型进 `api_schemas.py`，任务运行进 `task_runtime.py`），因此 D7 里的 `main.py:790` 与定稿一节里的行号不再有效；任务结束回收仍由 `agent/agent_loop.py` 的收尾包装器负责，未变。

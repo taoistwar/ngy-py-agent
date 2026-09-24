@@ -41,7 +41,7 @@
 
 `user_question`（携带问题原文，`is_other: true`）与 `user_answer`（携带 `status`、`answers`、`answered_count`），由 broker 发出，`_sink` 复用既有状态机：前者 `WAITING`、后者 `RUNNING`。工具返回普通的 `ToolOutcome`（无 `event_category`）——`tool_result` 已经记录了这次调用，再发一个同载荷的事件只会多一处可能不同步的地方。
 
-状态机的判定被抽成 `main._status_for_event`，因为它现在服务两条通道，藏在 `_sink` 的闭包里没法测。
+状态机的判定被抽成 `app_state.status_for_event`，因为它现在服务两条通道，藏在 `_sink` 的闭包里没法测。
 
 ### D4. 没有客户端时如实说"没人可问"
 

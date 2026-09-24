@@ -279,7 +279,29 @@ npm run i18n:check
 - 新增事件类别照例要补前端两份 i18n 与 `.tag.<category>` 样式（`npm run build` 里的 i18n 校验会拦），以及 `test/tools/catalog_test.py` 的 `EXPECTED_ORDER`。
 - 已知限制：CLI 与库调用只能拿到 `no_client`（在 REPL 里真去问用户是后续子项目）；单选，不支持一题多选。取舍与实测见 [ADR 0010](decisions/0010-ask-user-question.md)。
 
-## 13. 决策记录与术语
+## 13. 后端模块划分（`main.py` 拆分后）
+
+`main.py` 曾经承担全部后端职责，涨到 1700+ 行、超过 `AGENTS.md` 的 ~700 行上限。现在按职责拆开：
+
+| 文件 | 放什么 | 不放什么 |
+| --- | --- | --- |
+| `main.py` | FastAPI app 装配、CORS、静态前端与兜底路由、健康检查、CLI（`argparse` + REPL + `--web`） | 业务路由、运行期状态 |
+| `api_schemas.py` | 所有请求/响应 pydantic 模型 | 任何行为 |
+| `app_state.py` | 进程内的**活状态**：`monitor_store`、`permission_rule_store`、三项全局配置（保留天数 / 步数上限 / 确认模式）及其 `source`、三类任务注册表（停止事件、权限 broker、提问 broker）、`status_for_event`、`ROOT_DIR` | 任何判断逻辑 |
+| `task_runtime.py` | "一个任务是什么"：provider / 工作目录 / 步数 / 确认模式的解析、会话标题、保留期清理、`run_task`（跑 ReAct 循环并把两个 broker 注册进 `app_state`） | HTTP 细节 |
+| `task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
+| `workspace_api.py` | 会话、工作空间、模型配置路由 | |
+| `agent_api.py` | 模式、智能体、技能库路由 | |
+| `admin_api.py` | 管理配置路由（保留期 / 步数 / 确认模式 / 权限规则）、启动时把 env + 数据库读进 `app_state` 的 loader、`.env` 加载 | 业务路由 |
+
+两条必须守住的规则：
+
+1. **状态只有一份，在 `app_state.py`。** 路由与任务运行都读 `app_state.monitor_store`，而不是 `from task_store import monitor_store` 那种"把名字绑走"的写法：绑名字会让"测试换了存储、路由还在用旧的"变成一次静默失效（`test/permission_api_test.py` 与 `test/question_api_test.py` 因此在 `app_state` 上替换存储）。
+2. **路由模块不得 import `main`。** 需要状态就 import `app_state`，需要任务逻辑就 import `task_runtime`；`main` 只单向 import 它们。这条是拆分成立的前提，否则就是循环依赖。
+
+拆分本身是**纯搬运**：路由路径、字段、状态码、事件顺序都没动；验证方式是"全量测试 + 与拆分前的 OpenAPI 路径清单逐一比对"（29 条对 29 条）。
+
+## 14. 决策记录与术语
 
 - 设计决策（ADR）：`docs/decisions/`，命名 `NNNN-<topic>.md`。新增需要"解释为什么"的取舍时，先写 ADR 再改代码。
 - 术语表：`docs/glossary.md`。新增领域名词（工具、事件、策略、patch 结构等）时同步补条目。

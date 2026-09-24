@@ -112,6 +112,8 @@
 
 - 新增事件类别 `permission_request`（待确认）与 `permission_decision`（决策结果，含 `allowed` / `reason` / `scope` / 决策人）。
 - 新增 `TaskStatus.WAITING`。**同时必须修掉两条推流循环**：`_iter_task_events`（`main.py:1007`）与 WebSocket 循环（`:1090`）要把 `WAITING` 视为"仍在进行"，否则状态一置为等待，事件流立刻终止，用户永远收不到那条请求。
+
+> **结构变更（2026-09-24）**：`main.py` 已按职责拆分，本文里的 `main.py:NNNN` 行号不再有效——路由在 `task_api.py` / `workspace_api.py` / `agent_api.py` / `admin_api.py`（两条推流循环在 `task_api.py`），运行期状态在 `app_state.py`，请求/响应模型在 `api_schemas.py`，任务运行在 `task_runtime.py`，`main.py` 只剩 app 装配与 CLI。决策内容不受影响。
 - 因此 `task_store` 需要一个中途改状态的入口（今天只有 `finish_task`，没有别的）。
 
 ### D11. 对话框给用户看什么
