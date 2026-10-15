@@ -125,6 +125,8 @@ def _load_local_tokenizer_counter() -> Optional[Callable[[str], int]]:
             cache_dir=str(directory),
             local_files_only=offline_only,
         )
+        if tokenizer is None:
+            return None
         # ``from_pretrained`` is content with a half-downloaded cache and only fails
         # on the first encode. Count once here, so that "loaded but cannot count" is
         # rejected now instead of surfacing as the exact backend in the middle of a
