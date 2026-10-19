@@ -87,6 +87,7 @@ def build_provider_config(model: dict[str, Any] | None) -> Optional[ProviderConf
         api_key=str(model.get("api_key") or ""),
         base_url=(str(model.get("base_url")).strip() or None) if model.get("base_url") else None,
         max_input_tokens=int(model.get("max_input_tokens") or 0),
+        supports_image_input=bool(model.get("supports_image_input")),
     )
 
 

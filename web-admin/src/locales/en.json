@@ -120,6 +120,7 @@
   "category_file_edit": "File edit",
   "category_file_write": "File write",
   "category_exec": "Command",
+  "category_computer": "Computer",
   "category_debug": "Debug",
   "category_error": "Error",
   "category_permission_request": "Permission request",

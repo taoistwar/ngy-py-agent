@@ -37,12 +37,17 @@ PERMISSION_NONE = "none"
 PERMISSION_READ = "read"
 PERMISSION_WRITE = "write"
 PERMISSION_EXEC = "exec"
+# Host desktop control (click/type/launch) through cua-driver. Separate from
+# ``exec`` so the dialog can say what is about to happen to which window, and so
+# the UI can label it as computer use rather than a command.
+PERMISSION_COMPUTER = "computer"
 
 PERMISSION_KINDS = (
     PERMISSION_NONE,
     PERMISSION_READ,
     PERMISSION_WRITE,
     PERMISSION_EXEC,
+    PERMISSION_COMPUTER,
 )
 
 # Decision reasons. Kept as plain strings so they can travel in event payloads
@@ -427,6 +432,10 @@ class PermissionBroker:
             code = str(arguments.get("code") or "")
             summary = "Run Python code"
             details["code"] = _truncate(code)
+        elif kind == PERMISSION_COMPUTER:
+            action = str(arguments.get("action") or "").strip().lower() or "computer action"
+            summary = _computer_summary(action, arguments)
+            details.update(_computer_details(arguments))
         elif kind == PERMISSION_WRITE and "content" in arguments:
             content = str(arguments.get("content") or "")
             details["content"] = _truncate(content)
@@ -489,6 +498,9 @@ class PermissionBroker:
             except OSError:
                 return None
             return _display(path)
+
+        if kind == PERMISSION_COMPUTER:
+            return _computer_target(arguments)
 
         if tool == "exec_command":
             command = arguments.get("command")
@@ -642,3 +654,74 @@ def _truncate(text: str, limit: int = MAX_PREVIEW_CHARS) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + f"\n... [truncated, {len(text)} characters total]"
+
+
+def _computer_target(arguments: Dict[str, Any]) -> Optional[str]:
+    """What a desktop action is aimed at, for session rules and the dialog.
+
+    Keyed on the action plus the window, not on the click coordinates: "allow
+    clicking this window for this task" is the useful granularity, and a rule
+    keyed on a pixel would never match again.
+    """
+    action = str(arguments.get("action") or "").strip().lower()
+    if not action:
+        return None
+
+    if action == "launch_app":
+        ident = arguments.get("aumid") or arguments.get("path") or arguments.get("name")
+        if not ident:
+            urls = arguments.get("urls") or []
+            if isinstance(urls, (list, tuple)) and urls:
+                ident = urls[0]
+        return f"launch_app:{ident}" if ident else "launch_app"
+
+    parts = [action]
+    pid = arguments.get("pid")
+    if pid not in (None, ""):
+        parts.append(f"pid={pid}")
+    window_id = arguments.get("window_id")
+    if window_id not in (None, ""):
+        parts.append(f"window={window_id}")
+    return ":".join(parts)
+
+
+def _computer_summary(action: str, arguments: Dict[str, Any]) -> str:
+    """One dialog line: what will happen, and where."""
+    if action == "launch_app":
+        ident = arguments.get("aumid") or arguments.get("path") or arguments.get("name")
+        if not ident:
+            urls = arguments.get("urls") or []
+            ident = urls[0] if isinstance(urls, (list, tuple)) and urls else ""
+        return f"Launch {ident}" if ident else "Launch an app"
+
+    pid = arguments.get("pid")
+    window_id = arguments.get("window_id")
+    where = ""
+    if pid not in (None, ""):
+        where = f" on pid {pid}"
+    if window_id not in (None, ""):
+        where += f" window {window_id}"
+    return f"{action}{where}"
+
+
+def _computer_details(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """The dialog's detail block: the action's arguments, trimmed."""
+    details: Dict[str, Any] = {}
+    action = str(arguments.get("action") or "").strip().lower()
+    if action:
+        details["action"] = action
+
+    for key in ("pid", "window_id", "element_token", "x", "y", "delivery_mode"):
+        value = arguments.get(key)
+        if value is not None and value != "":
+            details[key] = value
+
+    text = arguments.get("text")
+    if isinstance(text, str) and text:
+        details["text"] = _truncate(text)
+
+    for key in ("key", "keys", "path", "name", "aumid", "urls"):
+        value = arguments.get(key)
+        if value not in (None, "", []):
+            details[key] = value
+    return details

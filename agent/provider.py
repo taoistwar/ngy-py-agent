@@ -31,6 +31,9 @@ PROVIDER_ALIASES = {
     "aws": "bedrock",
     "google": "gemini",
     "openai_compatible": "openai",
+    # Ollama serves the OpenAI chat-completions wire format and has no separate
+    # client; the model form offers the spelling, so route it to the same provider.
+    "ollama": "openai",
 }
 
 
@@ -231,6 +234,10 @@ class ProviderConfig:
     api_key: str
     base_url: Optional[str] = None
     max_input_tokens: int = 0
+    # The operator's statement that this model accepts image input (Web Admin ->
+    # Models -> Image input). ``agent.vision`` combines it with the wire format
+    # before attaching a tool screenshot to the conversation.
+    supports_image_input: bool = False
 
 
 class OpenAIProvider(BaseProvider):
@@ -753,6 +760,7 @@ def build_provider(provider: str, config: Optional[ProviderConfig] = None) -> Ba
                 base_url=_normalize_openai_base_url(
                     config.base_url or "http://127.0.0.1:12434/v1"
                 ),
+                supports_image_input=config.supports_image_input,
             )
         return OpenAIProvider(config)
 
@@ -781,6 +789,7 @@ def build_provider(provider: str, config: Optional[ProviderConfig] = None) -> Ba
                 model=config.model,
                 api_key=config.api_key,
                 base_url=_normalize_openai_base_url(config.base_url or "http://127.0.0.1:12434/v1"),
+                supports_image_input=config.supports_image_input,
             )
         return AnthropicOllamaProvider(config)
 

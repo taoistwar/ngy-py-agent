@@ -2130,6 +2130,10 @@
   background: #7a4a2f;
 }
 
+.tag.computer {
+  background: #3f6a4a;
+}
+
 .tag.permission_request {
   background: #8a6d1f;
 }

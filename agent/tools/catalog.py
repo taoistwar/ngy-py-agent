@@ -13,6 +13,8 @@ from typing import Callable, List, Sequence
 from agent.tools.ask_user_question import spec as ask_user_question
 from agent.tools.bindings import ToolBindings
 from agent.tools.code_interpreter import spec as code_interpreter
+from agent.tools.computer_control import spec as computer_control
+from agent.tools.computer_observe import spec as computer_observe
 from agent.tools.convert_currency import spec as convert_currency
 from agent.tools.edit_file import spec as edit_file
 from agent.tools.exec_command import spec as exec_command
@@ -34,6 +36,8 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     write_file.build_spec,
     exec_command.build_spec,
     write_stdin.build_spec,
+    computer_observe.build_spec,
+    computer_control.build_spec,
     # Asks rather than acts, so it sits last: it belongs to no family of tools above.
     ask_user_question.build_spec,
 )

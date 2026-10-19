@@ -13,6 +13,7 @@ from agent.models import (
     LLMResponseData,
     TaskEvent,
     ToolCallData,
+    ToolImage,
     ToolOutcome,
     ToolResultData,
 )
@@ -34,6 +35,7 @@ from agent.tools import process_store
 from agent.tools.file_access import default_workspace_root
 from agent.tools.permissions import PermissionBroker
 from agent.tools.user_question import UserQuestionBroker
+from agent.vision import build_image_message, redact_image_payload, supports_images
 
 # The provider to run when the caller does not name one. The environment variable
 # keeps its historical name (it started as the tool-schema selection switch) and the
@@ -401,7 +403,9 @@ def run_react_loop(
             **request_kwargs,
         )
         request_data_dict = request_data.model_dump()
-        request_data_dict["raw_request"] = raw_request_payload
+        # Screenshots ride along as base64 data URLs; persist a redacted copy so
+        # one observation does not add megabytes to the event log.
+        request_data_dict["raw_request"] = redact_image_payload(raw_request_payload)
         _emit(
             event_sink,
             task_id,
@@ -483,6 +487,10 @@ def run_react_loop(
             )
             break
 
+        # Screenshots collected during this step. They travel as one follow-up
+        # user message after every tool result, because the OpenAI chat API only
+        # accepts text in a ``tool`` message (see ``agent.vision``).
+        pending_images: List[Tuple[str, ToolImage]] = []
         for name, args, call_id in tool_calls:
             if should_stop is not None and should_stop():
                 stopped = True
@@ -574,8 +582,54 @@ def run_react_loop(
                     ),
                 )
 
+            if isinstance(outcome, ToolOutcome) and outcome.images:
+                pending_images.extend((name, image) for image in outcome.images)
+
             if verbose:
                 print(f"[tool:{name}] {result}")
+
+        if pending_images and not stopped:
+            image_message = build_image_message(pending_images, provider)
+            if image_message is not None:
+                messages.append(image_message)
+                _emit(
+                    event_sink,
+                    task_id,
+                    TaskEvent(
+                        task_id=task_id or "",
+                        category=EventCategory.DEBUG,
+                        title="Attached screenshots",
+                        data={
+                            "step": step,
+                            "count": len(pending_images),
+                            "files": [image.path for _, image in pending_images],
+                        },
+                        collapsed=True,
+                    ),
+                )
+            else:
+                _emit(
+                    event_sink,
+                    task_id,
+                    TaskEvent(
+                        task_id=task_id or "",
+                        category=EventCategory.DEBUG,
+                        title="Screenshots not attached",
+                        data={
+                            "step": step,
+                            "files": [image.path for _, image in pending_images],
+                            "reason": (
+                                "model image input is disabled or the provider wire format "
+                                "is not OpenAI-compatible"
+                                if not supports_images(provider)
+                                else "screenshot files were missing or exceeded the size limit"
+                            ),
+                        },
+                        collapsed=True,
+                    ),
+                )
+                if verbose:
+                    print("[info] screenshots were not attached: model or provider does not accept images")
 
         if stopped:
             break

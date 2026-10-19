@@ -21,6 +21,10 @@ class EventCategory(str, Enum):
     FILE_EDIT = "file_edit"
     FILE_WRITE = "file_write"
     EXEC = "exec"
+    # Host desktop interaction through cua-driver: observations, screenshots and
+    # actions. Separate from ``exec`` because "the agent clicked a window" and
+    # "the agent ran a command" are different records to audit.
+    COMPUTER = "computer"
     # Permission confirmation (see docs/decisions/0006-tool-permission-confirmation.md).
     PERMISSION_REQUEST = "permission_request"
     PERMISSION_DECISION = "permission_decision"
@@ -100,6 +104,21 @@ class ToolResultData(BaseModel):
     is_error: bool = False
 
 
+@dataclass(frozen=True)
+class ToolImage:
+    """A screenshot a tool wants the model to see, not just the UI.
+
+    ``path`` is an absolute file path on this machine. Whether it becomes image
+    content depends on the model configuration (``supports_image_input``) and on
+    the provider's wire format; ``agent.vision`` owns that decision so tools do
+    not have to know which provider is in use.
+    """
+
+    path: str
+    mime_type: str = "image/png"
+    detail: str = "auto"
+
+
 @dataclass
 class ToolOutcome:
     """Split tool result: a short text for the model and a rich payload for the UI.
@@ -108,12 +127,17 @@ class ToolOutcome:
     return this instead of a plain string/dict. ``ToolRegistry.execute_tool``
     passes it through untouched so ``agent_loop`` can route ``model_text`` into
     the ``messages`` list while emitting ``details`` as a dedicated event.
+
+    ``images`` is separate from ``details`` on purpose: details are for the UI
+    and may be large, while these files are turned into model input when the
+    configured model supports image input (see ``agent.vision``).
     """
 
     model_text: str
     event_category: Optional[EventCategory] = None
     event_title: str = ""
     details: Dict[str, Any] = field(default_factory=dict)
+    images: List[ToolImage] = field(default_factory=list)
 
 
 class AgentTaskTrace(BaseModel):

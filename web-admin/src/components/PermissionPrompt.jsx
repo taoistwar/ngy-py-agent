@@ -25,6 +25,14 @@ const DETAIL_LABELS = {
   gitDiff: "diff",
   match_count: "matches",
   encoding: "encoding",
+  action: "action",
+  pid: "pid",
+  window_id: "window",
+  element_token: "element",
+  text: "text",
+  key: "key",
+  keys: "keys",
+  delivery_mode: "delivery",
 }
 
 export default function PermissionPrompt({ request, onDecided, translate }) {

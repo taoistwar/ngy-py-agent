@@ -35,6 +35,9 @@ cd ..
   - `ANTHROPIC_API_KEY`
   - `GEMINI_MODEL`
   - `GEMINI_API_KEY`
+- 桌面操作：
+  - `CUA_DRIVER_BIN`（`cua-driver` 可执行文件路径；默认从 PATH 或 Windows 安装目录查找）
+  - `TOOL_IMAGE_MAX_BYTES`（工具截图附加到模型上下文的大小上限，默认 `8388608`，即 8 MiB）
 
 ## 4. 启动方式
 
@@ -278,6 +281,16 @@ npm run i18n:check
 - 前端对话框是纯表单（`web-admin/src/components/QuestionPrompt.jsx`）：每题单选 + 一个自由输入行；"其他"行由**客户端**加（模型被要求不要自己加）；**跳过 = 空答案集**，且对话框不可静默关闭（静默结局只会是超时）。
 - 新增事件类别照例要补前端两份 i18n 与 `.tag.<category>` 样式（`npm run build` 里的 i18n 校验会拦），以及 `test/tools/catalog_test.py` 的 `EXPECTED_ORDER`。
 - 已知限制：CLI 与库调用只能拿到 `no_client`（在 REPL 里真去问用户是后续子项目）；单选，不支持一题多选。取舍与实测见 [ADR 0010](decisions/0010-ask-user-question.md)。
+
+### 桌面操作：CLI 桥，不是 MCP 客户端
+
+- `computer_observe` / `computer_control` 通过 `subprocess` 调 `cua-driver <tool>`（JSON 从 stdin 进入），**没有**实现 MCP 客户端；`mcp_store.py` 目前仍然只是集市存储。将来换 MCP 只替换 `agent/tools/computer_driver.py` 的 `call_tool`，工具面对模型不变。
+- **会话标签必须等于 `task_id`**（`make_observe_tool` / `make_control_tool` 的绑定）：driver 用它键控快照缓存，`element_token` 才能跨调用复用；如果每次调用换标签，所有 token 都会 stale。
+- **观察与操作拆成两个包**，因为门禁按工具：观察 `permission=none`，操作 `PERMISSION_COMPUTER` 且只给 `once` / `session`。不要为了少一个工具把两者合并。
+- **driver 的契约写在描述里，不要靠模型试错**：动作前后快照、优先 `element_token`、默认 `background`、`unverifiable` 先重新快照。错误码到指令的映射在 `computer_driver._HINTS` 与 `computer_control/tool.py::_render_result`。
+- **截图是否可见由模型配置决定**：`agent/tools/computer_state.py` 负责把 UIA 树压成文本并走 `token_budget`，超预算时把完整 JSON/文本写进 `output_store`。截图通过 `ToolOutcome.images` 交给 `agent/vision.py`：只有模型配置 `supports_image_input` 且 provider 是 OpenAI 兼容 wire format 时，才在工具消息之后追加一条带 `image_url`（base64 data URL）的 user 消息；其他 provider 只保留路径。别在工具描述里承诺模型一定看得到。
+- **运行前提**：`cua-driver` 必须在交互式会话（Session 1+）里；Session 0 下 UIA、截图、UWP 激活全部静默失败。错误处理用 `ToolOutcome(success=False)` 回给模型，不抛异常，任务不会因为没装 driver 而崩。
+- 取舍见 [ADR 0011](decisions/0011-computer-use.md)。
 
 ## 13. 后端模块划分（`main.py` 拆分后）
 

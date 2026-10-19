@@ -20,7 +20,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from agent.provider import canonicalize_provider, normalize_provider_name  # noqa: E402
+from agent.provider import (  # noqa: E402
+    ProviderConfig,
+    build_provider,
+    canonicalize_provider,
+    normalize_provider_name,
+)
 from agent.tools.registry import ToolRegistry  # noqa: E402
 
 # Spellings a user might write -> the normalised form. Punctuation variants are not
@@ -64,6 +69,7 @@ class CanonicalizeProviderTest(unittest.TestCase):
             "google": "gemini",
             "openai-compatible": "openai",
             "OpenAI Compatible": "openai",
+            "ollama": "openai",
         }
         for raw, expected in cases.items():
             with self.subTest(provider=raw):
@@ -102,6 +108,7 @@ class SchemaAdapterTest(unittest.TestCase):
             "claude": "anthropic",
             "google": "gemini",
             "aws": "bedrock",
+            "ollama": "openai",
             "mcp": "mcp",
         }
         for raw, expected in cases.items():
@@ -116,6 +123,23 @@ class SchemaAdapterTest(unittest.TestCase):
     def test_unknown_adapter_still_fails_loudly(self):
         with self.assertRaises(ValueError):
             self.registry.get_tool_schemas("azure")
+
+
+class ProviderConfigTest(unittest.TestCase):
+    def test_the_image_flag_survives_provider_construction(self):
+        # ``build_provider`` rebuilds the config for the OpenAI-compatible wire
+        # format; dropping this flag there would silently disable tool screenshots.
+        config = ProviderConfig(
+            provider="openai",
+            model="deepseek-v4.1-flash",
+            api_key="test-key",
+            base_url="http://127.0.0.1:1/v1",
+            supports_image_input=True,
+        )
+
+        provider = build_provider("openai", config)
+
+        self.assertTrue(provider.config.supports_image_input)
 
 
 if __name__ == "__main__":
