@@ -42,7 +42,7 @@ cd ..
 ## 4. 启动方式
 
 ```bash
-uv run python main.py
+uv run python main.py --query "What's the weather in Tokyo?"
 uv run python main.py --interactive
 uv run python main.py --web --reload
 ```

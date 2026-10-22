@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -25,7 +26,8 @@ import agent_api
 import app_state
 import task_api
 import workspace_api
-from agent.agent_loop import DEFAULT_USER_QUERY, run_react_loop
+from agent.agent_loop import run_react_loop
+from agent.provider import ProviderError
 from mcp_api import router as mcp_router
 from task_runtime import purge_expired_tasks_with_log
 
@@ -110,18 +112,6 @@ async def read_frontend_assets(full_path: str) -> FileResponse:
     return _serve_frontend_file(full_path)
 
 
-def _resolve_query(cli_query: str | None) -> tuple[str, bool]:
-    mode = os.getenv("NGY_PY_AGENT_MODE", "").strip().lower()
-    if mode != "dev":
-        return cli_query or DEFAULT_USER_QUERY, False
-
-    query_from_env = os.getenv("NGY_PY_AGNET_QUERY", "").strip()
-    if query_from_env:
-        return query_from_env, True
-
-    return cli_query or DEFAULT_USER_QUERY, False
-
-
 def _run_web_server(host: str, port: int, reload: bool) -> None:
     try:
         _resolve_frontend_index()
@@ -141,10 +131,9 @@ def main() -> None:
         description="Run ReAct tasks with optional Web Admin mode.",
     )
     parser.add_argument(
-        "query",
-        nargs="?",
+        "--query",
         default=None,
-        help="Input query content; use default query if omitted.",
+        help="Input query for a single run; required unless --web or --interactive is used.",
     )
     parser.add_argument(
         "--provider",
@@ -199,8 +188,7 @@ def main() -> None:
         _run_web_server(host=args.host, port=args.port, reload=args.reload)
         return
 
-    query, used_env_query = _resolve_query(args.query)
-    if args.interactive and not used_env_query:
+    if args.interactive:
         print("Type your question, input exit/quit/q or Ctrl+C to leave.")
         interactive_verbose = (not args.quiet) and args.trace
         messages: List[Dict[str, Any]] = [
@@ -219,27 +207,45 @@ def main() -> None:
                 if user_input.lower() in {"exit", "quit", "q"}:
                     break
 
-                answer = run_react_loop(
-                    user_query=user_input,
-                    provider_name=args.provider,
-                    max_steps=args.steps,
-                    verbose=interactive_verbose,
-                    initial_messages=messages,
-                    base_dir=str(ROOT_DIR),
-                )
+                try:
+                    answer = run_react_loop(
+                        user_query=user_input,
+                        provider_name=args.provider,
+                        max_steps=args.steps,
+                        verbose=interactive_verbose,
+                        initial_messages=messages,
+                        base_dir=str(ROOT_DIR),
+                    )
+                except ProviderError as exc:
+                    # The model endpoint is configuration, not app state: an
+                    # unreachable model must not end the session, or fixing the
+                    # configuration would cost the user the whole conversation.
+                    print(f"[model error] {exc}", file=sys.stderr)
+                    continue
                 if not args.quiet:
                     print(f"assistant> {answer}")
         except KeyboardInterrupt:
             print("\nYou have exited interactive mode.")
         return
 
-    run_react_loop(
-        user_query=query,
-        provider_name=args.provider,
-        max_steps=args.steps,
-        verbose=not args.quiet,
-        base_dir=str(ROOT_DIR),
-    )
+    query = (args.query or "").strip()
+    if not query:
+        parser.error("--query is required unless --web or --interactive is used.")
+
+    try:
+        run_react_loop(
+            user_query=query,
+            provider_name=args.provider,
+            max_steps=args.steps,
+            verbose=not args.quiet,
+            base_dir=str(ROOT_DIR),
+        )
+    except ProviderError as exc:
+        # One query, one answer: there is nothing left to do, but a failed model
+        # call is still a configuration problem, so report it as one line instead
+        # of an SDK traceback.
+        print(f"[model error] {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

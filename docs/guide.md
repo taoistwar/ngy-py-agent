@@ -7,25 +7,19 @@
 ### 单次运行
 
 ```bash
-uv run python main.py
+uv run python main.py --query "What's the weather in Tokyo?"
 ```
 
-默认会执行内置示例问题，并走 ReAct + 工具调用流程。
-
-### 指定问题（单次）
-
-```bash
-uv run python main.py "What's the weather in Tokyo?"
-```
+`--query` 为必填参数，缺失时会打印用法错误并退出（`--web` / `--interactive` 除外）。
 
 ### 指定 Provider
 
 ```bash
-uv run python main.py --provider openai-compatible
-uv run python main.py --provider openai
-uv run python main.py --provider anthropic
-uv run python main.py --provider anthropic-compatible
-uv run python main.py --provider openai-compatible --steps 4
+uv run python main.py --provider openai-compatible --query "What's the weather in Tokyo?"
+uv run python main.py --provider openai --query "What's the weather in Tokyo?"
+uv run python main.py --provider anthropic --query "What's the weather in Tokyo?"
+uv run python main.py --provider anthropic-compatible --query "What's the weather in Tokyo?"
+uv run python main.py --provider openai-compatible --steps 4 --query "What's the weather in Tokyo?"
 ```
 
 说明：`openai-compatible` 会走 OpenAI 兼容接口。
@@ -40,7 +34,7 @@ uv run python main.py --interactive --trace
 ### 仅输出最终结果
 
 ```bash
-uv run python main.py --quiet "What's the weather in Vancouver?"
+uv run python main.py --quiet --query "What's the weather in Vancouver?"
 ```
 
 ## Web Admin 管理中心
@@ -58,6 +52,7 @@ http://127.0.0.1:8001
 ### 参数说明（关键）
 
 ```text
+--query QUERY        单次运行的问题（--web / --interactive 除外时必填）
 --web
 --host HOST          监听地址（默认 127.0.0.1）
 --port PORT          监听端口（默认 8001）

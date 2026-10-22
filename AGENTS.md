@@ -38,7 +38,7 @@
   - `python -m compileall -q main.py agent/agent_loop.py`
 - 冒烟验证：
   - `uv run python main.py --help`
-  - `uv run python main.py --steps 2 --quiet`
+  - `uv run python main.py --steps 2 --quiet --query "What's the weather in Tokyo?"`
   - `uv run python main.py --interactive --quiet`（如当前环境可交互）
 
 ## 环境说明

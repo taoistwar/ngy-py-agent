@@ -2,11 +2,13 @@
 
 基于 ReAct 的 CLI Agent 示例，支持命令行执行和 Web Admin 管理中心。
 
-## 快速启动
+## 快速运行（CLI 单次，不启动服务）
 
 ```bash
-uv run python main.py
+uv run python main.py --query "What's the weather in Tokyo?"
 ```
+
+`--query` 必填（`--web` / `--interactive` 除外）；模型配置来自 `.env`。
 
 ## 启动 Web Admin
 

@@ -6,6 +6,7 @@ import json
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from agent.llm_errors import describe_llm_failure
 from agent.models import (
     EventCategory,
     EventSink,
@@ -42,7 +43,6 @@ from agent.vision import build_image_message, redact_image_payload, supports_ima
 # fallback is the provider module's default, so there is one place that says what
 # "not configured" means.
 TOOL_SCHEMA_PROVIDER = os.getenv("TOOL_SCHEMA_PROVIDER") or DEFAULT_PROVIDER
-DEFAULT_USER_QUERY = "What's the current time and weather in Vancouver?"
 DEFAULT_MAX_STEPS = int(os.getenv("REACT_MAX_STEPS", "8"))
 
 
@@ -277,7 +277,7 @@ def _reaps_task_sessions(func):
 
 @_reaps_task_sessions
 def run_react_loop(
-    user_query: Optional[str] = DEFAULT_USER_QUERY,
+    user_query: str,
     provider_name: Optional[str] = None,
     max_steps: int = DEFAULT_MAX_STEPS,
     verbose: bool = True,
@@ -344,8 +344,7 @@ def run_react_loop(
             },
         ]
 
-    effective_query = user_query if user_query is not None else DEFAULT_USER_QUERY
-    messages.append({"role": "user", "content": effective_query})
+    messages.append({"role": "user", "content": user_query})
 
     _emit(
         event_sink,
@@ -357,7 +356,7 @@ def run_react_loop(
             data={
                 "provider": provider.config.provider,
                 "max_steps": max_steps,
-                "query": effective_query,
+                "query": user_query,
                 "model": provider.config.model,
                 "mode": mode,
                 "tools_enabled": enable_tools,
@@ -418,7 +417,33 @@ def run_react_loop(
             ),
         )
 
-        response = provider.chat_completion(**raw_request_payload)
+        # A model that is down or misconfigured is a routine failure, not a crash in
+        # the agent: describe it in terms the operator can act on, record it as an
+        # error event (the web admin shows it), and let the caller decide whether to
+        # retry. The raw SDK exception never escapes this loop.
+        try:
+            response = provider.chat_completion(**raw_request_payload)
+        except Exception as exc:  # noqa: BLE001 - every provider failure is reported
+            failure = describe_llm_failure(exc, provider)
+            _emit(
+                event_sink,
+                task_id,
+                TaskEvent(
+                    task_id=task_id or "",
+                    category=EventCategory.ERROR,
+                    title=f"LLM request failed (step {step})",
+                    data={
+                        "step": step,
+                        "provider": failure.provider,
+                        "model": failure.model,
+                        "endpoint": failure.endpoint,
+                        "type": type(exc).__name__,
+                        "error": str(failure),
+                    },
+                    collapsed=True,
+                ),
+            )
+            raise failure from exc
         assistant_message = response.choices[0].message
         message_dict = _to_dict(assistant_message)
         messages.append(message_dict)
