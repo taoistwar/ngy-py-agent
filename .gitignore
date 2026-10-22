@@ -22,3 +22,6 @@ data/ds-tokenizer/
 data/default_workspace/
 data/permission_rules.json
 .env
+output/
+/llm/
+/test/llm/
