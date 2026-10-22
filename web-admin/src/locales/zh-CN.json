@@ -155,7 +155,7 @@
   "permissionModeCurrent": "当前模式",
   "permissionModeSet": "模式",
   "permissionModeAsk": "ask（每次都确认）",
-  "permissionModeAuto": "auto approve（从不询问）",
+  "permissionModeAuto": "auto approve（自动批准）",
   "permissionModeDenyAll": "deny all（全部拒绝）",
   "permissionModeSave": "保存",
   "permissionModeSaving": "保存中…",
