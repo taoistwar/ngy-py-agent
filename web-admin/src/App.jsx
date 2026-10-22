@@ -1320,7 +1320,8 @@ function EventTimeline({ task, events, hasMore, loadingMore, onLoadMore, transla
     return <div className="timeline-empty">{translate("taskEventsNoTask")}</div>
   }
 
-  const ordered = [...events].reverse()
+  // Keep creation order so the earliest event appears first.
+  const ordered = events
 
   return (
     <div>
