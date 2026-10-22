@@ -92,6 +92,7 @@ class _SqliteTaskStore:
                 CREATE TABLE IF NOT EXISTS tasks (
                     task_id TEXT PRIMARY KEY,
                     query TEXT NOT NULL,
+                    name TEXT NOT NULL DEFAULT '',
                     provider TEXT NOT NULL,
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL,
@@ -170,6 +171,8 @@ class _SqliteTaskStore:
             self._conn.execute("ALTER TABLE tasks ADD COLUMN mode TEXT NOT NULL DEFAULT 'build'")
         if "result" not in existing:
             self._conn.execute("ALTER TABLE tasks ADD COLUMN result TEXT")
+        if "name" not in existing:
+            self._conn.execute("ALTER TABLE tasks ADD COLUMN name TEXT NOT NULL DEFAULT ''")
 
     def _ensure_session_columns(self) -> None:
         rows = self._conn.execute("PRAGMA table_info(sessions)").fetchall()
@@ -629,12 +632,14 @@ class _SqliteTaskStore:
             self._conn.execute(
                 """
                 INSERT INTO tasks (
-                    task_id, query, provider, status, created_at, updated_at, session_id, model_id, mode, result
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    task_id, query, name, provider, status, created_at, updated_at, session_id,
+                    model_id, mode, result
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
                     query,
+                    "",
                     provider,
                     TaskStatus.RUNNING,
                     now,
@@ -783,11 +788,21 @@ class _SqliteTaskStore:
             )
             self._conn.commit()
 
+    def set_task_name(self, task_id: str, name: str) -> bool:
+        """Store the short task name shown in the list; the query itself never changes."""
+        with self._lock:
+            cursor = self._conn.execute(
+                "UPDATE tasks SET name = ?, updated_at = ? WHERE task_id = ?",
+                (name, datetime.now(UTC).isoformat(), task_id),
+            )
+            self._conn.commit()
+            return (cursor.rowcount or 0) > 0
+
     def get_task(self, task_id: str) -> dict[str, Any] | None:
         with self._lock:
             task = self._conn.execute(
                 """
-                SELECT t.task_id, t.query, t.provider, t.status, t.created_at, t.updated_at,
+                SELECT t.task_id, t.query, t.name, t.provider, t.status, t.created_at, t.updated_at,
                        t.session_id, t.model_id, t.mode, m.name AS model_name
                 FROM tasks t
                 LEFT JOIN models m ON m.model_id = t.model_id
@@ -811,6 +826,7 @@ class _SqliteTaskStore:
             return {
                 "task_id": task["task_id"],
                 "query": task["query"],
+                "name": task["name"] or "",
                 "provider": task["provider"],
                 "status": task["status"],
                 "created_at": self._parse_datetime(task["created_at"]),
@@ -827,15 +843,15 @@ class _SqliteTaskStore:
             if session_id:
                 rows = self._conn.execute(
                     """
-                    SELECT t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at,
-                           t.session_id, t.model_id, t.mode, m.name AS model_name, t.result,
-                           COUNT(e.event_id) AS event_count
+                    SELECT t.task_id, t.query, t.name, t.status, t.provider, t.created_at,
+                           t.updated_at, t.session_id, t.model_id, t.mode, m.name AS model_name,
+                           t.result, COUNT(e.event_id) AS event_count
                     FROM tasks t
                     LEFT JOIN events e ON t.task_id = e.task_id
                     LEFT JOIN models m ON m.model_id = t.model_id
                     WHERE t.session_id = ?
-                    GROUP BY t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at,
-                             t.session_id, t.model_id, t.mode, m.name, t.result
+                    GROUP BY t.task_id, t.query, t.name, t.status, t.provider, t.created_at,
+                             t.updated_at, t.session_id, t.model_id, t.mode, m.name, t.result
                     ORDER BY t.created_at ASC, t.task_id ASC
                     """,
                     (session_id,),
@@ -843,14 +859,14 @@ class _SqliteTaskStore:
             else:
                 rows = self._conn.execute(
                     """
-                    SELECT t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at,
-                           t.session_id, t.model_id, t.mode, m.name AS model_name, t.result,
-                           COUNT(e.event_id) AS event_count
+                    SELECT t.task_id, t.query, t.name, t.status, t.provider, t.created_at,
+                           t.updated_at, t.session_id, t.model_id, t.mode, m.name AS model_name,
+                           t.result, COUNT(e.event_id) AS event_count
                     FROM tasks t
                     LEFT JOIN events e ON t.task_id = e.task_id
                     LEFT JOIN models m ON m.model_id = t.model_id
-                    GROUP BY t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at,
-                             t.session_id, t.model_id, t.mode, m.name, t.result
+                    GROUP BY t.task_id, t.query, t.name, t.status, t.provider, t.created_at,
+                             t.updated_at, t.session_id, t.model_id, t.mode, m.name, t.result
                     ORDER BY t.created_at ASC, t.task_id ASC
                     """
                 ).fetchall()
@@ -858,6 +874,7 @@ class _SqliteTaskStore:
                 {
                     "task_id": row["task_id"],
                     "query": row["query"],
+                    "name": row["name"] or "",
                     "status": row["status"],
                     "provider": row["provider"],
                     "created_at": self._parse_datetime(row["created_at"]),

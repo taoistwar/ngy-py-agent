@@ -62,5 +62,34 @@ class TaskListOrderTest(unittest.TestCase):
         self.assertEqual([older, newer], order)
 
 
+class TaskNameTest(unittest.TestCase):
+    """The list shows a task name; the raw query stays available for the detail view."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.store = _SqliteTaskStore(Path(self._tmp.name) / "tasks.db")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_a_new_task_has_no_name_yet(self):
+        task_id = self.store.create_task("build a report", "openai")
+
+        self.assertEqual("", self.store.get_task(task_id)["name"])
+        self.assertEqual("", self.store.list_tasks()[0]["name"])
+
+    def test_the_name_survives_in_both_read_paths(self):
+        task_id = self.store.create_task("build a report", "openai")
+
+        self.store.set_task_name(task_id, "report draft")
+
+        self.assertEqual("report draft", self.store.get_task(task_id)["name"])
+        self.assertEqual("report draft", self.store.list_tasks()[0]["name"])
+        self.assertEqual("build a report", self.store.get_task(task_id)["query"])
+
+    def test_naming_a_missing_task_is_a_no_op(self):
+        self.assertFalse(self.store.set_task_name("missing-task", "name"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -569,15 +569,41 @@
 
 .session-task-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 9px;
-  align-items: center;
+  align-items: start;
   border: 1px solid #2f4369;
   border-radius: 9px;
   background: rgba(18, 31, 58, 0.7);
   padding: 8px 10px;
   cursor: pointer;
   transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.session-task-info {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.session-task-query {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The row actions ride at the end of the meta line instead of holding a column of
+   their own, so the task name above gets the full width of the row. */
+.session-task-meta .task-row-actions {
+  margin-left: auto;
 }
 
 .session-task-row:hover {

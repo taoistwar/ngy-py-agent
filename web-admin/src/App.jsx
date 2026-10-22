@@ -748,7 +748,7 @@ function TaskList({
                   </label>
                   <div className="session-task-info">
                     <div className="session-task-query" title={item.query}>
-                      {shortenText(item.query, 90)}
+                      {shortenText(item.name || item.query, 90)}
                     </div>
                     <div className="session-task-meta">
                       <span className={`status ${getTaskStatusClass(item.status)}`}>
@@ -766,14 +766,15 @@ function TaskList({
                       <span className="hint">
                         {translate("taskEventCountPrefix")}: {item.event_count}
                       </span>
+                      {/* Kept on the meta line so the name above owns the full width. */}
+                      <TaskRowActions
+                        running={isTaskRunningStatus(item.status)}
+                        onRerun={() => onRerun(item)}
+                        onDelete={() => onDelete(item.task_id)}
+                        translate={translate}
+                      />
                     </div>
                   </div>
-                  <TaskRowActions
-                    running={isTaskRunningStatus(item.status)}
-                    onRerun={() => onRerun(item)}
-                    onDelete={() => onDelete(item.task_id)}
-                    translate={translate}
-                  />
                 </div>
               ))}
             </div>

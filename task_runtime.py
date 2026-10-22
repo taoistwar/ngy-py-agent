@@ -15,7 +15,7 @@ import json
 import os
 import threading
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import app_state
 from agent.agent_loop import DEFAULT_MAX_STEPS, run_react_loop
@@ -148,7 +148,7 @@ def resolve_skills_root() -> str:
     return str(app_state.ROOT_DIR / "skills")
 
 
-# ------------------------------------------------------- session title (LLM)
+# ------------------------------------------------- task and session names (LLM)
 
 
 _SESSION_TITLE_MAX_LENGTH = 60
@@ -158,18 +158,66 @@ _SESSION_TITLE_PROMPT = (
     "Reply with the title only, without quotes, and keep it under 20 characters when possible."
 )
 
+# The task list shows this name on one line, so it stays short.
+_TASK_NAME_MAX_LENGTH = 20
+_TASK_NAME_PROMPT = (
+    "You name tasks for a task list. Summarize the user's task as a very short name "
+    "in the same language as the request. Reply with the name only, without quotes, "
+    "and keep it within 20 characters."
+)
+
 
 def default_session_name() -> str:
     """Time-based session name used when the user does not provide one."""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _collapsed(query: str) -> str:
+    """One-line form of the query: names are labels, not quotes."""
+    return " ".join(str(query or "").split())
+
+
 def _fallback_session_title(query: str) -> str:
     """Fallback title derived from the raw query when the LLM is unavailable."""
-    collapsed = " ".join(str(query or "").split())
+    collapsed = _collapsed(query)
     if not collapsed:
         return default_session_name()
     return collapsed[:_SESSION_TITLE_MAX_LENGTH]
+
+
+def _fallback_task_name(query: str) -> str:
+    """Task name used when the LLM is unavailable."""
+    return _collapsed(query)[:_TASK_NAME_MAX_LENGTH]
+
+
+def _summarize(
+    prompt: str,
+    max_length: int,
+    provider_name: str,
+    provider_config: Optional[ProviderConfig],
+    query: str,
+    fallback: Callable[[str], str],
+) -> str:
+    """Ask the LLM for a short label, falling back to a query-derived one."""
+    try:
+        provider = build_provider(provider_name, provider_config)
+        response = provider.chat_completion(
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": str(query or "")},
+            ]
+        )
+        message = response.choices[0].message
+        content = (
+            message.get("content") if isinstance(message, dict) else getattr(message, "content", None)
+        )
+    except Exception:  # noqa: BLE001 - a label is a convenience; fall back to the query
+        return fallback(query)
+
+    label = str(content or "").strip().strip('"').strip("'").strip()
+    if not label:
+        return fallback(query)
+    return label[:max_length]
 
 
 def _summarize_session_title(
@@ -178,25 +226,14 @@ def _summarize_session_title(
     query: str,
 ) -> str:
     """Ask the LLM for a short session title, falling back to the raw query."""
-    try:
-        provider = build_provider(provider_name, provider_config)
-        response = provider.chat_completion(
-            messages=[
-                {"role": "system", "content": _SESSION_TITLE_PROMPT},
-                {"role": "user", "content": str(query or "")},
-            ]
-        )
-        message = response.choices[0].message
-        content = (
-            message.get("content") if isinstance(message, dict) else getattr(message, "content", None)
-        )
-    except Exception:  # noqa: BLE001 - a title is a convenience; fall back to the query
-        return _fallback_session_title(query)
-
-    title = str(content or "").strip().strip('"').strip("'").strip()
-    if not title:
-        return _fallback_session_title(query)
-    return title[:_SESSION_TITLE_MAX_LENGTH]
+    return _summarize(
+        _SESSION_TITLE_PROMPT,
+        _SESSION_TITLE_MAX_LENGTH,
+        provider_name,
+        provider_config,
+        query,
+        _fallback_session_title,
+    )
 
 
 def update_session_title(
@@ -211,6 +248,51 @@ def update_session_title(
     title = _summarize_session_title(provider_name, provider_config, query)
     if title:
         app_state.monitor_store.rename_session(session_id, title)
+
+
+def update_task_name(
+    task_id: str,
+    provider_name: str,
+    provider_config: Optional[ProviderConfig],
+    query: str,
+) -> None:
+    """Name a task the way the list shows it.
+
+    A query that already fits in the name length is its own name - asking the model
+    to shorten three words can only lose them - so the model is only used when the
+    query is longer than the name may be.
+    """
+    collapsed = _collapsed(query)
+    if not collapsed:
+        return
+    if len(collapsed) <= _TASK_NAME_MAX_LENGTH:
+        app_state.monitor_store.set_task_name(task_id, collapsed)
+        return
+    name = _summarize(
+        _TASK_NAME_PROMPT,
+        _TASK_NAME_MAX_LENGTH,
+        provider_name,
+        provider_config,
+        query,
+        _fallback_task_name,
+    )
+    app_state.monitor_store.set_task_name(task_id, name)
+
+
+def name_task_and_session(
+    task_id: str,
+    session_id: str | None,
+    provider_name: str,
+    provider_config: Optional[ProviderConfig],
+    query: str,
+) -> None:
+    """Both naming steps in one background thread.
+
+    Each one calls the model, so running them one after the other keeps a local
+    model from being asked twice at the same time while the task itself is running.
+    """
+    update_task_name(task_id, provider_name, provider_config, query)
+    update_session_title(session_id, provider_name, provider_config, query)
 
 
 # ------------------------------------------------------------ retention purge
@@ -284,8 +366,8 @@ def run_task(
     )
 
     threading.Thread(
-        target=update_session_title,
-        args=(request.session_id, provider, provider_config, request.query),
+        target=name_task_and_session,
+        args=(task_id, request.session_id, provider, provider_config, request.query),
         daemon=True,
     ).start()
 

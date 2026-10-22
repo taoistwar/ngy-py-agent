@@ -61,6 +61,8 @@ class TaskListItemResponse(BaseModel):
 
     task_id: str
     query: str
+    # Short name shown in the task list; empty until the naming step has run.
+    name: str = ""
     status: str
     provider: str
     session_id: str | None = None
@@ -83,6 +85,7 @@ class TaskDetailResponse(BaseModel):
 
     task_id: str
     query: str
+    name: str = ""
     status: str
     provider: str
     session_id: str | None = None
