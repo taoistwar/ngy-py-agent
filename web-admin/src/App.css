@@ -1,7 +1,13 @@
+/* The shell owns the viewport: the page never scrolls, so the task columns keep
+   their own height and scroll inside. Letting the shell grow with its content is
+   what pushed the task list and the composer below the fold whenever the event
+   log on the right got long. */
 .admin-root {
-  min-height: 100vh;
-  display: grid;
-  grid-template-rows: auto 1fr;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   color: var(--text);
 }
 
@@ -700,6 +706,9 @@
   padding: 7px 9px;
   font-size: 13px;
   min-height: 64px;
+  /* Dragging it taller must not push the composer off the screen: the task list
+     above it keeps the rest of the column. */
+  max-height: 30vh;
   resize: vertical;
   font-family: inherit;
   box-sizing: border-box;
@@ -950,6 +959,15 @@
   min-width: 0;
   min-height: 0;
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: auto;
+}
+
+/* The detail panel is the only column that is meant to be long, so it scrolls
+   inside its own frame instead of stretching the whole workspace. */
+.task-detail-pane .panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -1635,11 +1653,22 @@
   height: 28px;
 }
 
+/* The content area takes the height the topbar leaves and scrolls its own page,
+   so a management page taller than the screen keeps working after the shell
+   stopped scrolling. */
 .admin-content {
   padding: 12px;
   display: grid;
   gap: 7px;
   min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+/* The task workspace is height-bound instead of content-bound: its columns share
+   one screen and each body scrolls on its own. */
+.admin-content-fill {
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .global-error {

@@ -101,6 +101,36 @@ const TASK_COLUMN_COLLAPSED_WIDTH = 44
 const TASK_COLUMN_WIDTHS_KEY = "web-admin.taskColumnWidths"
 const TASK_COLUMN_COLLAPSED_KEY = "web-admin.leftColumnCollapsed"
 const TASK_COLUMN_DEFAULT_WIDTHS = { left: 260, mid: 360 }
+// One draft per session, so a refresh restores what was being typed and two
+// sessions never show each other's text.
+const COMPOSER_DRAFT_KEY_PREFIX = "web-admin.composerDraft."
+
+function composerDraftKey(sessionId) {
+  return `${COMPOSER_DRAFT_KEY_PREFIX}${sessionId}`
+}
+
+function loadComposerDraft(sessionId) {
+  if (typeof window === "undefined" || !sessionId) return ""
+  try {
+    return window.localStorage.getItem(composerDraftKey(sessionId)) || ""
+  } catch {
+    return ""
+  }
+}
+
+function saveComposerDraft(sessionId, text) {
+  if (typeof window === "undefined" || !sessionId) return
+  try {
+    if (text) {
+      window.localStorage.setItem(composerDraftKey(sessionId), text)
+    } else {
+      // An empty composer is not a draft: drop the key instead of storing "".
+      window.localStorage.removeItem(composerDraftKey(sessionId))
+    }
+  } catch {
+    // ignore persistence errors
+  }
+}
 
 function loadLeftColumnCollapsed() {
   if (typeof window === "undefined") return false
@@ -144,6 +174,12 @@ function formatTime(value) {
     return String(value)
   }
   return time.toLocaleString()
+}
+
+// The task list is served oldest first, so the task to resume is the last one
+// in the list - "the first entry" would be the oldest task of the session.
+function latestTaskId(list) {
+  return list && list.length > 0 ? list[list.length - 1].task_id : ""
 }
 
 function shortenText(value, maxLength) {
@@ -855,6 +891,7 @@ function TaskComposer({
   models,
   agents,
   skills,
+  sessionId,
   composerRunning,
   onCreate,
   onStop,
@@ -862,7 +899,7 @@ function TaskComposer({
   onImportSkill,
   translate,
 }) {
-  const [query, setQuery] = useState("")
+  const [query, setQuery] = useState(() => loadComposerDraft(sessionId))
   const [modelId, setModelId] = useState("")
   const [provider, setProvider] = useState("openai-compatible")
   const [agentId, setAgentId] = useState("")
@@ -875,6 +912,19 @@ function TaskComposer({
 
   const effectiveModelId = modelId || (models && models.length ? models[0].model_id : "")
   const effectiveAgentId = agentId || (agents && agents.length ? agents[0].agent_id : "")
+
+  // Writing the draft from the edit handlers (not from an effect) keeps every
+  // write inside the session on screen: on a session switch the textarea still
+  // holds the previous session's text for one render, and an effect keyed on
+  // ``query`` would save that text into the new session's key.
+  const updateQuery = (value) => {
+    setQuery(value)
+    saveComposerDraft(sessionId, value)
+  }
+
+  useEffect(() => {
+    setQuery(loadComposerDraft(sessionId))
+  }, [sessionId])
 
   useEffect(() => {
     if (!skillsOpen) return undefined
@@ -906,7 +956,7 @@ function TaskComposer({
         payload.provider = provider
       }
       await onCreate(payload)
-      setQuery("")
+      updateQuery("")
       setPickedSkills([])
     } catch {
       // surface errors through the global error banner
@@ -924,7 +974,7 @@ function TaskComposer({
   const applySkill = (skill) => {
     const label = skill.display_name || skill.name
     const line = skill.description ? `使用技能 ${label}：${skill.description}` : `使用技能 ${label}`
-    setQuery((prev) => (prev ? `${prev}\n${line}` : line))
+    updateQuery(query ? `${query}\n${line}` : line)
     setPickedSkills((prev) => (prev.includes(skill.name) ? prev : [...prev, skill.name]))
     setSkillsOpen(false)
   }
@@ -939,7 +989,7 @@ function TaskComposer({
           <textarea
             className="composer-textarea"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => updateQuery(event.target.value)}
             onKeyDown={onQueryKeyDown}
             placeholder={translate("taskFormPlaceholder")}
           />
@@ -1428,7 +1478,7 @@ export default function App() {
     if (list.length === 0) {
       setSelectedId("")
     } else if (!current || !list.some((item) => item.task_id === current)) {
-      setSelectedId(list[0].task_id)
+      setSelectedId(latestTaskId(list))
     }
   }, [])
 
@@ -1562,7 +1612,7 @@ export default function App() {
         const list = await fetchTasks(sessionId)
         setTasks(list)
         if (list.length > 0) {
-          setSelectedId(list[0].task_id)
+          setSelectedId(latestTaskId(list))
         } else {
           setSelectedId("")
         }
@@ -1950,7 +2000,7 @@ export default function App() {
           nextOffsetRef.current = 0
           setHasMoreEvents(false)
           if (nextTasks.length > 0) {
-            const nextId = nextTasks[0].task_id
+            const nextId = latestTaskId(nextTasks)
             setSelectedId(nextId)
             const task = await refreshTask(nextId)
             await loadEvents(nextId, true, task?.status, true)
@@ -1984,7 +2034,7 @@ export default function App() {
         nextOffsetRef.current = 0
         setHasMoreEvents(false)
         if (remaining.length > 0) {
-          const nextId = remaining[0].task_id
+          const nextId = latestTaskId(remaining)
           setSelectedId(nextId)
           const task = await fetchTask(nextId)
           await loadEvents(nextId, true, task?.status, true)
@@ -2202,7 +2252,7 @@ export default function App() {
           if (taskList.length > 0) {
             const current = selectedIdRef.current
             if (!current || !taskList.some((item) => item.task_id === current)) {
-              setSelectedId(taskList[0].task_id)
+              setSelectedId(latestTaskId(taskList))
             }
           } else {
             setSelectedId("")
@@ -2337,7 +2387,7 @@ export default function App() {
         translate={translate}
       />
       {error && <div className="global-error">{error}</div>}
-      <main className="admin-content">
+      <main className={`admin-content ${activeMenu === "tasks" ? "admin-content-fill" : ""}`}>
         {activeMenu === "tasks" ? (
           <div
             className="task-workspace"
@@ -2425,6 +2475,7 @@ export default function App() {
                 models={models}
                 agents={agents}
                 skills={skills}
+                sessionId={activeSessionId}
                 composerRunning={Boolean(composerTaskId)}
                 onCreate={createNewTask}
                 onStop={stopComposerTask}

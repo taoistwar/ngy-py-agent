@@ -836,7 +836,7 @@ class _SqliteTaskStore:
                     WHERE t.session_id = ?
                     GROUP BY t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at,
                              t.session_id, t.model_id, t.mode, m.name, t.result
-                    ORDER BY t.created_at DESC
+                    ORDER BY t.created_at ASC, t.task_id ASC
                     """,
                     (session_id,),
                 ).fetchall()
@@ -851,7 +851,7 @@ class _SqliteTaskStore:
                     LEFT JOIN models m ON m.model_id = t.model_id
                     GROUP BY t.task_id, t.query, t.status, t.provider, t.created_at, t.updated_at,
                              t.session_id, t.model_id, t.mode, m.name, t.result
-                    ORDER BY t.created_at DESC
+                    ORDER BY t.created_at ASC, t.task_id ASC
                     """
                 ).fetchall()
             return [
