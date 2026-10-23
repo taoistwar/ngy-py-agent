@@ -76,6 +76,7 @@ class _SqliteTaskStore:
                 CREATE TABLE IF NOT EXISTS agents (
                     agent_id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
+                    icon TEXT NOT NULL DEFAULT '',
                     description TEXT NOT NULL DEFAULT '',
                     system_prompt TEXT NOT NULL DEFAULT '',
                     tool_names TEXT,
@@ -147,6 +148,7 @@ class _SqliteTaskStore:
             )
             self._ensure_task_columns()
             self._ensure_session_columns()
+            self._ensure_agent_columns()
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_events_task_id_id ON events(task_id, id)")
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at)")
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id)")
@@ -180,31 +182,48 @@ class _SqliteTaskStore:
         if "workspace_id" not in existing:
             self._conn.execute("ALTER TABLE sessions ADD COLUMN workspace_id TEXT")
 
+    def _ensure_agent_columns(self) -> None:
+        rows = self._conn.execute("PRAGMA table_info(agents)").fetchall()
+        existing = {row["name"] for row in rows}
+        if "icon" not in existing:
+            self._conn.execute("ALTER TABLE agents ADD COLUMN icon TEXT NOT NULL DEFAULT ''")
+
     def _seed_default_agents(self) -> None:
-        """Insert the built-in build/ask/plan agents derived from the mode configs."""
+        """Insert the built-in build/ask/plan agents derived from the mode configs.
+
+        Rows that predate a config field (today: ``icon``) are backfilled when the
+        stored value is still empty, so an existing database picks the defaults up.
+        """
         from agent.modes import MODE_CONFIGS
 
         now = datetime.now(UTC).isoformat()
         with self._lock:
             for name, config in MODE_CONFIGS.items():
                 row = self._conn.execute(
-                    "SELECT 1 FROM agents WHERE agent_id = ?",
+                    "SELECT icon FROM agents WHERE agent_id = ?",
                     (name,),
                 ).fetchone()
                 if row is not None:
+                    default_icon = config.get("icon", "")
+                    if default_icon and not (row["icon"] or ""):
+                        self._conn.execute(
+                            "UPDATE agents SET icon = ? WHERE agent_id = ?",
+                            (default_icon, name),
+                        )
                     continue
                 tool_names = config.get("tool_names")
                 self._conn.execute(
                     """
                     INSERT INTO agents (
-                        agent_id, name, description, system_prompt,
+                        agent_id, name, icon, description, system_prompt,
                         tool_names, skill_names, mcp_servers, is_builtin,
                         created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         name,
                         config.get("label", name),
+                        config.get("icon", ""),
                         config.get("description", ""),
                         config.get("system_prompt", ""),
                         json.dumps(list(tool_names)) if tool_names is not None else None,
@@ -443,6 +462,7 @@ class _SqliteTaskStore:
         return {
             "agent_id": row["agent_id"],
             "name": row["name"],
+            "icon": row["icon"] or "",
             "description": row["description"] or "",
             "system_prompt": row["system_prompt"] or "",
             "tool_names": tool_names,
@@ -478,14 +498,15 @@ class _SqliteTaskStore:
             self._conn.execute(
                 """
                 INSERT INTO agents (
-                    agent_id, name, description, system_prompt,
+                    agent_id, name, icon, description, system_prompt,
                     tool_names, skill_names, mcp_servers, is_builtin,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     agent_id,
                     payload.get("name") or "",
+                    payload.get("icon") or "",
                     payload.get("description") or "",
                     payload.get("system_prompt") or "",
                     json.dumps(list(tool_names)) if tool_names is not None else None,
@@ -511,12 +532,13 @@ class _SqliteTaskStore:
             self._conn.execute(
                 """
                 UPDATE agents
-                SET name = ?, description = ?, system_prompt = ?,
+                SET name = ?, icon = ?, description = ?, system_prompt = ?,
                     tool_names = ?, skill_names = ?, mcp_servers = ?, updated_at = ?
                 WHERE agent_id = ?
                 """,
                 (
                     merged.get("name") or "",
+                    merged.get("icon") or "",
                     merged.get("description") or "",
                     merged.get("system_prompt") or "",
                     json.dumps(list(tool_names)) if tool_names is not None else None,

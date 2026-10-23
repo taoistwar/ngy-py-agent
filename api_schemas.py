@@ -327,6 +327,12 @@ class AgentUpsertRequest(BaseModel):
     """Create or update an agent configuration."""
 
     name: str = Field(min_length=1, max_length=120, description="Agent name.")
+    icon: str = Field(
+        default="",
+        max_length=32,
+        pattern=r"^[a-z0-9_-]*$",
+        description="Icon key rendered by the web admin agent picker; empty means default.",
+    )
     description: str = Field(default="", max_length=2000)
     system_prompt: str = Field(default="", description="System prompt used for this agent.")
     tool_names: list[str] | None = Field(
@@ -341,6 +347,7 @@ class AgentUpdateRequest(BaseModel):
     """Partial update of an agent configuration."""
 
     name: str | None = Field(default=None, min_length=1, max_length=120)
+    icon: str | None = Field(default=None, max_length=32, pattern=r"^[a-z0-9_-]*$")
     description: str | None = Field(default=None, max_length=2000)
     system_prompt: str | None = None
     tool_names: list[str] | None = None
@@ -353,6 +360,7 @@ class AgentItemResponse(BaseModel):
 
     agent_id: str
     name: str
+    icon: str = ""
     description: str = ""
     system_prompt: str = ""
     tool_names: list[str] | None = None

@@ -4,6 +4,7 @@ Each task mode (build / ask / plan) provides its own:
 - ``system_prompt``: the base system instruction for the agent
 - ``tool_names``: which registered tools the agent may use (``None`` = all)
 - ``skills``: list of enabled skill names (see ``SKILLS``)
+- ``icon``: default icon key shown in the agent picker (see web-admin agentIcons)
 """
 
 from typing import Any, Dict, List
@@ -32,6 +33,7 @@ AVAILABLE_SKILLS = sorted(SKILLS.keys())
 MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
     "build": {
         "label": "Build",
+        "icon": "wrench",
         "description": "Implement solutions end-to-end using all available tools.",
         "system_prompt": (
             "You are a Build agent operating in a ReAct loop. Your job is to implement the "
@@ -44,6 +46,7 @@ MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
     },
     "ask": {
         "label": "Ask",
+        "icon": "message",
         "description": "Answer questions clearly using read-only tools when helpful.",
         "system_prompt": (
             "You are an Ask agent. Answer the user's question clearly and accurately. You may "
@@ -65,6 +68,7 @@ MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
     },
     "plan": {
         "label": "Plan",
+        "icon": "clipboard",
         "description": "Produce a concrete plan without performing actions.",
         "system_prompt": (
             "You are a Plan agent. Do NOT execute the task. Instead, produce a concrete, "
