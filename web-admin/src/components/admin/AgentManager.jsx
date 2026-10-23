@@ -4,6 +4,7 @@ import { AgentMcpDetail, AgentSkillDetail, AgentToolDetail } from "./AgentDetail
 import Modal from "./Modal"
 import { buildMcpItems, resolveMcpServers, splitAgentMcpServers } from "./agentMcpSelection"
 import { ManagerSearch, agentDisplayName, matchesKeyword } from "./shared"
+import { AGENT_ICON_KEYS, AgentIcon, agentIconName } from "../agentIcons"
 
 // Hint shown in the shared detail dialog, keyed by the selected row type.
 const DETAIL_HINT_KEYS = {
@@ -16,6 +17,7 @@ function emptyAgentForm() {
   return {
     agent_id: "",
     name: "",
+    icon: "",
     description: "",
     system_prompt: "",
     use_all_tools: true,
@@ -31,6 +33,7 @@ function buildAgentForm(agent, servers) {
     form: {
       agent_id: agent.agent_id,
       name: agent.name || "",
+      icon: agent.icon || "",
       description: agent.description || "",
       system_prompt: agent.system_prompt || "",
       use_all_tools: agent.tool_names === null || agent.tool_names === undefined,
@@ -205,6 +208,7 @@ export default function AgentManager({
     setBusy(true)
     const payload = {
       name: form.name.trim(),
+      icon: form.icon,
       description: form.description,
       system_prompt: form.system_prompt,
       tool_names: form.use_all_tools ? null : form.tool_names,
@@ -285,7 +289,10 @@ export default function AgentManager({
                 {filtered.map((agent) => (
                   <tr key={agent.agent_id}>
                     <td className="model-name">
-                      {agentDisplayName(agent, translate)}
+                      <span className="agent-name">
+                        <AgentIcon name={agentIconName(agent)} />
+                        {agentDisplayName(agent, translate)}
+                      </span>
                       {agent.is_builtin && (
                         <span className="badge badge-builtin">{translate("agentBuiltin")}</span>
                       )}
@@ -327,6 +334,26 @@ export default function AgentManager({
           onClose={closeModal}
         >
           <form className="form-grid agent-form" onSubmit={submit}>
+            <div className="agent-icon-field">
+              <span className="agent-icon-field-label">{translate("agentFormIcon")}</span>
+              <div className="agent-icon-options">
+                {AGENT_ICON_KEYS.map((key) => {
+                  const active = (form.icon || agentIconName(form)) === key
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`agent-icon-option ${active ? "active" : ""}`}
+                      aria-label={key}
+                      aria-pressed={active}
+                      onClick={() => setField("icon", key)}
+                    >
+                      <AgentIcon name={key} />
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
             <label>
               <span>{translate("agentFormName")}</span>
               <input

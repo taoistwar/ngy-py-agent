@@ -1,6 +1,6 @@
 // Shared inline stroke icons (Feather-style) used by the icon-only buttons.
 
-function Icon({ children }) {
+export function Icon({ children }) {
   return (
     <svg
       viewBox="0 0 24 24"

@@ -71,6 +71,8 @@ import {
 import SkillManager from "./components/admin/SkillManager"
 import ToolManager from "./components/admin/ToolManager"
 import WorkspaceManager from "./components/admin/WorkspaceManager"
+import AgentPicker from "./components/AgentPicker"
+import { AgentIcon, agentIconName } from "./components/agentIcons"
 import { PROVIDER_OPTIONS, agentDisplayName } from "./components/admin/shared"
 import "./App.css"
 
@@ -89,10 +91,12 @@ const MENU_ITEMS = [
   { key: "config", labelKey: "menuConfig" },
 ]
 
-const AGENT_CREATE_OPTION = "__create_agent__"
+function resolveAgent(agentId, agents) {
+  return (agents || []).find((item) => item.agent_id === agentId)
+}
 
 function resolveAgentName(agentId, agents, translate) {
-  const agent = (agents || []).find((item) => item.agent_id === agentId)
+  const agent = resolveAgent(agentId, agents)
   if (agent) return agentDisplayName(agent, translate)
   return translate(modeLabelKey(agentId))
 }
@@ -765,6 +769,7 @@ function TaskList({
                         <span className="hint">{item.provider}</span>
                       )}
                       <span className={`badge badge-mode badge-mode-${item.mode || "build"}`}>
+                        <AgentIcon name={agentIconName(resolveAgent(item.mode, agents))} />
                         {resolveAgentName(item.mode, agents, translate)}
                       </span>
                       <span className="hint">
@@ -999,26 +1004,13 @@ function TaskComposer({
             placeholder={translate("taskFormPlaceholder")}
           />
           <div className="composer-toolbar">
-            <select
-              className="composer-select"
+            <AgentPicker
+              agents={agents}
               value={effectiveAgentId}
-              onChange={(event) => {
-                const value = event.target.value
-                if (value === AGENT_CREATE_OPTION) {
-                  onRequestCreateAgent()
-                  return
-                }
-                setAgentId(value)
-              }}
-              title={translate("taskFormAgent")}
-            >
-              {(agents || []).map((item) => (
-                <option value={item.agent_id} key={item.agent_id}>
-                  {agentDisplayName(item, translate)}
-                </option>
-              ))}
-              <option value={AGENT_CREATE_OPTION}>{translate("agentCreateOption")}</option>
-            </select>
+              onSelect={setAgentId}
+              onCreate={onRequestCreateAgent}
+              translate={translate}
+            />
 
             {models && models.length > 0 ? (
               <select
@@ -1145,7 +1137,10 @@ function TaskDetail({ task, result, agents, translate }) {
         </div>
         <div className="detail-item">
           <span>{translate("detailAgent")}</span>
-          <strong>{resolveAgentName(task.mode, agents, translate)}</strong>
+          <strong className="agent-name">
+            <AgentIcon name={agentIconName(resolveAgent(task.mode, agents))} />
+            {resolveAgentName(task.mode, agents, translate)}
+          </strong>
         </div>
         <div className="detail-item">
           <span>{translate("detailModel")}</span>

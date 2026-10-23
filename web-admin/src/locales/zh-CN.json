@@ -276,6 +276,7 @@
   "agentFormEdit": "编辑智能体",
   "agentFormSave": "保存",
   "agentFormUpdate": "更新",
+  "agentFormIcon": "图标",
   "agentFormName": "名称",
   "agentFormNamePlaceholder": "智能体名称，例如 代码助手",
   "agentFormDescription": "描述",

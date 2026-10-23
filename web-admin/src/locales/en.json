@@ -276,6 +276,7 @@
   "agentFormEdit": "Edit agent",
   "agentFormSave": "Save",
   "agentFormUpdate": "Update",
+  "agentFormIcon": "Icon",
   "agentFormName": "Name",
   "agentFormNamePlaceholder": "Agent name, e.g. Code Assistant",
   "agentFormDescription": "Description",
