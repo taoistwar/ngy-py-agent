@@ -3,42 +3,34 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agent.agent_loop.config import DEFAULT_MAX_STEPS
-from agent.agent_loop.messages import (
-    _parse_tool_calls,
-    _to_content_text,
-    _to_dict,
-    _tool_fallback_parse,
-    _with_base_dir,
-)
+from agent.agent_loop.messages import _with_base_dir
 from agent.agent_loop.runtime import (
     _build_runtime,
     _emit,
-    _execute_tool,
     _reaps_task_sessions,
+    _traced_run,
 )
-from agent.llm_errors import describe_llm_failure
+from agent.agent_loop.steps import run_model_turn, run_tool
 from agent.models import (
     EventCategory,
     EventSink,
-    LLMRequestData,
-    LLMResponseData,
     TaskEvent,
-    ToolCallData,
     ToolImage,
     ToolOutcome,
-    ToolResultData,
 )
 from agent.modes import (
     build_system_prompt,
     build_system_prompt_from_config,
 )
 from agent.provider import ProviderConfig
+from agent.telemetry import current_trace_ids, react_step_span
 from agent.tools.permissions import PermissionBroker
 from agent.tools.user_question import UserQuestionBroker
-from agent.vision import build_image_message, redact_image_payload, supports_images
+from agent.vision import build_image_message, supports_images
 
 
 @_reaps_task_sessions
+@_traced_run
 def run_react_loop(
     user_query: str,
     provider_name: Optional[str] = None,
@@ -128,6 +120,7 @@ def run_react_loop(
                 "base_dir": base_dir,
                 "agent_id": (agent_config or {}).get("agent_id"),
                 "mcp_servers": (agent_config or {}).get("mcp_servers"),
+                **current_trace_ids(),
             },
             collapsed=True,
         ),
@@ -151,276 +144,113 @@ def run_react_loop(
                 "chat_template_kwargs": {"enable_thinking": True}
             }
 
-        request_data = LLMRequestData(
-            step=step,
-            model=provider.config.model,
-            provider=provider.config.provider,
-            tool_count=len(request_tools or []),
-            message_count=len(messages),
-            tool_choice="auto",
-        )
-        raw_request_payload = provider.build_request_payload(
-            messages=messages,
-            tools=request_tools,
-            **request_kwargs,
-        )
-        request_data_dict = request_data.model_dump()
-        # Screenshots ride along as base64 data URLs; persist a redacted copy so
-        # one observation does not add megabytes to the event log.
-        request_data_dict["raw_request"] = redact_image_payload(raw_request_payload)
-        _emit(
-            event_sink,
-            task_id,
-            TaskEvent(
-                task_id=task_id or "",
-                category=EventCategory.LLM_REQUEST,
-                title=f"LLM request Step {step}",
-                data=request_data_dict,
-                collapsed=True,
-            ),
-        )
-
-        # A model that is down or misconfigured is a routine failure, not a crash in
-        # the agent: describe it in terms the operator can act on, record it as an
-        # error event (the web admin shows it), and let the caller decide whether to
-        # retry. The raw SDK exception never escapes this loop.
-        try:
-            response = provider.chat_completion(**raw_request_payload)
-        except Exception as exc:  # noqa: BLE001 - every provider failure is reported
-            failure = describe_llm_failure(exc, provider)
-            _emit(
+        with react_step_span(step, max_steps):
+            turn = run_model_turn(
+                provider,
+                step,
+                messages,
+                request_tools,
+                request_kwargs,
                 event_sink,
                 task_id,
-                TaskEvent(
-                    task_id=task_id or "",
-                    category=EventCategory.ERROR,
-                    title=f"LLM request failed (step {step})",
-                    data={
-                        "step": step,
-                        "provider": failure.provider,
-                        "model": failure.model,
-                        "endpoint": failure.endpoint,
-                        "type": type(exc).__name__,
-                        "error": str(failure),
-                    },
-                    collapsed=True,
-                ),
             )
-            raise failure from exc
-        assistant_message = response.choices[0].message
-        message_dict = _to_dict(assistant_message)
-        messages.append(message_dict)
-
-        assistant_content = _to_content_text(message_dict.get("content"))
-        if verbose:
-            print(f"[assistant] {assistant_content or '(no direct content)'}")
-
-        tool_calls = _parse_tool_calls(assistant_message)
-
-        if not tool_calls:
-            tool_call = _tool_fallback_parse(assistant_content)
-            if tool_call is not None:
-                tool_calls = [tool_call]
-
-        finish_reason = (
-            getattr(response, "choices", [{}])[0].finish_reason
-            if getattr(response, "choices", None)
-            else None
-        )
-        response_data = LLMResponseData(
-            step=step,
-            provider=provider.config.provider,
-            model=provider.config.model,
-            finish_reason=str(finish_reason) if finish_reason else None,
-            content=assistant_content,
-        )
-        response_data.tool_call_count = len(tool_calls)
-        response_data_dict = response_data.model_dump()
-        if hasattr(response, "model_dump"):
-            response_payload = response.model_dump()
-        elif hasattr(response, "dict"):
-            response_payload = response.dict()
-        else:
-            response_payload = _to_dict(response)
-        response_data_dict["raw_response"] = response_payload
-
-        _emit(
-            event_sink,
-            task_id,
-            TaskEvent(
-                task_id=task_id or "",
-                category=EventCategory.LLM_RESPONSE,
-                title=f"LLM response Step {step}",
-                data=response_data_dict,
-                collapsed=True,
-            ),
-        )
-
-        if not tool_calls:
-            final_output = assistant_content or ""
-            _emit(
-                event_sink,
-                task_id,
-                TaskEvent(
-                    task_id=task_id or "",
-                    category=EventCategory.DEBUG,
-                    title="ReAct finished",
-                    data={
-                        "reason": "No tool call, returning direct result.",
-                        "step": step,
-                        "result": final_output,
-                    },
-                    collapsed=True,
-                ),
-            )
-            break
-
-        # Screenshots collected during this step. They travel as one follow-up
-        # user message after every tool result, because the OpenAI chat API only
-        # accepts text in a ``tool`` message (see ``agent.vision``).
-        pending_images: List[Tuple[str, ToolImage]] = []
-        for name, args, call_id in tool_calls:
-            if should_stop is not None and should_stop():
-                stopped = True
-                break
-            call_data = ToolCallData(
-                step=step,
-                name=name,
-                arguments=args,
-                tool_call_id=call_id,
-            )
-            _emit(
-                event_sink,
-                task_id,
-                TaskEvent(
-                    task_id=task_id or "",
-                    category=EventCategory.TOOL_CALL,
-                    title=f"Tool call: {name}",
-                    data=call_data.model_dump(),
-                    collapsed=True,
-                ),
-            )
-
-            outcome: Any = None
-            # Deliberately broad: a tool may raise anything, and each failure has to
-            # reach the model as a result instead of aborting the step.
-            try:
-                outcome = _execute_tool(registry, name, args)
-                result = outcome.model_text if isinstance(outcome, ToolOutcome) else outcome
-                tool_result_payload = ToolResultData(
-                    step=step,
-                    name=name,
-                    tool_call_id=call_id,
-                    result=result,
-                    is_error=False,
-                )
-            except Exception as exc:  # noqa: BLE001
-                result = f"Error: {exc}"
-                tool_result_payload = ToolResultData(
-                    step=step,
-                    name=name,
-                    tool_call_id=call_id,
-                    result=result,
-                    is_error=True,
-                )
-                _emit(
-                    event_sink,
-                    task_id,
-                    TaskEvent(
-                        task_id=task_id or "",
-                        category=EventCategory.ERROR,
-                        title=f"Tool error: {name}",
-                        data={"step": step, "name": name, "error": str(exc)},
-                        collapsed=True,
-                    ),
-                )
-
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call_id,
-                    "name": name,
-                    "content": result,
-                }
-            )
-            _emit(
-                event_sink,
-                task_id,
-                TaskEvent(
-                    task_id=task_id or "",
-                    category=EventCategory.TOOL_RESULT,
-                    title=f"Tool result: {name}",
-                    data=tool_result_payload.model_dump(),
-                    collapsed=True,
-                ),
-            )
-
-            # Rich tool payloads (for the UI / external consumers) travel on their
-            # own event so the model only ever sees the short ``model_text``.
-            if isinstance(outcome, ToolOutcome) and outcome.event_category is not None:
-                _emit(
-                    event_sink,
-                    task_id,
-                    TaskEvent(
-                        task_id=task_id or "",
-                        category=outcome.event_category,
-                        title=outcome.event_title or f"{name}",
-                        data=outcome.details,
-                        collapsed=True,
-                    ),
-                )
-
-            if isinstance(outcome, ToolOutcome) and outcome.images:
-                pending_images.extend((name, image) for image in outcome.images)
-
             if verbose:
-                print(f"[tool:{name}] {result}")
+                print(f"[assistant] {turn.assistant_content or '(no direct content)'}")
 
-        if pending_images and not stopped:
-            image_message = build_image_message(pending_images, provider)
-            if image_message is not None:
-                messages.append(image_message)
+            if not turn.tool_calls:
+                final_output = turn.assistant_content or ""
                 _emit(
                     event_sink,
                     task_id,
                     TaskEvent(
                         task_id=task_id or "",
                         category=EventCategory.DEBUG,
-                        title="Attached screenshots",
+                        title="ReAct finished",
                         data={
+                            "reason": "No tool call, returning direct result.",
                             "step": step,
-                            "count": len(pending_images),
-                            "files": [image.path for _, image in pending_images],
+                            "result": final_output,
+                            **current_trace_ids(),
                         },
                         collapsed=True,
                     ),
                 )
-            else:
-                _emit(
-                    event_sink,
-                    task_id,
-                    TaskEvent(
-                        task_id=task_id or "",
-                        category=EventCategory.DEBUG,
-                        title="Screenshots not attached",
-                        data={
-                            "step": step,
-                            "files": [image.path for _, image in pending_images],
-                            "reason": (
-                                "model image input is disabled or the provider wire format "
-                                "is not OpenAI-compatible"
-                                if not supports_images(provider)
-                                else "screenshot files were missing or exceeded the size limit"
-                            ),
-                        },
-                        collapsed=True,
-                    ),
+                break
+
+            # Screenshots collected during this step. They travel as one follow-up
+            # user message after every tool result, because the OpenAI chat API only
+            # accepts text in a ``tool`` message (see ``agent.vision``).
+            pending_images: List[Tuple[str, ToolImage]] = []
+            for name, args, call_id in turn.tool_calls:
+                if should_stop is not None and should_stop():
+                    stopped = True
+                    break
+
+                outcome, result = run_tool(
+                    registry, name, args, call_id, step, event_sink, task_id
                 )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "name": name,
+                        "content": result,
+                    }
+                )
+
+                if isinstance(outcome, ToolOutcome) and outcome.images:
+                    pending_images.extend((name, image) for image in outcome.images)
+
                 if verbose:
-                    print("[info] screenshots were not attached: model or provider does not accept images")
+                    print(f"[tool:{name}] {result}")
 
-        if stopped:
-            break
+            if pending_images and not stopped:
+                image_message = build_image_message(pending_images, provider)
+                if image_message is not None:
+                    messages.append(image_message)
+                    _emit(
+                        event_sink,
+                        task_id,
+                        TaskEvent(
+                            task_id=task_id or "",
+                            category=EventCategory.DEBUG,
+                            title="Attached screenshots",
+                            data={
+                                "step": step,
+                                "count": len(pending_images),
+                                "files": [image.path for _, image in pending_images],
+                                **current_trace_ids(),
+                            },
+                            collapsed=True,
+                        ),
+                    )
+                else:
+                    _emit(
+                        event_sink,
+                        task_id,
+                        TaskEvent(
+                            task_id=task_id or "",
+                            category=EventCategory.DEBUG,
+                            title="Screenshots not attached",
+                            data={
+                                "step": step,
+                                "files": [image.path for _, image in pending_images],
+                                "reason": (
+                                    "model image input is disabled or the provider wire format "
+                                    "is not OpenAI-compatible"
+                                    if not supports_images(provider)
+                                    else "screenshot files were missing or exceeded the size limit"
+                                ),
+                                **current_trace_ids(),
+                            },
+                            collapsed=True,
+                        ),
+                    )
+                    if verbose:
+                        print("[info] screenshots were not attached: model or provider does not accept images")
+
+            if stopped:
+                break
 
     if stopped:
         final_output = "Task stopped by user."
@@ -431,7 +261,7 @@ def run_react_loop(
                 task_id=task_id or "",
                 category=EventCategory.DEBUG,
                 title="ReAct stopped",
-                data={"reason": final_output},
+                data={"reason": final_output, **current_trace_ids()},
                 collapsed=True,
             ),
         )
@@ -448,7 +278,7 @@ def run_react_loop(
                 task_id=task_id or "",
                 category=EventCategory.ERROR,
                 title="Reached maximum step limit",
-                data={"reason": final_output},
+                data={"reason": final_output, **current_trace_ids()},
                 collapsed=True,
             ),
         )
@@ -465,7 +295,7 @@ def run_react_loop(
             task_id=task_id or "",
             category=EventCategory.DEBUG,
             title="ReAct run completed",
-            data={"result": final_output},
+            data={"result": final_output, **current_trace_ids()},
             collapsed=True,
         ),
     )

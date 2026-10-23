@@ -17,6 +17,7 @@ from agent.provider import (
     canonicalize_provider,
     resolve_tool_provider_for_schemas,
 )
+from agent.telemetry import task_span
 from agent.tool_registry import ToolRegistry
 from agent.tools import process_store
 
@@ -87,6 +88,29 @@ def _build_runtime(
 
     provider = build_provider(provider_name, provider_config)
     return provider_name, registry, provider, tool_schemas
+
+
+def _traced_run(func):
+    """Open the task span for a whole loop run.
+
+    A decorator rather than a ``with`` in the body: the body already carries four
+    exits and re-indenting it would bury the change. The span reuses one an outer
+    caller (the API worker) already started, so a run is traced once either way.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        bound = inspect.signature(func).bind_partial(*args, **kwargs)
+        arguments = bound.arguments
+        attributes = {
+            "task.id": str(arguments.get("task_id") or ""),
+            "react.mode": arguments.get("mode"),
+            "react.max_steps": arguments.get("max_steps"),
+        }
+        with task_span("", attributes):
+            return func(*args, **kwargs)
+
+    return wrapper
 
 
 def _reaps_task_sessions(func):
