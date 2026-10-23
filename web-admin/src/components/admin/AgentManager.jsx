@@ -349,7 +349,7 @@ export default function AgentManager({
               <textarea
                 value={form.system_prompt}
                 onChange={(event) => setField("system_prompt", event.target.value)}
-                rows={6}
+                rows={3}
               />
             </label>
 

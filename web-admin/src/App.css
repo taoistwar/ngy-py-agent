@@ -1397,10 +1397,15 @@
 
 .agent-form {
   max-width: 920px;
+  gap: 4px;
+}
+
+.agent-form label {
+  gap: 3px;
 }
 
 .agent-prompt-field textarea {
-  min-height: 140px;
+  min-height: 72px;
   font-family: inherit;
 }
 
@@ -1418,6 +1423,27 @@
   gap: 8px;
   font-size: 12px;
   color: var(--muted);
+}
+
+/* The agent editor packs three long option lists into one dialog, so it uses
+   tighter spacing and shorter scroll areas than the shared defaults. */
+.agent-form .agent-section {
+  padding-top: 5px;
+  gap: 4px;
+}
+
+.agent-form .agent-check-list {
+  gap: 3px;
+  max-height: 196px;
+}
+
+.agent-form .agent-check-row {
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+.agent-form .agent-check-desc {
+  line-height: 1.25;
 }
 
 .badge-builtin {
