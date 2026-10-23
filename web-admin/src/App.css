@@ -2706,14 +2706,15 @@
   color: var(--muted);
 }
 
-/* Fullscreen reading view. Rendered in a portal, so it only has to beat the topbar. */
+/* Fullscreen reading view. Rendered in a portal, so it only has to beat the topbar.
+   The background must stay opaque: at 98% the console below still ghosted through. */
 .event-overlay {
   position: fixed;
   inset: 0;
   z-index: 70;
   display: flex;
   flex-direction: column;
-  background: rgba(6, 12, 26, 0.98);
+  background: var(--bg);
 }
 
 .event-overlay-header {
@@ -2741,9 +2742,36 @@
   padding: 14px 16px 20px;
 }
 
-.event-overlay-body .event-friendly,
-.event-standalone-main .event-friendly {
-  max-width: 1100px;
+/* Fullscreen and standalone pages have the room, so the table should use it: a
+   1100px column left half the screen empty. Type also scales up a notch; the card
+   sizing reads as a shrunken widget on a large monitor. */
+.event-overlay-body,
+.event-standalone-main {
+  padding: 16px 22px 24px;
+}
+
+.event-overlay-body .event-friendly-headline,
+.event-standalone-main .event-friendly-headline {
+  font-size: 15px;
+}
+
+.event-overlay-body .event-kv,
+.event-standalone-main .event-kv,
+.event-overlay-body .event-friendly-text,
+.event-standalone-main .event-friendly-text {
+  font-size: 13.5px;
+}
+
+.event-overlay-body .event-kv th,
+.event-overlay-body .event-kv td,
+.event-standalone-main .event-kv th,
+.event-standalone-main .event-kv td {
+  padding: 6px 10px;
+}
+
+.event-overlay-body .event-kv th,
+.event-standalone-main .event-kv th {
+  width: 180px;
 }
 
 /* Standalone page opened from the "new tab" button: one event, no console chrome. */
