@@ -52,6 +52,8 @@
   "eventsLoadMore": "加载更多",
   "eventsLoading": "加载中...",
   "eventsNoMore": "没有更多事件",
+  "eventsCollapseAll": "折叠所有",
+  "eventsExpandAll": "打开所有",
   "eventViewSwitchAria": "事件展示方式",
   "eventViewFriendly": "友好展示",
   "eventViewRaw": "原始文本",

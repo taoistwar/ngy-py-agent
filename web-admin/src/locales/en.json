@@ -52,6 +52,8 @@
   "eventsLoadMore": "Load more",
   "eventsLoading": "Loading...",
   "eventsNoMore": "No more events",
+  "eventsCollapseAll": "Collapse all",
+  "eventsExpandAll": "Expand all",
   "eventViewSwitchAria": "Event display mode",
   "eventViewFriendly": "Readable",
   "eventViewRaw": "Raw text",

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { getEventCategoryText } from "../i18n"
 import { formatTime } from "../utils/format"
 import { EventDetailBody, EventDetailOverlay, eventDetailUrl, getTagClass } from "./EventDetail"
-import { ExpandIcon, ExternalLinkIcon } from "./icons"
+import { ChevronsDownIcon, ChevronsUpIcon, ExpandIcon, ExternalLinkIcon } from "./icons"
 
 function EventItem({ event, taskId, collapsed, onToggle, translate, locale }) {
   const [fullscreen, setFullscreen] = useState(false)
@@ -102,8 +102,30 @@ export default function EventTimeline({ task, events, hasMore, loadingMore, onLo
   // Keep creation order so the earliest event appears first.
   const ordered = events
 
+  // A whole task log can be 100+ events; one click should be enough to see them all
+  // (or to get back to the compact list).
+  const setAllCollapsed = (collapsed) => {
+    const next = {}
+    events.forEach((event) => {
+      next[event.event_id] = collapsed
+    })
+    setCollapsedMap(next)
+  }
+
   return (
     <div>
+      {ordered.length > 0 && (
+        <div className="event-timeline-toolbar">
+          <button type="button" className="event-bulk-btn" onClick={() => setAllCollapsed(true)}>
+            <ChevronsUpIcon />
+            {translate("eventsCollapseAll")}
+          </button>
+          <button type="button" className="event-bulk-btn" onClick={() => setAllCollapsed(false)}>
+            <ChevronsDownIcon />
+            {translate("eventsExpandAll")}
+          </button>
+        </div>
+      )}
       {ordered.length === 0 ? (
         <div className="timeline-empty">{translate("taskEventsNoRecords")}</div>
       ) : (

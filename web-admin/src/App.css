@@ -2490,6 +2490,38 @@
   height: 12px;
 }
 
+/* Batch expand/collapse for the whole task log, right-aligned above the list. */
+.event-timeline-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.event-bulk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid rgba(79, 120, 203, 0.45);
+  border-radius: 6px;
+  background: rgba(30, 46, 82, 0.6);
+  color: #cdd9ff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.event-bulk-btn:hover {
+  border-color: var(--focus);
+  background: rgba(72, 102, 173, 0.35);
+  color: #fff;
+}
+
+.event-bulk-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
 .tag {
   border-radius: 12px;
   font-size: 11px;
