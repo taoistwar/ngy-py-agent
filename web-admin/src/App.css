@@ -2460,6 +2460,34 @@
   gap: 8px;
   align-items: center;
   font-size: 13px;
+  min-width: 0;
+}
+
+/* Fullscreen shortcut on the card header, usable before the card is expanded. */
+.event-fullscreen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(79, 120, 203, 0.45);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.event-fullscreen-btn:hover {
+  border-color: var(--focus);
+  background: rgba(72, 102, 173, 0.35);
+  color: #fff;
+}
+
+.event-fullscreen-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 .tag {

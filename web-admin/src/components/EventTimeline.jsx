@@ -37,6 +37,19 @@ function EventItem({ event, taskId, collapsed, onToggle, translate, locale }) {
     <div className="event-card">
       <div className="event-header" onClick={onToggle}>
         <div className="event-title">
+          {/* Reachable while the card is collapsed, before the body is shown. */}
+          <button
+            type="button"
+            className="event-fullscreen-btn"
+            title={fullscreenLabel}
+            aria-label={fullscreenLabel}
+            onClick={(clickEvent) => {
+              clickEvent.stopPropagation()
+              setFullscreen(true)
+            }}
+          >
+            <ExpandIcon />
+          </button>
           <span className={getTagClass(event.category)}>
             {getEventCategoryText(translate, event.category)}
           </span>
