@@ -101,13 +101,19 @@ def _traced_run(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         bound = inspect.signature(func).bind_partial(*args, **kwargs)
+        # Defaults matter here: a CLI run passes neither ``mode`` nor ``max_steps``,
+        # and a span without them says less than the run did.
+        bound.apply_defaults()
         arguments = bound.arguments
-        attributes = {
-            "task.id": str(arguments.get("task_id") or ""),
+        task_id = str(arguments.get("task_id") or "")
+        attributes: dict[str, Any] = {
             "react.mode": arguments.get("mode"),
             "react.max_steps": arguments.get("max_steps"),
         }
-        with task_span("", attributes):
+        if task_id:
+            # A CLI run has no task record; an empty id would only look like one.
+            attributes["task.id"] = task_id
+        with task_span(task_id, attributes):
             return func(*args, **kwargs)
 
     return wrapper
