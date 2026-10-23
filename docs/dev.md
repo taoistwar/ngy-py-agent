@@ -38,6 +38,7 @@ cd ..
 - 桌面操作：
   - `CUA_DRIVER_BIN`（`cua-driver` 可执行文件路径；默认从 PATH 或 Windows 安装目录查找）
   - `TOOL_IMAGE_MAX_BYTES`（工具截图附加到模型上下文的大小上限，默认 `8388608`，即 8 MiB）
+- 可观测（默认关闭，见第 15 节）：`OTEL_TRACING_ENABLED`、`OTEL_TRACES_EXPORTER`、`OTEL_TRACES_JSONL_PATH`、`OTEL_TRACES_SAMPLER_ARG`、`OTEL_SERVICE_NAME`
 
 ## 4. 启动方式
 
@@ -329,3 +330,40 @@ npm run i18n:check
   - [ADR 0008 `write_stdin` 工具与"还活着的会话"](decisions/0008-write-stdin-tool.md)
   - [ADR 0009 `exec_command` 的 `tty`（伪终端）](decisions/0009-exec-tty.md)
   - [ADR 0010 `ask_user_question` 工具与"提问通道"](decisions/0010-ask-user-question.md)
+
+## 15. 可观测（OpenTelemetry Tracing）
+
+目标不是替代事件流，而是补上"一次执行到底调了什么"的调用树：`TaskEvent` 仍然是 Web Admin 的唯一数据源，trace 默认只写本机文件（或控制台），不依赖任何外部后端。
+
+### 代码位置
+
+| 位置 | 职责 |
+| --- | --- |
+| `agent/telemetry/config.py` | 读 `OTEL_*` 环境变量；非法值回落默认并打印一行提示 |
+| `agent/telemetry/setup.py` | 幂等装配 `TracerProvider` + `Resource` + `ParentBased(TraceIdRatioBased)` 采样 + `BatchSpanProcessor`；`shutdown_telemetry()` 负责刷盘；关闭时不占用"已初始化"状态，允许 `.env` 晚加载后再开 |
+| `agent/telemetry/exporters.py` | `JsonlSpanExporter`：每行一个 span；写不进去返回 `FAILURE` 而不是抛异常 |
+| `agent/telemetry/attributes.py` | 属性截断（512 字符）与敏感键脱敏（按 key 分段匹配，`gen_ai.usage.input_tokens` 不会被误判成凭证） |
+| `agent/telemetry/usage.py` | 兼容 OpenAI 的 `prompt_tokens`/`completion_tokens` 与 Anthropic 的 `input_tokens`/`output_tokens` |
+| `agent/telemetry/spans.py` | `task_span` / `react_step_span` / `llm_span` / `tool_span`，以及跨线程的 `TaskSpanHandle` |
+
+埋点调用点只有四处：`agent/agent_loop/runtime.py` 的 `_traced_run`（任务根）、`agent/agent_loop/loop.py`（步骤）、`agent/agent_loop/steps.py`（模型请求与工具调用）、`task_api.create_task` + `task_runtime.run_task`（任务生命周期）。
+
+### 三条必须守住的约定
+
+1. **埋点不改变控制流。** span 内部一律 `try/except` 吞掉自己的错误；LLM 失败仍然 `raise failure from exc`，工具异常仍然变成 `Error: ...` 结果回给模型。`with` 块里的异常照常向外抛，由 SDK 记到 span 上。
+2. **关闭时零成本。** 没有 provider 时 `active_tracer()` 返回 `None`，四个上下文管理器直接 `yield None`，事件 `data` 里也不会出现 `trace_id`。
+3. **跨线程靠显式传递。** 任务跑在 `threading.Thread` 上，`contextvars` 不会跟着走，所以 `create_task` 在请求线程 `start_task_span()`，把 `TaskSpanHandle` 当普通参数交给 `run_task`；后者 `attach`/`detach`，并在 `finally` 里结束 span（失败任务也要结束，否则 span 永远不落盘）。
+
+### 被排除的路径
+
+`main.OTEL_EXCLUDED_URLS` 排除了 `/api/tasks/{id}/events/stream`、`/api/tasks/{id}/events/ws` 与前端静态资源：前两个是长连接，instrument 之后 span 会一直挂到任务结束，是真实的内存风险；静态资源没有调试价值。
+
+### 测试
+
+`test/telemetry/` 按模块镜像：
+
+- `config_test.py` / `exporters_test.py` / `attributes_test.py` / `usage_test.py`：纯单元；
+- `spans_test.py`：嵌套、复用外层 span、禁用时零 span、异常状态；
+- `agent_loop_tracing_test.py`：假 provider 跑完整循环，断言 span 层级与事件里的 `trace_id`；
+- `task_tracing_test.py`：跨线程句柄的 attach/结束，失败任务也要关 span；
+- `http_tracing_test.py`：`TestClient` 打一次 `/api/healthz`，确认 HTTP span 与被排除路径。
