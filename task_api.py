@@ -20,6 +20,7 @@ from fastapi.responses import StreamingResponse
 import app_state
 from agent.models import TaskStatus
 from agent.modes import DEFAULT_MODE, VALID_MODES
+from agent.telemetry import end_task_span, start_task_span
 from agent.tools.permissions import SCOPES
 from agent.tools.user_question import STATUS_ANSWERED, validate_answers
 from api_schemas import (
@@ -77,11 +78,28 @@ async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
     agent_config = agent_runtime_config(agent)
     base_dir = resolve_session_base_dir(session_id)
     stop_event = app_state.register_task_stop(task_id)
-    threading.Thread(
+    # Started on the request thread so the task's spans join the request's trace.
+    # The worker attaches it: ``contextvars`` do not cross ``threading.Thread``.
+    otel_handle = start_task_span(
+        task_id,
+        {
+            "task.mode": agent_id,
+            "task.provider": provider,
+            "task.model": (model or {}).get("name"),
+        },
+    )
+    worker = threading.Thread(
         target=run_task,
         args=(task_id, request, model, base_dir, agent_config, stop_event),
+        kwargs={"otel_handle": otel_handle},
         daemon=True,
-    ).start()
+    )
+    try:
+        worker.start()
+    except Exception:
+        # A thread that never ran would leave its span open for the process lifetime.
+        end_task_span(otel_handle)
+        raise
 
     trace = app_state.monitor_store.get_task(task_id)
     if trace is None:

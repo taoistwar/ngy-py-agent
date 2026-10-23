@@ -53,6 +53,17 @@ def _start_span(
         yield span
 
 
+def _task_attributes(
+    task_id: str, attributes: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    """``task.id`` only when there is one: a CLI run has no task record."""
+    payload: dict[str, Any] = {}
+    if task_id:
+        payload["task.id"] = task_id
+    payload.update(attributes or {})
+    return payload
+
+
 @contextmanager
 def task_span(task_id: str, attributes: Mapping[str, Any] | None = None) -> Iterator[Any]:
     """The root of one run; reuses an already-recording span from the caller."""
@@ -65,8 +76,7 @@ def task_span(task_id: str, attributes: Mapping[str, Any] | None = None) -> Iter
         yield active
         return
 
-    payload = {"task.id": task_id}
-    payload.update(attributes or {})
+    payload = _task_attributes(task_id, attributes)
     with _start_span("task", payload) as span:
         yield span
 
@@ -145,8 +155,7 @@ def start_task_span(
     tracer = active_tracer()
     if tracer is None:
         return None
-    payload = {"task.id": task_id}
-    payload.update(attributes or {})
+    payload = _task_attributes(task_id, attributes)
     try:
         span = tracer.start_span("task", attributes=safe_attributes(payload))
         return TaskSpanHandle(span=span, context=trace.set_span_in_context(span))

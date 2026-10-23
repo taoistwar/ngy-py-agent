@@ -21,6 +21,13 @@ import app_state
 from agent.agent_loop import DEFAULT_MAX_STEPS, run_react_loop
 from agent.models import EventCategory, EventSink, TaskEvent, TaskStatus
 from agent.provider import ProviderConfig, build_provider, canonicalize_provider
+from agent.telemetry import (
+    TaskSpanHandle,
+    attach_task_span,
+    current_trace_ids,
+    detach_task_span,
+    end_task_span,
+)
 from agent.tools.permissions import PermissionBroker, PermissionMode, normalize_mode
 from agent.tools.user_question import UserQuestionBroker
 from api_schemas import RunTaskRequest
@@ -323,8 +330,31 @@ def run_task(
     base_dir: str | None = None,
     agent_config: dict[str, Any] | None = None,
     stop_event: threading.Event | None = None,
+    otel_handle: TaskSpanHandle | None = None,
 ) -> None:
-    """Run one task to completion under its brokers; called on the task's own thread."""
+    """Run one task to completion under its brokers; called on the task's own thread.
+
+    ``otel_handle`` is started by the caller on the request thread, which is what
+    makes the task a child of its HTTP span; ``contextvars`` do not cross
+    ``threading.Thread``, so the handle is attached here and the span ended here,
+    after the closing event, so the event can still name it.
+    """
+    token = attach_task_span(otel_handle)
+    try:
+        _execute_task(task_id, request, model, base_dir, agent_config, stop_event)
+    finally:
+        detach_task_span(token)
+        end_task_span(otel_handle)
+
+
+def _execute_task(
+    task_id: str,
+    request: RunTaskRequest,
+    model: dict[str, Any] | None,
+    base_dir: str | None,
+    agent_config: dict[str, Any] | None,
+    stop_event: threading.Event | None,
+) -> None:
     provider = str((model or {}).get("provider") or request.provider or "openai-compatible")
     provider_config = build_provider_config(model)
     max_steps = resolve_max_steps(request)
@@ -362,6 +392,7 @@ def run_task(
             "supports_tool_calls": (model or {}).get("supports_tool_calls", True),
             "thinking_mode": (model or {}).get("thinking_mode", False),
             "max_output_tokens": (model or {}).get("max_output_tokens", 0),
+            **current_trace_ids(),
         },
     )
 
@@ -410,19 +441,19 @@ def run_task(
             user_question_broker=question_broker,
         )
         if stop_event is not None and stop_event.is_set():
-            emit_debug(_sink, task_id, "Task stopped", {"result": result})
+            emit_debug(_sink, task_id, "Task stopped", {"result": result, **current_trace_ids()})
             app_state.monitor_store.finish_task(
                 task_id, success=False, result=result, status=TaskStatus.STOPPED
             )
         else:
-            emit_debug(_sink, task_id, "Task finished", {"result": result})
+            emit_debug(_sink, task_id, "Task finished", {"result": result, **current_trace_ids()})
             app_state.monitor_store.finish_task(task_id, success=True, result=result)
     except Exception as exc:  # noqa: BLE001 - a failed task must still be recorded as failed
         emit_debug(
             _sink,
             task_id,
             "Task failed",
-            {"error": str(exc), "type": exc.__class__.__name__},
+            {"error": str(exc), "type": exc.__class__.__name__, **current_trace_ids()},
         )
         app_state.monitor_store.finish_task(task_id, success=False)
     finally:

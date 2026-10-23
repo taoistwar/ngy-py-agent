@@ -9,6 +9,7 @@ point and one of the span helpers from the loop.
 from agent.telemetry.attributes import set_error_status, summarize_arguments
 from agent.telemetry.config import TelemetryConfig, load_config
 from agent.telemetry.setup import (
+    active_provider,
     active_tracer,
     init_telemetry,
     is_telemetry_enabled,
@@ -32,6 +33,7 @@ from agent.telemetry.spans import (
 __all__ = [
     "TaskSpanHandle",
     "TelemetryConfig",
+    "active_provider",
     "active_tracer",
     "attach_task_span",
     "current_trace_ids",

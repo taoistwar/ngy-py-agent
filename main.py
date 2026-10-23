@@ -30,6 +30,12 @@ import tool_api
 import workspace_api
 from agent.agent_loop import run_react_loop
 from agent.provider import ProviderError
+from agent.telemetry import (
+    active_provider,
+    init_telemetry,
+    is_telemetry_enabled,
+    shutdown_telemetry,
+)
 from mcp_api import router as mcp_router
 from task_runtime import purge_expired_tasks_with_log
 
@@ -37,6 +43,19 @@ ROOT_DIR = app_state.ROOT_DIR
 FRONTEND_DIR = ROOT_DIR / "web-admin"
 FRONTEND_DIST_DIR = FRONTEND_DIR / "dist"
 FRONTEND_DIST_INDEX = FRONTEND_DIST_DIR / "index.html"
+
+_app_instrumented = False
+
+# Paths a trace must not wait on: the two event streams stay open for as long as the
+# task runs, and the built frontend is megabytes of static files nobody debugs with
+# traces. Everything else under the API is worth an HTTP span.
+OTEL_EXCLUDED_URLS = (
+    "/api/tasks/[^/]+/events/stream,"
+    "/api/tasks/[^/]+/events/ws,"
+    "/assets/.*,"
+    "/monaco-editor/.*,"
+    "/favicon.*"
+)
 
 app = FastAPI(
     title="NGY Agent Web Admin",
@@ -56,6 +75,32 @@ app.include_router(agent_api.router)
 app.include_router(tool_api.router)
 app.include_router(task_api.router)
 app.include_router(admin_api.router)
+
+
+def _configure_telemetry() -> None:
+    """Initialize tracing and hook the ASGI app; safe to call more than once.
+
+    Called at import time as well as from :func:`main`: with ``--reload`` uvicorn
+    imports this module in a child process and never runs ``main`` there, while the
+    first process only sees ``.env`` once ``load_env_file`` has run. Both calls are
+    cheap when tracing is off.
+    """
+    global _app_instrumented
+
+    init_telemetry()
+    if not is_telemetry_enabled() or _app_instrumented:
+        return
+    try:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+        # The provider is passed explicitly: the app's HTTP spans must land in the
+        # same exporter as the loop's, not in whichever provider won the global slot.
+        FastAPIInstrumentor.instrument_app(
+            app, excluded_urls=OTEL_EXCLUDED_URLS, tracer_provider=active_provider()
+        )
+    except Exception:  # noqa: BLE001 - tracing must never stop the server from booting
+        return
+    _app_instrumented = True
 
 
 def _resolve_frontend_dir() -> Path:
@@ -124,12 +169,17 @@ def _run_web_server(host: str, port: int, reload: bool) -> None:
         ) from exc
 
     purge_expired_tasks_with_log("Web admin startup")
-    uvicorn_run("main:app", host=host, port=port, reload=reload, app_dir=str(ROOT_DIR))
+    try:
+        uvicorn_run("main:app", host=host, port=port, reload=reload, app_dir=str(ROOT_DIR))
+    finally:
+        # A batch processor holds the last few spans; shutdown is what flushes them.
+        shutdown_telemetry()
 
 
 def main() -> None:
     admin_api.load_env_file()
     admin_api.load_startup_config()
+    _configure_telemetry()
     parser = argparse.ArgumentParser(
         description="Run ReAct tasks with optional Web Admin mode.",
     )
@@ -229,6 +279,8 @@ def main() -> None:
                     print(f"assistant> {answer}")
         except KeyboardInterrupt:
             print("\nYou have exited interactive mode.")
+        finally:
+            shutdown_telemetry()
         return
 
     query = (args.query or "").strip()
@@ -249,6 +301,13 @@ def main() -> None:
         # of an SDK traceback.
         print(f"[model error] {exc}", file=sys.stderr)
         raise SystemExit(1) from None
+    finally:
+        shutdown_telemetry()
+
+
+# Import-time setup serves ``uvicorn --reload``: the child process imports this
+# module (with the parent's ``.env`` already in its environment) and never runs main.
+_configure_telemetry()
 
 
 if __name__ == "__main__":

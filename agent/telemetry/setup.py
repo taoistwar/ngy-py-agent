@@ -40,6 +40,11 @@ def active_tracer() -> Any | None:
     return _provider.get_tracer(INSTRUMENTATION_NAME)
 
 
+def active_provider() -> TracerProvider | None:
+    """The provider behind :func:`active_tracer`, for libraries that want it explicit."""
+    return _provider
+
+
 def build_span_exporter(config: TelemetryConfig) -> SpanExporter | None:
     if config.exporter == "console":
         return ConsoleSpanExporter()
@@ -75,11 +80,13 @@ def init_telemetry(
 
     if _initialized:
         return is_telemetry_enabled()
-    _initialized = True
 
     settings = config or load_config()
     if not settings.enabled:
+        # Not a terminal state: ``.env`` is loaded after some modules are imported,
+        # so a later call is allowed to turn tracing on once the flag is visible.
         return False
+    _initialized = True
 
     provider = TracerProvider(
         resource=Resource.create({"service.name": settings.service_name}),
