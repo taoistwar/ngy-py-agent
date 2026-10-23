@@ -794,8 +794,8 @@
 .composer-icon-btn {
   margin-left: auto;
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   border: 1px solid rgba(79, 120, 203, 0.6);
   background: linear-gradient(180deg, #3255a4, #2f4e9b);
@@ -807,8 +807,8 @@
 }
 
 .composer-icon-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .composer-icon-btn:disabled {
