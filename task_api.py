@@ -35,6 +35,7 @@ from api_schemas import (
     TaskListItemResponse,
     TaskListResponse,
 )
+from session_history import build_session_history
 from task_runtime import (
     agent_runtime_config,
     extract_task_result,
@@ -66,6 +67,9 @@ async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
         session_id = app_state.monitor_store.ensure_default_session()
 
     provider = str((model or {}).get("provider") or payload.provider or "openai-compatible")
+    # Read the transcript before the task exists, so the task itself can never be
+    # part of its own context. A task in the same session continues that conversation.
+    history_messages = build_session_history(session_id)
     task_id = app_state.monitor_store.create_task(
         query=payload.query,
         provider=provider,
@@ -91,7 +95,7 @@ async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
     worker = threading.Thread(
         target=run_task,
         args=(task_id, request, model, base_dir, agent_config, stop_event),
-        kwargs={"otel_handle": otel_handle},
+        kwargs={"otel_handle": otel_handle, "history_messages": history_messages},
         daemon=True,
     )
     try:

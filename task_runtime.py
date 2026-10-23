@@ -331,6 +331,7 @@ def run_task(
     agent_config: dict[str, Any] | None = None,
     stop_event: threading.Event | None = None,
     otel_handle: TaskSpanHandle | None = None,
+    history_messages: list[dict[str, Any]] | None = None,
 ) -> None:
     """Run one task to completion under its brokers; called on the task's own thread.
 
@@ -338,10 +339,21 @@ def run_task(
     makes the task a child of its HTTP span; ``contextvars`` do not cross
     ``threading.Thread``, so the handle is attached here and the span ended here,
     after the closing event, so the event can still name it.
+
+    ``history_messages`` is the conversation the session had before this task, read
+    by the caller so this thread never guesses at it (see ``session_history``).
     """
     token = attach_task_span(otel_handle)
     try:
-        _execute_task(task_id, request, model, base_dir, agent_config, stop_event)
+        _execute_task(
+            task_id,
+            request,
+            model,
+            base_dir,
+            agent_config,
+            stop_event,
+            history_messages=history_messages,
+        )
     finally:
         detach_task_span(token)
         end_task_span(otel_handle)
@@ -354,6 +366,7 @@ def _execute_task(
     base_dir: str | None,
     agent_config: dict[str, Any] | None,
     stop_event: threading.Event | None,
+    history_messages: list[dict[str, Any]] | None = None,
 ) -> None:
     provider = str((model or {}).get("provider") or request.provider or "openai-compatible")
     provider_config = build_provider_config(model)
@@ -392,6 +405,9 @@ def _execute_task(
             "supports_tool_calls": (model or {}).get("supports_tool_calls", True),
             "thinking_mode": (model or {}).get("thinking_mode", False),
             "max_output_tokens": (model or {}).get("max_output_tokens", 0),
+            # How much of the session's earlier conversation this task continues
+            # from: zero means it started a fresh conversation.
+            "history_messages": len(history_messages or []),
             **current_trace_ids(),
         },
     )
@@ -424,6 +440,7 @@ def _execute_task(
         app_state.register_task_questions(task_id, question_broker)
         result = run_react_loop(
             user_query=request.query,
+            history_messages=history_messages,
             provider_name=provider,
             provider_config=provider_config,
             enable_tools=bool((model or {}).get("supports_tool_calls", True)),

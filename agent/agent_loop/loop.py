@@ -3,7 +3,7 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agent.agent_loop.config import DEFAULT_MAX_STEPS
-from agent.agent_loop.messages import _with_base_dir
+from agent.agent_loop.messages import _with_base_dir, _with_history
 from agent.agent_loop.runtime import (
     _build_runtime,
     _emit,
@@ -37,6 +37,7 @@ def run_react_loop(
     max_steps: int = DEFAULT_MAX_STEPS,
     verbose: bool = True,
     initial_messages: Optional[List[Dict[str, Any]]] = None,
+    history_messages: Optional[List[Dict[str, Any]]] = None,
     task_id: str | None = None,
     event_sink: EventSink | None = None,
     provider_config: Optional[ProviderConfig] = None,
@@ -99,6 +100,12 @@ def run_react_loop(
             },
         ]
 
+    if history_messages:
+        # Earlier turns of the session sit before this task's query, so a follow-up
+        # continues the conversation instead of restarting it. The API builds this
+        # from the session's finished tasks (see ``session_history``).
+        messages = _with_history(messages, history_messages)
+
     messages.append({"role": "user", "content": user_query})
 
     _emit(
@@ -120,6 +127,7 @@ def run_react_loop(
                 "base_dir": base_dir,
                 "agent_id": (agent_config or {}).get("agent_id"),
                 "mcp_servers": (agent_config or {}).get("mcp_servers"),
+                "history_messages": len(history_messages or []),
                 **current_trace_ids(),
             },
             collapsed=True,

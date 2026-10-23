@@ -124,6 +124,22 @@ def _tool_fallback_parse(content: str) -> Optional[Tuple[str, Dict[str, Any], st
     return name, args, _new_id()
 
 
+def _with_history(
+    messages: List[Dict[str, Any]],
+    history: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Put earlier turns between the system prompt and this task's query.
+
+    The system prompt is a preamble, not a turn: an earlier conversation placed
+    before it would read as if the model had answered before being told how to
+    behave. The caller's list is copied, so a loop run never edits stored history.
+    """
+    merged = list(messages)
+    insert_at = 1 if merged and merged[0].get("role") == "system" else 0
+    merged[insert_at:insert_at] = [dict(message) for message in history]
+    return merged
+
+
 def _with_base_dir(prompt: str, base_dir: Optional[str]) -> str:
     """Append the working directory so relative paths resolve against that folder."""
     directory = (base_dir or "").strip()

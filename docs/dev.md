@@ -303,6 +303,7 @@ npm run i18n:check
 | `main.py` | FastAPI app 装配、CORS、静态前端与兜底路由、健康检查、CLI（`argparse` + REPL + `--web`） | 业务路由、运行期状态 |
 | `api_schemas.py` | 所有请求/响应 pydantic 模型 | 任何行为 |
 | `app_state.py` | 进程内的**活状态**：`monitor_store`、`permission_rule_store`、三项全局配置（保留天数 / 步数上限 / 确认模式）及其 `source`、三类任务注册表（停止事件、权限 broker、提问 broker）、`status_for_event`、`ROOT_DIR` | 任何判断逻辑 |
+| `session_history.py` | 会话上下文：把同一会话中**已完成**任务的 `query` / `result` 重建成 `user` / `assistant` messages，并按消息数 / 字符预算裁剪（只留最近的轮次） | 不注入、不运行任务 |
 | `task_runtime.py` | "一个任务是什么"：provider / 工作目录 / 步数 / 确认模式的解析、会话标题、保留期清理、`run_task`（跑 ReAct 循环并把两个 broker 注册进 `app_state`） | HTTP 细节 |
 | `task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
 | `workspace_api.py` | 会话、工作空间、模型配置路由 | |
