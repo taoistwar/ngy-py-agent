@@ -164,15 +164,21 @@ http://127.0.0.1:8001
 
 ### 工具管理
 
-「工具管理」页面列出 `agent/tools/catalog.py` 注册的全部工具，可搜索工具名、描述或智能体；点「详情」查看权限门禁、确认框可提供的答复、实现文件与参数结构（参数渲染与智能体编辑里的工具详情一致）。
+「工具管理」页面把 `agent/tools/catalog.py` 注册的工具按分类分组，一类一张表（文件读写 / 命令与进程 / 桌面操作 / 计算与代码 / 信息查询 / 用户交互），可搜索工具名、描述或智能体；点「详情」查看权限门禁、确认框可提供的答复、实现文件与参数结构（参数渲染与智能体编辑里的工具详情一致）。
 
 - `GET /api/tools`：返回 `{tools}`，每个工具包含：
   - `name` / `description` / `parameters`：与模型看到的工具声明一致；
+  - `category`：列表分组，取值见 `agent/tools/spec.py` 的 `CATEGORY_KINDS`；页面认识的分类用本地化名称，不认识的直接显示原值；
+  - `description_i18n`：`{语言: {description, parameters}}`，只用于页面展示，不会进入模型看到的 schema；
   - `permission`：权限门禁种类 `none` / `read` / `write` / `exec` / `computer`（见 `agent/tools/permissions.py`），`none` 表示永不询问；
   - `scopes`：确认框可以给出的答复（`once` / `session` / `always`），只包含该工具实际接受的范围；
   - `has_preview`：是否提供确认前的无副作用预演；
   - `source`：实现文件，相对仓库根目录；
   - `agent_ids`：允许调用该工具的智能体 id；智能体的 `tool_names` 为 `null` 表示"全部工具"，此时它会出现在每个工具的列表里。
+
+工具说明与参数说明是双语的：英文是源文本，页面上始终显示；当前语言不是英文时，如果该工具带这种语言的翻译，会在英文下方再显示一行。英文界面只显示英文，某语言没有翻译时也只显示英文（不会混排）。
+
+翻译放在每个工具包自己的 `i18n.py` 里（`ToolText`，由 `spec.py` 通过 `description_i18n` 声明），与 `description.py` 分开，因为模型永远只看英文。新增或修改工具参数时要同步补翻译：`test/tool_api_test.py` 会校验每个参数都有中文文本。
 
 详情弹窗里每个参数都有一个输入框（按参数类型给文本框 / 下拉 / JSON 文本），点右上角「测试」会在后台真实执行一次该工具，并显示模型会收到的结果；`ToolOutcome` 的 `details` 另列为 JSON。
 

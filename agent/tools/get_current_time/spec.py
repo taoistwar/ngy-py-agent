@@ -1,8 +1,9 @@
 """The ``get_current_time`` spec: name, schema and permission kind."""
 
 from agent.tools.bindings import ToolBindings
+from agent.tools.get_current_time.i18n import ZH_CN
 from agent.tools.get_current_time.tool import get_current_time
-from agent.tools.spec import ToolSpec
+from agent.tools.spec import CATEGORY_LOOKUP, LOCALE_ZH_CN, ToolSpec
 
 NAME = "get_current_time"
 
@@ -27,4 +28,6 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
             },
             "required": [],
         },
+        category=CATEGORY_LOOKUP,
+        description_i18n={LOCALE_ZH_CN: ZH_CN},
     )

@@ -1,9 +1,10 @@
 """The ``code_interpreter`` spec: name, schema and permission kind."""
 
 from agent.tools.bindings import ToolBindings
+from agent.tools.code_interpreter.i18n import ZH_CN
 from agent.tools.code_interpreter.tool import code_interpreter
 from agent.tools.permissions import PERMISSION_EXEC
-from agent.tools.spec import ToolSpec
+from agent.tools.spec import CATEGORY_COMPUTE, LOCALE_ZH_CN, ToolSpec
 
 NAME = "code_interpreter"
 
@@ -33,4 +34,6 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         # Arbitrary code: this is one of the two tools that can reach anything on the
         # machine, which is why it is confirmed (ADR 0006 D2).
         permission=PERMISSION_EXEC,
+        category=CATEGORY_COMPUTE,
+        description_i18n={LOCALE_ZH_CN: ZH_CN},
     )

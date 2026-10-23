@@ -2539,6 +2539,7 @@ export default function App() {
           <ToolManager
             tools={tools}
             agents={agents}
+            locale={locale}
             onRefresh={refreshTools}
             translate={translate}
           />

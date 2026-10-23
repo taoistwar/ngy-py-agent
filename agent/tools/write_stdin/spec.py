@@ -8,13 +8,14 @@ one task whose sessions it may touch.
 
 from agent.tools.bindings import ToolBindings
 from agent.tools.permissions import PERMISSION_EXEC, SCOPE_ONCE, SCOPE_SESSION
-from agent.tools.spec import ToolSpec
+from agent.tools.spec import CATEGORY_SHELL, LOCALE_ZH_CN, ToolSpec
 from agent.tools.write_stdin import (
     WRITE_STDIN_DESCRIPTION,
     WRITE_STDIN_PARAMETERS,
     WRITE_STDIN_TOOL_NAME,
     make_write_stdin_tool,
 )
+from agent.tools.write_stdin.i18n import ZH_CN
 
 NAME = WRITE_STDIN_TOOL_NAME
 
@@ -36,4 +37,6 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         # Its target is a random session id, so a persisted "always" rule could
         # never match again: offer once/session only (ADR 0008).
         scopes=(SCOPE_ONCE, SCOPE_SESSION),
+        category=CATEGORY_SHELL,
+        description_i18n={LOCALE_ZH_CN: ZH_CN},
     )

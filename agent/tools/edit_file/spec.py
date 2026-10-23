@@ -7,8 +7,9 @@ from agent.tools.edit_file import (
     make_edit_file_tool,
     make_edit_preview,
 )
+from agent.tools.edit_file.i18n import ZH_CN
 from agent.tools.permissions import PERMISSION_WRITE
-from agent.tools.spec import ToolSpec
+from agent.tools.spec import CATEGORY_FILE, LOCALE_ZH_CN, ToolSpec
 
 NAME = "edit_file"
 
@@ -29,4 +30,6 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         preview=make_edit_preview(
             base_dir=bindings.base_dir, extra_read_roots=bindings.extra_read_roots
         ),
+        category=CATEGORY_FILE,
+        description_i18n={LOCALE_ZH_CN: ZH_CN},
     )

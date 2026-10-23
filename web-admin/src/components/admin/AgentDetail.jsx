@@ -66,14 +66,19 @@ function ParameterInput({ param, value, onChange, translate }) {
   )
 }
 
-export function AgentToolDetail({ tool, translate, values, onChange }) {
+export function AgentToolDetail({ tool, translate, values, onChange, translation }) {
   const params = normalizeParameters(tool.parameters)
   const hasSchema = Boolean(tool.parameters) && Object.keys(tool.parameters).length > 0
   const editable = typeof onChange === "function"
+  // English is always shown; a locale's own text only ever adds to it.
+  const translatedParams = translation?.parameters || {}
 
   return (
     <div className="agent-detail">
       <p className="agent-detail-desc">{tool.description || translate("agentToolNoDescription")}</p>
+      {translation?.description ? (
+        <p className="agent-detail-desc agent-desc-i18n">{translation.description}</p>
+      ) : null}
       <div className="agent-section">
         <div className="agent-section-head">
           <span>{translate("agentToolParams")}</span>
@@ -92,6 +97,11 @@ export function AgentToolDetail({ tool, translate, values, onChange }) {
                 <span className="agent-param-desc">
                   {param.description || translate("agentToolNoDescription")}
                 </span>
+                {translatedParams[param.name] ? (
+                  <span className="agent-param-desc agent-desc-i18n">
+                    {translatedParams[param.name]}
+                  </span>
+                ) : null}
                 {editable ? (
                   <ParameterInput
                     param={param}

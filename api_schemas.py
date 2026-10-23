@@ -377,12 +377,23 @@ class AgentListResponse(BaseModel):
     agents: list[AgentItemResponse]
 
 
+class ToolTextResponse(BaseModel):
+    """One language's display text for a tool.
+
+    The page shows the English ``description`` / parameter text always, and adds
+    this underneath when the current locale is not English.
+    """
+
+    description: str = ""
+    parameters: dict[str, str] = Field(default_factory=dict)
+
+
 class ToolItemResponse(BaseModel):
     """One registered tool, as the admin tool page shows it.
 
     The model only ever sees ``name`` / ``description`` / ``parameters``; the rest
-    is the management view - which confirmation the gate asks for, and where the
-    tool is implemented.
+    is the management view - which confirmation the gate asks for, where the tool
+    is implemented, how it is grouped and its translations.
     """
 
     name: str
@@ -397,6 +408,10 @@ class ToolItemResponse(BaseModel):
     source: str = ""
     # Agent ids whose configuration lets the model call this tool.
     agent_ids: list[str] = Field(default_factory=list)
+    # Grouping in the tool list (file / shell / computer / compute / lookup / ...).
+    category: str = "other"
+    # Locale -> display text. English is not repeated here: it is the fields above.
+    description_i18n: dict[str, ToolTextResponse] = Field(default_factory=dict)
 
 
 class ToolListResponse(BaseModel):

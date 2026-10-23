@@ -2,6 +2,29 @@
 
 import { agentDisplayName } from "./shared"
 
+// Order the list is grouped in; a category the page does not know yet is appended
+// after these, in the order the API returned it. Mirrors CATEGORY_KINDS in
+// agent/tools/spec.py.
+export const CATEGORY_ORDER = [
+  "file",
+  "shell",
+  "computer",
+  "compute",
+  "lookup",
+  "interaction",
+  "other",
+]
+
+const CATEGORY_LABEL_KEYS = {
+  file: "toolCategoryFile",
+  shell: "toolCategoryShell",
+  computer: "toolCategoryComputer",
+  compute: "toolCategoryCompute",
+  lookup: "toolCategoryLookup",
+  interaction: "toolCategoryInteraction",
+  other: "toolCategoryOther",
+}
+
 // Confirmation kind -> locale key, mirroring PERMISSION_KINDS in
 // agent/tools/permissions.py.
 const PERMISSION_LABEL_KEYS = {
@@ -18,6 +41,41 @@ const SCOPE_LABEL_KEYS = {
   once: "toolScopeOnce",
   session: "toolScopeSession",
   always: "toolScopeAlways",
+}
+
+export function categoryLabel(category, translate) {
+  const key = CATEGORY_LABEL_KEYS[category]
+  return key ? translate(key) : String(category || "other")
+}
+
+/** Split tools into one bucket per category, in display order. */
+export function groupTools(tools) {
+  const buckets = new Map()
+  tools.forEach((tool) => {
+    const category = tool.category || "other"
+    if (!buckets.has(category)) buckets.set(category, [])
+    buckets.get(category).push(tool)
+  })
+
+  const known = CATEGORY_ORDER.filter((category) => buckets.has(category))
+  const unknown = [...buckets.keys()].filter((category) => !CATEGORY_ORDER.includes(category))
+  return [...known, ...unknown].map((category) => ({
+    category,
+    tools: buckets.get(category),
+  }))
+}
+
+/**
+ * The text to show under the English one, or null.
+ *
+ * English is the source of truth and is always displayed; a non-English locale
+ * adds its own translation underneath. A locale without a translation, or English
+ * itself, gets nothing extra - never a partial mix.
+ */
+export function localizedText(tool, locale) {
+  if (!locale || locale === "en") return null
+  const text = tool?.description_i18n?.[locale]
+  return text && text.description ? text : null
 }
 
 export function permissionLabel(permission, translate) {

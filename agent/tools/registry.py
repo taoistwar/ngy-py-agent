@@ -2,7 +2,7 @@
 
 import copy
 import json
-from typing import Any, Callable, ClassVar, Dict, List, Optional, Sequence
+from typing import Any, Callable, ClassVar, Dict, List, Mapping, Optional, Sequence
 
 from agent.models import EventCategory, ToolOutcome
 from agent.provider import canonicalize_provider
@@ -22,6 +22,7 @@ from agent.tools.permissions import (
     PermissionDenial,
 )
 from agent.tools.read_ledger import ReadLedger
+from agent.tools.spec import CATEGORY_OTHER, ToolText
 from agent.tools.user_question import STATUS_NO_CLIENT, QuestionResult, UserQuestionBroker
 
 
@@ -135,6 +136,8 @@ class ToolRegistry:
                 permission=spec.permission,
                 scopes=spec.scopes,
                 preview=spec.preview,
+                category=spec.category,
+                description_i18n=spec.description_i18n,
             )
 
         if enabled_tools is not None:
@@ -152,6 +155,8 @@ class ToolRegistry:
         permission: str = PERMISSION_NONE,
         scopes: Optional[Sequence[str]] = None,
         preview: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+        category: str = CATEGORY_OTHER,
+        description_i18n: Optional[Mapping[str, ToolText]] = None,
     ):
         """Register a new tool.
 
@@ -159,7 +164,9 @@ class ToolRegistry:
         It defaults to ``none``, i.e. never confirmed, so a tool that touches the
         filesystem must say so explicitly. ``scopes`` narrows the answers the
         dialog may offer. ``preview`` is an optional side-effect free dry run used
-        to fill in the confirmation dialog.
+        to fill in the confirmation dialog. ``category`` groups the tool in the
+        admin page, and ``description_i18n`` is the display-only text for other
+        languages; neither reaches the model.
         """
         self.tools[name] = {
             "function": function,
@@ -168,6 +175,8 @@ class ToolRegistry:
             "permission": permission or PERMISSION_NONE,
             "scopes": tuple(scopes or SCOPES),
             "preview": preview,
+            "category": category or CATEGORY_OTHER,
+            "description_i18n": dict(description_i18n or {}),
         }
 
     def describe_tools(self) -> List[Dict[str, Any]]:
@@ -187,6 +196,14 @@ class ToolRegistry:
                 "scopes": list(tool.get("scopes") or ()),
                 "has_preview": tool.get("preview") is not None,
                 "source": _implementation_source(tool["function"]),
+                "category": tool.get("category") or CATEGORY_OTHER,
+                "description_i18n": {
+                    locale: {
+                        "description": text.description,
+                        "parameters": dict(text.parameters),
+                    }
+                    for locale, text in (tool.get("description_i18n") or {}).items()
+                },
             }
             for name, tool in self.tools.items()
         ]

@@ -5,6 +5,7 @@ import Modal from "./Modal"
 import {
   buildArguments,
   initialValues,
+  localizedText,
   permissionLabel,
   resolveAgentNames,
   scopeSummary,
@@ -51,8 +52,9 @@ function ToolTestResult({ result, translate }) {
   )
 }
 
-export default function ToolDetailDialog({ tool, agents, onClose, translate }) {
+export default function ToolDetailDialog({ tool, agents, locale, onClose, translate }) {
   const params = normalizeParameters(tool.parameters)
+  const translation = localizedText(tool, locale)
   const [values, setValues] = useState(() => initialValues(params))
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState(null)
@@ -148,6 +150,7 @@ export default function ToolDetailDialog({ tool, agents, onClose, translate }) {
           translate={translate}
           values={values}
           onChange={setValue}
+          translation={translation}
         />
 
         {inputError ? <div className="form-error">{inputError}</div> : null}

@@ -1304,6 +1304,12 @@
   line-height: 1.5;
 }
 
+/* Translation of the English text above it: same size, dimmer, pulled closer. */
+.agent-desc-i18n {
+  margin-top: -6px;
+  color: #cfd8ef;
+}
+
 .agent-detail-meta {
   display: flex;
   align-items: center;
@@ -1674,6 +1680,31 @@
 
 .model-list {
   overflow: auto;
+}
+
+/* One block per tool category, so each group keeps its own table header. */
+.tool-group + .tool-group {
+  margin-top: 18px;
+}
+
+.tool-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 2px 6px;
+}
+
+.tool-group-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tool-desc-i18n {
+  color: #cfd8ef;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .model-table {

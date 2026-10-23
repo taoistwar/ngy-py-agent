@@ -12,7 +12,8 @@ from agent.tools.computer_observe import (
     OBSERVE_TOOL_NAME,
     make_observe_tool,
 )
-from agent.tools.spec import ToolSpec
+from agent.tools.computer_observe.i18n import ZH_CN
+from agent.tools.spec import CATEGORY_COMPUTER, LOCALE_ZH_CN, ToolSpec
 
 NAME = OBSERVE_TOOL_NAME
 
@@ -30,4 +31,6 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         ),
         description=OBSERVE_DESCRIPTION,
         parameters=OBSERVE_PARAMETERS,
+        category=CATEGORY_COMPUTER,
+        description_i18n={LOCALE_ZH_CN: ZH_CN},
     )

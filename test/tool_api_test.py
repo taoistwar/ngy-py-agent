@@ -9,6 +9,7 @@ configurations (build / ask / plan) are seeded from scratch and nothing here rea
 or writes the developer's data.
 """
 
+import json
 import sys
 import tempfile
 import unittest
@@ -25,6 +26,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.tools.permissions import PERMISSION_KINDS, SCOPES  # noqa: E402
+from agent.tools.spec import CATEGORY_KINDS  # noqa: E402
 from task_store import _SqliteTaskStore  # noqa: E402
 
 
@@ -98,6 +100,49 @@ class ToolApiTest(unittest.TestCase):
 
         self.assertIn(created["agent_id"], tools["get_current_time"]["agent_ids"])
         self.assertNotIn(created["agent_id"], tools["read_file"]["agent_ids"])
+
+    # ----------------------------------------------------------------- grouping
+
+    def test_reports_a_known_category_per_tool(self):
+        tools = self.fetch_tools()
+
+        self.assertEqual(tools["read_file"]["category"], "file")
+        self.assertEqual(tools["exec_command"]["category"], "shell")
+        self.assertEqual(tools["computer_control"]["category"], "computer")
+        self.assertEqual(tools["code_interpreter"]["category"], "compute")
+        self.assertEqual(tools["get_current_time"]["category"], "lookup")
+        self.assertEqual(tools["ask_user_question"]["category"], "interaction")
+        for name, item in tools.items():
+            self.assertIn(item["category"], CATEGORY_KINDS, name)
+
+    # --------------------------------------------------------------- languages
+
+    def test_ships_chinese_text_beside_the_english(self):
+        read_file = self.fetch_tools()["read_file"]
+
+        chinese = read_file["description_i18n"]["zh-CN"]
+        self.assertTrue(chinese["description"])
+        self.assertNotEqual(chinese["description"], read_file["description"])
+        self.assertTrue(chinese["parameters"]["file_path"])
+
+    def test_every_parameter_has_chinese_text(self):
+        # A missing translation shows up as an English-only row on a Chinese page,
+        # which is exactly the drift this asserts against.
+        for name, item in self.fetch_tools().items():
+            chinese = item["description_i18n"].get("zh-CN")
+            self.assertIsNotNone(chinese, name)
+            self.assertTrue(chinese["description"], name)
+            for param in item["parameters"].get("properties") or {}:
+                self.assertTrue(
+                    chinese["parameters"].get(param), f"{name}.{param} has no zh-CN text"
+                )
+
+    def test_translations_stay_out_of_the_model_schema(self):
+        # The model gets English only: a translation inside the schema would be
+        # sent to the provider on every request.
+        for name, item in self.fetch_tools().items():
+            self.assertNotIn("zh-CN", json.dumps(item["parameters"]), name)
+            self.assertNotIn("zh-CN", json.dumps(item["description"]), name)
 
     # ------------------------------------------------------------------ running
 
