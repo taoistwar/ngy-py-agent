@@ -140,7 +140,7 @@ class LoopFailureHandlingTest(unittest.TestCase):
     def run_loop(self, provider, sink):
         registry = _Registry()
         with patch(
-            "agent.agent_loop._build_runtime",
+            "agent.agent_loop.loop._build_runtime",
             return_value=("openai", registry, provider, []),
         ):
             return run_react_loop(

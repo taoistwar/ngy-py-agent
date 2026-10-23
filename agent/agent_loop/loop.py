@@ -1,11 +1,21 @@
-"""ReAct execution loop."""
+"""The ReAct execution loop itself."""
 
-import functools
-import inspect
-import json
-import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from agent.agent_loop.config import DEFAULT_MAX_STEPS
+from agent.agent_loop.messages import (
+    _parse_tool_calls,
+    _to_content_text,
+    _to_dict,
+    _tool_fallback_parse,
+    _with_base_dir,
+)
+from agent.agent_loop.runtime import (
+    _build_runtime,
+    _emit,
+    _execute_tool,
+    _reaps_task_sessions,
+)
 from agent.llm_errors import describe_llm_failure
 from agent.models import (
     EventCategory,
@@ -21,258 +31,11 @@ from agent.models import (
 from agent.modes import (
     build_system_prompt,
     build_system_prompt_from_config,
-    build_tool_registry,
-    build_tool_registry_from_names,
 )
-from agent.provider import (
-    DEFAULT_PROVIDER,
-    ProviderConfig,
-    build_provider,
-    canonicalize_provider,
-    resolve_tool_provider_for_schemas,
-)
-from agent.tool_registry import ToolRegistry
-from agent.tools import process_store
-from agent.tools.file_access import default_workspace_root
+from agent.provider import ProviderConfig
 from agent.tools.permissions import PermissionBroker
 from agent.tools.user_question import UserQuestionBroker
 from agent.vision import build_image_message, redact_image_payload, supports_images
-
-# The provider to run when the caller does not name one. The environment variable
-# keeps its historical name (it started as the tool-schema selection switch) and the
-# fallback is the provider module's default, so there is one place that says what
-# "not configured" means.
-TOOL_SCHEMA_PROVIDER = os.getenv("TOOL_SCHEMA_PROVIDER") or DEFAULT_PROVIDER
-DEFAULT_MAX_STEPS = int(os.getenv("REACT_MAX_STEPS", "8"))
-
-
-def _to_content_text(content: Any) -> str:
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    return json.dumps(content, ensure_ascii=False)
-
-
-def _to_dict(message: Any) -> Dict[str, Any]:
-    if isinstance(message, dict):
-        return message
-
-    role = getattr(message, "role", "assistant")
-    content = _to_content_text(getattr(message, "content", ""))
-
-    tool_calls_obj = getattr(message, "tool_calls", None)
-    tool_calls = []
-    for tool_call in tool_calls_obj or []:
-        function = getattr(tool_call, "function", None)
-        if function is None and isinstance(tool_call, dict):
-            function = tool_call.get("function")
-        if function is None:
-            continue
-        name = getattr(function, "name", None) or (
-            function.get("name") if isinstance(function, dict) else None
-        )
-        if not name:
-            continue
-        arguments = getattr(function, "arguments", None)
-        if arguments is None and isinstance(function, dict):
-            arguments = function.get("arguments")
-        if isinstance(arguments, str):
-            function_args = arguments
-        else:
-            function_args = _to_content_text(arguments)
-        tool_calls.append(
-            {
-                "id": getattr(tool_call, "id", None) or str(_new_id()),
-                "type": "function",
-                "function": {
-                    "name": str(name),
-                    "arguments": function_args,
-                },
-            }
-        )
-
-    result = {"role": role, "content": content}
-    if tool_calls:
-        result["tool_calls"] = tool_calls
-    return result
-
-
-def _new_id() -> str:
-    import uuid
-
-    return str(uuid.uuid4())
-
-
-def _parse_tool_calls(message: Any) -> List[Tuple[str, Dict[str, Any], str]]:
-    parsed = []
-    raw_tool_calls = getattr(message, "tool_calls", None)
-    if raw_tool_calls is None and isinstance(message, dict):
-        raw_tool_calls = message.get("tool_calls", [])
-
-    for call in raw_tool_calls or []:
-        function = getattr(call, "function", None)
-        if function is None and isinstance(call, dict):
-            function = call.get("function")
-        if function is None:
-            continue
-
-        name = getattr(function, "name", None) or (
-            function.get("name") if isinstance(function, dict) else None
-        )
-        if not name:
-            continue
-
-        raw_args = getattr(function, "arguments", None)
-        if raw_args is None and isinstance(function, dict):
-            raw_args = function.get("arguments")
-
-        try:
-            args = (
-                json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
-            )
-            if not isinstance(args, dict):
-                args = {}
-        except json.JSONDecodeError:
-            args = {}
-
-        call_id = getattr(call, "id", None)
-        if call_id is None and isinstance(call, dict):
-            call_id = call.get("id")
-        parsed.append((str(name), args, str(call_id or _new_id())))
-    return parsed
-
-
-def _tool_fallback_parse(content: str) -> Optional[Tuple[str, Dict[str, Any], str]]:
-    """Some providers may return tool calls as JSON in plain text content."""
-    text = (content or "").strip()
-    if not (text.startswith("{") and text.endswith("}")):
-        return None
-    try:
-        payload = json.loads(text)
-    except (ValueError, TypeError):
-        # Not JSON: the content was prose after all, so there is no tool call here.
-        return None
-    if not isinstance(payload, dict):
-        return None
-    name = str(payload.get("name", "")).strip()
-    if not name:
-        return None
-    args = payload.get("arguments", {})
-    if not isinstance(args, dict):
-        return None
-    return name, args, _new_id()
-
-
-def _with_base_dir(prompt: str, base_dir: Optional[str]) -> str:
-    """Append the working directory so relative paths resolve against that folder."""
-    directory = (base_dir or "").strip()
-    if not directory:
-        # An unbound session still resolves relative paths somewhere, and the model
-        # has to know where that is before it writes a file into it.
-        return (
-            f"{prompt}\n\n## Working directory\n"
-            "This session has no workspace bound, so relative file paths resolve against "
-            f"{default_workspace_root().as_posix()}. Use an absolute path when you need a "
-            "specific location."
-        )
-    return (
-        f"{prompt}\n\n## Working directory\n"
-        f"All project tasks run inside the workspace root folder: {directory}\n"
-        "Treat this folder as the base for every relative file path and keep all reads "
-        "and writes inside it."
-    )
-
-
-def _emit(
-    event_sink: EventSink | None,
-    task_id: str | None,
-    event: TaskEvent,
-) -> None:
-    if event_sink is None or task_id is None:
-        return
-    # Deliberately broad: the sink is caller-supplied, and a failing listener must not
-    # be the thing that aborts the run.
-    try:
-        event_sink(task_id, event)
-    except Exception:  # noqa: BLE001
-        # Event emission failures should not interrupt main flow.
-        return
-
-
-def _execute_tool(registry: ToolRegistry, name: str, arguments: Any) -> Any:
-    if isinstance(arguments, str):
-        try:
-            arguments = json.loads(arguments)
-        except json.JSONDecodeError:
-            arguments = {}
-    if not isinstance(arguments, dict):
-        arguments = {}
-    return registry.execute_tool(name, arguments)
-
-
-def _build_runtime(
-    provider_name: Optional[str] = None,
-    provider_config: Optional[ProviderConfig] = None,
-    enable_tools: bool = True,
-    mode: str = "build",
-    base_dir: Optional[str] = None,
-    agent_config: Optional[Dict[str, Any]] = None,
-    task_id: str = "",
-) -> tuple[str, ToolRegistry, Any, Optional[List[Dict[str, Any]]]]:
-    provider_name = canonicalize_provider(provider_name or TOOL_SCHEMA_PROVIDER)
-    registry_options = {
-        "base_dir": base_dir,
-        "max_tokens": int(getattr(provider_config, "max_input_tokens", 0) or 0),
-        "provider": provider_name,
-        "model": getattr(provider_config, "model", "") or "",
-        "task_id": task_id,
-    }
-    if not enable_tools:
-        registry = ToolRegistry(enabled_tools=[], **registry_options)
-    elif agent_config is not None:
-        registry = build_tool_registry_from_names(
-            agent_config.get("tool_names"), **registry_options
-        )
-    else:
-        registry = build_tool_registry(mode, **registry_options)
-    tool_schemas: Optional[List[Dict[str, Any]]] = None
-    if enable_tools:
-        try:
-            request_provider = resolve_tool_provider_for_schemas(provider_name)
-            tool_schemas = registry.get_tool_schemas(request_provider)
-        except ValueError:
-            print(
-                f"Unsupported TOOL_SCHEMA_PROVIDER='{provider_name}', fallback to openai schema"
-            )
-            provider_name = "openai"
-            tool_schemas = registry.get_tool_schemas("openai")
-
-    provider = build_provider(provider_name, provider_config)
-    return provider_name, registry, provider, tool_schemas
-
-
-def _reaps_task_sessions(func):
-    """Stop the loop's live sessions when it returns, however it returns.
-
-    The loop has several exits (a final answer, the step limit, a stop request), so
-    the reaping cannot be bolted onto one of them, and a ``finally`` inside would
-    mean re-indenting the whole body. A wrapper keeps the change local and, because
-    it sits here, every caller gets it: the API server, both CLI entry points and
-    any library driving the loop directly (ADR 0008: sessions are task scoped).
-    """
-
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        finally:
-            bound = inspect.signature(func).bind_partial(*args, **kwargs)
-            task_id = str(bound.arguments.get("task_id") or "")
-            if task_id:
-                process_store.stop_task(task_id)
-
-    return wrapper
 
 
 @_reaps_task_sessions

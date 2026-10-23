@@ -2,7 +2,7 @@
 
 - 状态：已接受（Accepted）
 - 日期：2026-09-20
-- 相关：`agent/tools/permissions.py`、`agent/tools/registry.py`、`agent/tools/specs.py`、`agent/agent_loop.py`、`main.py`、`task_store.py`、`web-admin/src/components/PermissionPrompt.jsx`
+- 相关：`agent/tools/permissions.py`、`agent/tools/registry.py`、`agent/tools/specs.py`、`agent/agent_loop/`、`main.py`、`task_store.py`、`web-admin/src/components/PermissionPrompt.jsx`
 - 前置：[ADR 0001](0001-file-edit-tool.md)、[ADR 0002](0002-file-encoding.md)、[ADR 0004](0004-file-write-tool.md)、[ADR 0005](0005-exec-tool.md)
 
 ## 背景
@@ -26,7 +26,7 @@
 
 `execute_tool` 是每次工具调用的必经之路，因此门禁写在这里可以**自动覆盖全部工具**，包括将来新增的工具。反过来，如果按工具逐个加门禁，遗漏是默认结局，而遗漏意味着"界面上显示已保护、实际没保护"——比不做更危险。
 
-`agent/tools/registry.py` 与 `agent/agent_loop.py` 的分工：
+`agent/tools/registry.py` 与 `agent/agent_loop/` 的分工：
 
 - `ToolRegistry` 拿到一个可选的 `permission_broker`。**为 `None` 时行为与今天完全一致（全部放行）**，这样测试、库调用与其它 `execute_tool` 调用方不受影响。
 - `run_react_loop` 在该函数内部构建 registry（`agent_loop.py:247`），而它同时持有 `task_id` 与 `event_sink`，因此在构建完 registry 后注入 broker 即可。

@@ -2,7 +2,7 @@
 
 - 状态：已接受（Accepted）；D4 / D7 已被后续 ADR 取代（见文末「后续修订」）
 - 日期：2026-09-18
-- 相关：`agent/tools/file_edit_tool.py`、`agent/tools/file_read_tool.py`、`agent/tools/file_access.py`、`agent/tools/registry.py`、`agent/agent_loop.py`、`agent/models.py`
+- 相关：`agent/tools/file_edit_tool.py`、`agent/tools/file_read_tool.py`、`agent/tools/file_access.py`、`agent/tools/registry.py`、`agent/agent_loop/`、`agent/models.py`
 
 ## 背景
 

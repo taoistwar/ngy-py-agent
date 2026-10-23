@@ -105,7 +105,7 @@ class AgentLoopVisionTest(unittest.TestCase):
     def run_loop(self, provider):
         registry = _Registry(str(self.png))
         with patch(
-            "agent.agent_loop._build_runtime",
+            "agent.agent_loop.loop._build_runtime",
             return_value=("openai", registry, provider, []),
         ):
             result = run_react_loop(

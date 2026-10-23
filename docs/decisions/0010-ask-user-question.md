@@ -2,7 +2,7 @@
 
 - 状态：已接受（Accepted）
 - 日期：2026-09-24
-- 相关：`agent/tools/user_question.py`、`agent/tools/ask_user_question/`、`agent/tools/registry.py`、`agent/tools/bindings.py`、`agent/agent_loop.py`、`main.py`、`web-admin/src/components/QuestionPrompt.jsx`
+- 相关：`agent/tools/user_question.py`、`agent/tools/ask_user_question/`、`agent/tools/registry.py`、`agent/tools/bindings.py`、`agent/agent_loop/`、`main.py`、`web-admin/src/components/QuestionPrompt.jsx`
 - 前置：[ADR 0005](0005-exec-tool.md)、[ADR 0006](0006-tool-permission-confirmation.md)、[ADR 0008](0008-write-stdin-tool.md)
 
 ## 背景

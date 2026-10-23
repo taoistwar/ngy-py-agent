@@ -57,7 +57,7 @@ def main() -> None:
     # cheaper to read than a test failure caused by an undefined name.
     run(["uv", "run", "ruff", "check", "."], cwd=ROOT)
     run(
-        ["uv", "run", "python", "-m", "compileall", "-q", "main.py", "agent/agent_loop.py"],
+        ["uv", "run", "python", "-m", "compileall", "-q", "main.py", "agent/agent_loop"],
         cwd=ROOT,
     )
     run(["uv", "run", "python", "main.py", "--help"], cwd=ROOT)

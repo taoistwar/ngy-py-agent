@@ -110,7 +110,7 @@ Output:
 
 上一节标为"待定"的各项在此落定，代码已按此实现：
 
-- **回收钩子**：挂在 `agent/agent_loop.py` 的收尾包装器上（`run_react_loop` 被 `_reaps_task_sessions` 包住），凡是传入 `task_id` 的调用在返回时都会 `stop_task`——API 任务（`main.py:790`）走的就是这条；**不传 `task_id` 的调用**（交互式 CLI 的 REPL、部分库用法）**不属于任何任务**，其会话由容量上限、TTL 与 `atexit` 兜底。给 REPL 补一个 per-query 任务标识是后续可选工作。
+- **回收钩子**：挂在 `agent/agent_loop/` 的收尾包装器上（`run_react_loop` 被 `_reaps_task_sessions` 包住），凡是传入 `task_id` 的调用在返回时都会 `stop_task`——API 任务（`main.py:790`）走的就是这条；**不传 `task_id` 的调用**（交互式 CLI 的 REPL、部分库用法）**不属于任何任务**，其会话由容量上限、TTL 与 `atexit` 兜底。给 REPL 补一个 per-query 任务标识是后续可选工作。
 - **回收语义**：任务结束**显式停止**本任务会话。不采用"丢句柄"：那在 Windows 上会杀掉整棵树（`KILL_ON_JOB_CLOSE`）、在 POSIX 上却让进程继续活着，同一份代码两种结果。因此不存在"活过任务"的后台命令；需要长跑服务就让用户自己在终端起。
 - **隔离**：校验 `task_id + workspace`，不匹配一律按"未知会话"回答，不泄露存在性（`session_id` 当 capability 用）。
 - **上限 / TTL**：每任务活会话上限 8，超限**拒绝**新启（先 sweep 掉已退出与超 TTL 的僵尸再计数），而不是杀旧会话——那会毁掉模型正在进行的交互；TTL 30 分钟，与 `MAX_TIMEOUT_MS` 同量级。
@@ -122,4 +122,4 @@ Output:
 
 > **后续结构变更（同日，工具目录重构）**：工具声明已从 `agent/tools/specs.py` 移入**各工具包的 `spec.py`**，由 `agent/tools/catalog.py` 汇总、`agent/tools/bindings.py` 提供运行期绑定，`specs.py` 已删除。本文上方"相关"里的 `agent/tools/specs.py`，以及 D7 提到的 `write_stdin_tool.py` / `exec_tool.py`，请按 `agent/tools/spec.py`、`agent/tools/write_stdin/`、`agent/tools/exec_command/` 理解；决策内容不受影响。
 
-> **结构变更（2026-09-24）**：`main.py` 已按职责拆分（路由进 `task_api.py` / `workspace_api.py` / `agent_api.py` / `admin_api.py`，状态进 `app_state.py`，模型进 `api_schemas.py`，任务运行进 `task_runtime.py`），因此 D7 里的 `main.py:790` 与定稿一节里的行号不再有效；任务结束回收仍由 `agent/agent_loop.py` 的收尾包装器负责，未变。
+> **结构变更（2026-09-24）**：`main.py` 已按职责拆分（路由进 `task_api.py` / `workspace_api.py` / `agent_api.py` / `admin_api.py`，状态进 `app_state.py`，模型进 `api_schemas.py`，任务运行进 `task_runtime.py`），因此 D7 里的 `main.py:790` 与定稿一节里的行号不再有效；任务结束回收仍由 `agent/agent_loop/` 的收尾包装器负责，未变。

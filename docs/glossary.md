@@ -6,7 +6,7 @@
 
 | 术语 | 定义 | 位置 |
 | --- | --- | --- |
-| **ReAct 循环** | Agent 的主循环：请求模型 → 解析工具调用 → 执行工具 → 把结果回填到消息列表 → 继续，直到模型不再调用工具或达到步数上限。 | `agent/agent_loop.py` |
+| **ReAct 循环** | Agent 的主循环：请求模型 → 解析工具调用 → 执行工具 → 把结果回填到消息列表 → 继续，直到模型不再调用工具或达到步数上限。 | `agent/agent_loop/` |
 | **`base_dir` / 工作空间根** | 当前会话绑定的本地根目录。相对路径以它为基准解析，且不得逃出该目录。为空表示**未绑定会话（unbound session）**。 | `agent/tools/file_access.py` |
 | **未绑定会话** | 没有 `base_dir` 的会话。此时只剩下全局 `file_access` 策略生效，文件工具默认可以访问工作空间之外；**相对路径以"会话默认目录"为起点**。 | `agent/tools/file_access.py` |
 | **会话默认目录（`default_workspace`）** | 未绑定会话里相对路径的起点：`<程序启动路径>/data/default_workspace`（`DEFAULT_WORKSPACE_DIR` 可覆盖）。**是基目录不是边界**——`..` 仍可离开，全局策略照旧生效。写入按需创建它，读取不创建。 | [ADR 0007](decisions/0007-default-workspace.md) |
@@ -23,7 +23,7 @@
 | **ToolBindings（工具绑定）** | 一次运行绑给工具的东西：`base_dir`、`session_id`（输出目录作用域）、`task_id`、`max_tokens`、`provider`/`model`、`output_directory`、`ledger`、`extra_read_roots`。每个工具包的 `build_spec(bindings)` 自取所需，所以新增工具不必给 registry 加参数。 | `agent/tools/bindings.py` |
 | **工具目录（catalog）** | 内置工具的**唯一清单**，决定模型看到哪些工具、顺序如何：`build_all_specs(bindings)` 遍历各工具包的 `spec.py`。新增工具 = 新增一个包 + 在 `_BUILDERS` 加一行。 | `agent/tools/catalog.py` |
 | **ToolOutcome** | **工具结果分流契约**。工具回调可返回它，携带 `model_text`（给模型）与可选事件类别/标题 + `details`（给 UI/外部消费者）。`execute_tool` 对其原样透传，由 `agent_loop` 拆分。 | `agent/models.py` |
-| **双通道（dual channel）** | 一次工具调用产生两份输出：给**模型**的精简文本、给 **UI/外部消费者**的结构化记录。二者不再共用同一条消息。见 [ADR 0001](decisions/0001-file-edit-tool.md)。 | `agent/agent_loop.py` |
+| **双通道（dual channel）** | 一次工具调用产生两份输出：给**模型**的精简文本、给 **UI/外部消费者**的结构化记录。二者不再共用同一条消息。见 [ADR 0001](decisions/0001-file-edit-tool.md)。 | `agent/agent_loop/` |
 | **`model_text`** | `ToolOutcome` 中回填进 `messages`（`role="tool"`）的文本，是模型实际"看到"的内容。 | `agent/models.py` |
 | **`details`** | `ToolOutcome` 中随事件发送的结构化负载，模型看不到。 | `agent/models.py` |
 

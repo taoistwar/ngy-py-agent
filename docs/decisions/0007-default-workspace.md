@@ -2,7 +2,7 @@
 
 - 状态：已接受（Accepted）
 - 日期：2026-09-22
-- 相关：`agent/tools/file_access.py`、`agent/agent_loop.py`、`.gitignore`
+- 相关：`agent/tools/file_access.py`、`agent/agent_loop/`、`.gitignore`
 - 前置：[ADR 0001](0001-file-edit-tool.md)、[ADR 0004](0004-file-write-tool.md)
 
 ## 背景

@@ -30,7 +30,7 @@
 - 单个源码文件应优先拆分为多个源码文件；单个方法应优先拆分为多个更小方法，不应等到“文件太大/方法太长”才改。
   - 建议门槛（用于执行）：一个文件出现明显多个职责（输入/计算/输出、网络/持久化/业务）时立即拆分；一个方法包含两个以上职责阶段（如验证-组装-调用、查询-处理-输出）时优先拆成子方法。
 - 如无明确要求，优先保持现有行为不变，最小化改动范围。
-- 涉及运行时行为调整时，优先只修改 `main.py` 与 `agent/agent_loop.py`，避免无关文件扩散。
+- 涉及运行时行为调整时，优先只修改 `main.py` 与 `agent/agent_loop/`，避免无关文件扩散。
 - **每次执行完成后自动提交**：改动完成且验证通过后直接 `git commit`，不需要用户再提醒。
   - 一个可独立描述的改动一个 commit；提交信息写清"做了什么、为什么"（沿用 `type(scope): subject` 的英文格式）。
   - 只提交本次改动涉及的文件：不要把工作区里无关的改动、别人暂存的内容一起带进来（必要时用 `git commit -- <paths>` 限定范围）。
@@ -40,7 +40,7 @@
 ## AI 辅助修改建议的快速校验
 
 - 语法检查：
-  - `python -m compileall -q main.py agent/agent_loop.py`
+  - `python -m compileall -q main.py agent/agent_loop/`
 - 冒烟验证：
   - `uv run python main.py --help`
   - `uv run python main.py --steps 2 --quiet --query "What's the weather in Tokyo?"`
