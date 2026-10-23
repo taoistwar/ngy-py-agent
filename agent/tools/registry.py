@@ -25,6 +25,20 @@ from agent.tools.read_ledger import ReadLedger
 from agent.tools.user_question import STATUS_NO_CLIENT, QuestionResult, UserQuestionBroker
 
 
+def _implementation_source(handler: Callable[..., Any]) -> str:
+    """The file a handler is defined in, relative to the repository root.
+
+    Tool handlers are built inside ``agent/tools/<tool>/tool.py`` (closures) or are
+    plain functions of that same package, so the module names the implementing
+    file. A handler that is not a plain function - a callable object, a partial -
+    reports no source instead of guessing one.
+    """
+    module = getattr(handler, "__module__", "")
+    if not isinstance(module, str) or not module.startswith("agent."):
+        return ""
+    return f"{module.replace('.', '/')}.py"
+
+
 class ToolRegistry:
     """Registry for managing available tools"""
 
@@ -155,6 +169,27 @@ class ToolRegistry:
             "scopes": tuple(scopes or SCOPES),
             "preview": preview,
         }
+
+    def describe_tools(self) -> List[Dict[str, Any]]:
+        """Metadata for every registered tool, without executing anything.
+
+        This is the admin view rather than the model's view: it carries the
+        permission gate and the implementing file, which no provider schema has a
+        place for. It deliberately does not reuse :meth:`get_tool_schemas`, which
+        speaks a provider's wire format.
+        """
+        return [
+            {
+                "name": name,
+                "description": tool["description"],
+                "parameters": self._schema_copy(tool["parameters"]),
+                "permission": tool.get("permission") or PERMISSION_NONE,
+                "scopes": list(tool.get("scopes") or ()),
+                "has_preview": tool.get("preview") is not None,
+                "source": _implementation_source(tool["function"]),
+            }
+            for name, tool in self.tools.items()
+        ]
 
     def get_tool_schemas(self, provider: str = "openai") -> List[Dict[str, Any]]:
         """Get provider-compatible tool schemas"""

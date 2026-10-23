@@ -4,8 +4,9 @@ This module is the app assembly and the CLI: it mounts the route modules on the 
 app, serves the built frontend, and runs the ReAct loop from the command line. What it
 used to carry lives next door now - ``api_schemas`` (request/response models),
 ``app_state`` (the live state), ``task_runtime`` (what a task is), and one module per
-route group (``task_api``, ``workspace_api``, ``agent_api``, ``admin_api``). A single
-1700-line module is neither readable nor safe to edit (``AGENTS.md``).
+route group (``task_api``, ``workspace_api``, ``agent_api``, ``tool_api``,
+``admin_api``). A single 1700-line module is neither readable nor safe to edit
+(``AGENTS.md``).
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ import admin_api
 import agent_api
 import app_state
 import task_api
+import tool_api
 import workspace_api
 from agent.agent_loop import run_react_loop
 from agent.provider import ProviderError
@@ -51,6 +53,7 @@ app.add_middleware(
 app.include_router(mcp_router)
 app.include_router(workspace_api.router)
 app.include_router(agent_api.router)
+app.include_router(tool_api.router)
 app.include_router(task_api.router)
 app.include_router(admin_api.router)
 

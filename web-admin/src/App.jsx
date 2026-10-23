@@ -32,6 +32,7 @@ import {
   fetchTask,
   fetchTaskEvents,
   fetchTasks,
+  fetchTools,
   fetchWorkspaces,
   importSkill,
   renameSession,
@@ -67,6 +68,7 @@ import {
   RetentionManager,
 } from "./components/admin/SettingsPanels"
 import SkillManager from "./components/admin/SkillManager"
+import ToolManager from "./components/admin/ToolManager"
 import WorkspaceManager from "./components/admin/WorkspaceManager"
 import { PROVIDER_OPTIONS, agentDisplayName } from "./components/admin/shared"
 import "./App.css"
@@ -78,6 +80,7 @@ const SESSION_PREVIEW_LIMIT = 10
 const MENU_ITEMS = [
   { key: "tasks", labelKey: "menuTasks" },
   { key: "agents", labelKey: "menuAgents" },
+  { key: "tools", labelKey: "menuTools" },
   { key: "skills", labelKey: "menuSkills" },
   { key: "mcp", labelKey: "menuMcp" },
   { key: "workspaces", labelKey: "menuWorkspaces" },
@@ -1367,6 +1370,7 @@ export default function App() {
   const [workspaces, setWorkspaces] = useState([])
   const [agents, setAgents] = useState([])
   const [mcpServers, setMcpServers] = useState([])
+  const [tools, setTools] = useState([])
   const [agentMeta, setAgentMeta] = useState(null)
   const [agentCreateSignal, setAgentCreateSignal] = useState(0)
   const [skills, setSkills] = useState([])
@@ -1525,6 +1529,12 @@ export default function App() {
   const refreshMcpServers = useCallback(async () => {
     const list = await fetchMcpServers()
     setMcpServers(list)
+    return list
+  }, [])
+
+  const refreshTools = useCallback(async () => {
+    const list = await fetchTools()
+    setTools(list)
     return list
   }, [])
 
@@ -2242,6 +2252,9 @@ export default function App() {
         const mcpList = await fetchMcpServers()
         if (cancelled) return
         setMcpServers(mcpList)
+        const toolList = await fetchTools()
+        if (cancelled) return
+        setTools(toolList)
 
         const sid = activeSessionRef.current || (sessionList[0]?.session_id ?? "")
         if (sid) {
@@ -2296,6 +2309,9 @@ export default function App() {
         refreshAgentMeta().catch(() => {})
         refreshMcpServers().catch(() => {})
       }
+      if (activeMenu === "tools") {
+        refreshTools().catch(() => {})
+      }
       if (activeMenu === "skills") {
         refreshSkills().catch(() => {})
       }
@@ -2319,7 +2335,7 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [activeMenu, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshWorkspaces, translate])
+  }, [activeMenu, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWorkspaces, translate])
 
   useEffect(() => {
     if (!selectedId || activeMenu !== "tasks") return
@@ -2519,6 +2535,13 @@ export default function App() {
             onUpdate={updateAgentHandler}
             onDelete={deleteAgentHandler}
             onRefresh={refreshAgents}
+            translate={translate}
+          />
+        ) : activeMenu === "tools" ? (
+          <ToolManager
+            tools={tools}
+            agents={agents}
+            onRefresh={refreshTools}
             translate={translate}
           />
         ) : activeMenu === "skills" ? (

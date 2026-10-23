@@ -100,6 +100,11 @@ export async function fetchAgentMeta() {
   return requestJson(`${API_BASE}/api/agents/meta`)
 }
 
+export async function fetchTools() {
+  const data = await requestJson(`${API_BASE}/api/tools`)
+  return data.tools ?? []
+}
+
 export async function createAgent(payload) {
   return requestJson(`${API_BASE}/api/agents`, {
     method: "POST",

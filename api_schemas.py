@@ -369,6 +369,34 @@ class AgentListResponse(BaseModel):
     agents: list[AgentItemResponse]
 
 
+class ToolItemResponse(BaseModel):
+    """One registered tool, as the admin tool page shows it.
+
+    The model only ever sees ``name`` / ``description`` / ``parameters``; the rest
+    is the management view - which confirmation the gate asks for, and where the
+    tool is implemented.
+    """
+
+    name: str
+    description: str = ""
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    # Confirmation kind (see agent/tools/permissions.py); "none" never asks.
+    permission: str = "none"
+    scopes: list[str] = Field(default_factory=list)
+    # Whether the tool provides a dry run to fill in the confirmation dialog.
+    has_preview: bool = False
+    # Implementing file, relative to the repository root; empty when unknown.
+    source: str = ""
+    # Agent ids whose configuration lets the model call this tool.
+    agent_ids: list[str] = Field(default_factory=list)
+
+
+class ToolListResponse(BaseModel):
+    """Registered tool list response."""
+
+    tools: list[ToolItemResponse]
+
+
 class SkillsRootUpdateRequest(BaseModel):
     """Update the shared skills root folder."""
 

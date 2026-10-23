@@ -981,6 +981,32 @@
   color: #e2cf7e;
 }
 
+/* Tool confirmation kinds, mirroring PERMISSION_KINDS in agent/tools/permissions.py. */
+.badge-permission-none {
+  border-color: #2f6b57;
+  color: #86e0bf;
+}
+
+.badge-permission-read {
+  border-color: #2f4f6b;
+  color: #7ec3e2;
+}
+
+.badge-permission-write {
+  border-color: #6b5a2f;
+  color: #e2cf7e;
+}
+
+.badge-permission-exec {
+  border-color: #7a3a3a;
+  color: #f09a9a;
+}
+
+.badge-permission-computer {
+  border-color: #6b3a7a;
+  color: #d09af0;
+}
+
 .task-detail-pane {
   min-width: 0;
   min-height: 0;
