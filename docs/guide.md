@@ -102,6 +102,13 @@ http://127.0.0.1:8001
   - `source`：实现文件，相对仓库根目录；
   - `agent_ids`：允许调用该工具的智能体 id；智能体的 `tool_names` 为 `null` 表示"全部工具"，此时它会出现在每个工具的列表里。
 
+详情弹窗里每个参数都有一个输入框（按参数类型给文本框 / 下拉 / JSON 文本），点右上角「测试」会在后台真实执行一次该工具，并显示模型会收到的结果；`ToolOutcome` 的 `details` 另列为 JSON。
+
+- `POST /api/tools/{tool_name}/test`：请求体 `{"arguments": {...}}`，返回 `{tool, ok, result, details, error, truncated, duration_ms}`。
+  - `ok=false` 表示工具抛出了异常（参数不对就是这种），不是 HTTP 错误；工具自己返回的错误仍是 `ok=true`，错误文本在 `result` 里。
+  - **不经过权限确认**：它不属于任何任务，没有 broker 可以询问。页面在测试需要确认的工具（`permission != none`）前会先弹一次浏览器确认；不要把它当作通用执行接口。
+  - `result` / `details` 超过 2 万字符会截断，`truncated=true`。
+
 ### MCP 市场
 
 MCP 市场维护可复用的 MCP 服务预设（传输方式 + 命令/URL），智能体在创建或编辑时从市场中勾选，不再手写传输方式与目标。

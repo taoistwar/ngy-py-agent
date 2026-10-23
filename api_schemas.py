@@ -405,6 +405,31 @@ class ToolListResponse(BaseModel):
     tools: list[ToolItemResponse]
 
 
+class ToolTestRequest(BaseModel):
+    """Arguments for running one tool from the tool management page."""
+
+    arguments: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Arguments passed to the tool by keyword, as the model would send them.",
+    )
+
+
+class ToolTestResponse(BaseModel):
+    """Outcome of running one tool from the tool management page."""
+
+    tool: str
+    # False means the call raised; the tool's own errors still come back as
+    # ok=true with the error text in ``result``.
+    ok: bool
+    # What the model would receive as the tool message, capped for display.
+    result: str = ""
+    # ToolOutcome.details as pretty JSON, for tools that report to the UI.
+    details: str = ""
+    error: str = ""
+    truncated: bool = False
+    duration_ms: int = 0
+
+
 class SkillsRootUpdateRequest(BaseModel):
     """Update the shared skills root folder."""
 

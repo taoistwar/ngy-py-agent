@@ -1,25 +1,7 @@
 import { useMemo, useState } from "react"
-import { AgentToolDetail } from "./AgentDetail"
-import Modal from "./Modal"
-import { ManagerSearch, agentDisplayName, matchesKeyword } from "./shared"
-
-// Confirmation kind -> locale key, mirroring PERMISSION_KINDS in
-// agent/tools/permissions.py.
-const PERMISSION_LABEL_KEYS = {
-  none: "toolPermissionNone",
-  read: "toolPermissionRead",
-  write: "toolPermissionWrite",
-  exec: "toolPermissionExec",
-  computer: "toolPermissionComputer",
-}
-
-// Answers a tool's confirmation dialog may offer, mirroring SCOPES in
-// agent/tools/permissions.py.
-const SCOPE_LABEL_KEYS = {
-  once: "toolScopeOnce",
-  session: "toolScopeSession",
-  always: "toolScopeAlways",
-}
+import ToolDetailDialog from "./ToolDetailDialog"
+import { ManagerSearch, matchesKeyword } from "./shared"
+import { parameterCount, permissionLabel, resolveAgentNames } from "./toolMeta"
 
 const DESCRIPTION_PREVIEW_CHARS = 140
 
@@ -27,77 +9,6 @@ function truncate(text, maxLength) {
   const value = String(text || "")
   if (value.length <= maxLength) return value
   return `${value.slice(0, maxLength - 1)}...`
-}
-
-function permissionLabel(permission, translate) {
-  const key = PERMISSION_LABEL_KEYS[permission]
-  return key ? translate(key) : String(permission || "none")
-}
-
-function parameterCount(tool) {
-  const properties = tool?.parameters?.properties
-  if (!properties || typeof properties !== "object") return 0
-  return Object.keys(properties).length
-}
-
-function scopeSummary(tool, translate) {
-  const scopes = Array.isArray(tool?.scopes) ? tool.scopes : []
-  if (scopes.length === 0) return "-"
-  return scopes
-    .map((scope) => translate(SCOPE_LABEL_KEYS[scope] || scope))
-    .join(" / ")
-}
-
-function resolveAgentNames(agentIds, agents, translate) {
-  return (agentIds || []).map((agentId) => {
-    const agent = (agents || []).find((item) => item.agent_id === agentId)
-    return {
-      id: agentId,
-      label: agent ? agentDisplayName(agent, translate) : agentId,
-    }
-  })
-}
-
-function ToolDetail({ tool, agents, translate }) {
-  const agentNames = resolveAgentNames(tool.agent_ids, agents, translate)
-
-  return (
-    <div className="agent-detail">
-      <div className="agent-detail-meta">
-        <span className="agent-detail-label">{translate("toolDetailPermission")}</span>
-        <span className={`badge badge-permission-${tool.permission || "none"}`}>
-          {permissionLabel(tool.permission, translate)}
-        </span>
-      </div>
-      <div className="agent-detail-meta">
-        <span className="agent-detail-label">{translate("toolDetailScopes")}</span>
-        <span className="agent-detail-value">{scopeSummary(tool, translate)}</span>
-      </div>
-      <div className="agent-detail-meta">
-        <span className="agent-detail-label">{translate("toolDetailSource")}</span>
-        <code className="agent-detail-value">{tool.source || "-"}</code>
-      </div>
-      <div className="agent-detail-meta">
-        <span className="agent-detail-label">{translate("toolDetailPreview")}</span>
-        <span className="agent-detail-value">
-          {tool.has_preview ? translate("yes") : translate("no")}
-        </span>
-      </div>
-      <div className="agent-detail-meta">
-        <span className="agent-detail-label">{translate("toolDetailAgents")}</span>
-        {agentNames.length > 0 ? (
-          agentNames.map((agent) => (
-            <span className={`badge badge-mode-${agent.id}`} key={agent.id}>
-              {agent.label}
-            </span>
-          ))
-        ) : (
-          <span className="hint">{translate("toolDetailNoAgents")}</span>
-        )}
-      </div>
-      <AgentToolDetail tool={tool} translate={translate} />
-    </div>
-  )
 }
 
 export default function ToolManager({ tools, agents, onRefresh, translate }) {
@@ -205,15 +116,15 @@ export default function ToolManager({ tools, agents, onRefresh, translate }) {
       </div>
 
       {detailTool && (
-        <Modal
-          wide
-          title={detailTool.name}
-          hint={translate("toolDetailHint")}
-          closeLabel={translate("dialogClose")}
+        // Keyed by name so switching tools remounts the form with that tool's
+        // schema defaults instead of keeping the previous tool's arguments.
+        <ToolDetailDialog
+          key={detailTool.name}
+          tool={detailTool}
+          agents={agents}
           onClose={() => setDetailName("")}
-        >
-          <ToolDetail tool={detailTool} agents={agents} translate={translate} />
-        </Modal>
+          translate={translate}
+        />
       )}
     </section>
   )

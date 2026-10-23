@@ -1213,6 +1213,13 @@
   max-width: none;
 }
 
+/* Extra dialog controls (e.g. the tool test button) sit to the right of close. */
+.modal-titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .agent-section-actions {
   display: flex;
   align-items: center;
@@ -1369,6 +1376,34 @@
   color: var(--muted);
   font-size: 11px;
   line-height: 1.4;
+}
+
+/* Editable argument, shown by the tool test dialog under each parameter. */
+.agent-param-input {
+  width: 100%;
+  border: 1px solid #30436b;
+  border-radius: 8px;
+  background: #0b1326;
+  color: #e6ecff;
+  padding: 7px 9px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.agent-param-input:focus {
+  outline: none;
+  border-color: var(--focus);
+}
+
+.tool-test-output {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tool-test-error {
+  color: #f09a9a;
 }
 
 .model-form {

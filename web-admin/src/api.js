@@ -105,6 +105,19 @@ export async function fetchTools() {
   return data.tools ?? []
 }
 
+// Run one tool with hand-written arguments. The response is what the model would
+// receive, so a tool that reports an error still answers 200; only a broken
+// request (unknown tool) is rejected.
+export async function testTool(name, args) {
+  return requestJson(`${API_BASE}/api/tools/${encodeURIComponent(name)}/test`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ arguments: args }),
+  })
+}
+
 export async function createAgent(payload) {
   return requestJson(`${API_BASE}/api/agents`, {
     method: "POST",

@@ -1,21 +1,75 @@
 // Read-only detail views for the agent editor: tool schema and skill instruction.
 
-function normalizeParameters(parameters) {
+export function normalizeParameters(parameters) {
   if (!parameters || typeof parameters !== "object") return []
   const properties = parameters.properties
   if (!properties || typeof properties !== "object") return []
   const required = Array.isArray(parameters.required) ? parameters.required : []
   return Object.entries(properties).map(([name, schema]) => ({
     name,
-    type: schema?.type || "any",
+    type: Array.isArray(schema?.type) ? schema.type.join(" | ") : schema?.type || "any",
     description: schema?.description || "",
     required: required.includes(name),
+    // Kept for the test form: a sensible starting value and the allowed values.
+    defaultValue: schema?.default,
+    options: Array.isArray(schema?.enum) ? schema.enum.map((value) => String(value)) : [],
   }))
 }
 
-export function AgentToolDetail({ tool, translate }) {
+const TEXTUAL_TYPES = new Set(["string", "any", "null"])
+
+// Editor for one tool argument, chosen from its JSON schema. It sits next to the
+// read-only rendering so the tool page and the agent editor describe a parameter
+// the same way.
+function ParameterInput({ param, value, onChange, translate }) {
+  const current = value ?? ""
+
+  if (param.options.length > 0 || param.type === "boolean") {
+    const options = param.options.length > 0 ? param.options : ["true", "false"]
+    return (
+      <select
+        className="agent-param-input"
+        value={current}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">{translate("toolTestValueUnset")}</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    )
+  }
+
+  if (param.type === "object" || param.type === "array") {
+    return (
+      <textarea
+        className="agent-param-input"
+        rows={3}
+        value={current}
+        placeholder={param.type === "array" ? '["value"]' : '{"key": "value"}'}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    )
+  }
+
+  return (
+    <input
+      className="agent-param-input"
+      type="text"
+      inputMode={TEXTUAL_TYPES.has(param.type) ? undefined : "decimal"}
+      value={current}
+      placeholder={param.defaultValue !== undefined ? String(param.defaultValue) : param.name}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  )
+}
+
+export function AgentToolDetail({ tool, translate, values, onChange }) {
   const params = normalizeParameters(tool.parameters)
   const hasSchema = Boolean(tool.parameters) && Object.keys(tool.parameters).length > 0
+  const editable = typeof onChange === "function"
 
   return (
     <div className="agent-detail">
@@ -38,6 +92,14 @@ export function AgentToolDetail({ tool, translate }) {
                 <span className="agent-param-desc">
                   {param.description || translate("agentToolNoDescription")}
                 </span>
+                {editable ? (
+                  <ParameterInput
+                    param={param}
+                    value={values?.[param.name]}
+                    onChange={(next) => onChange(param.name, next)}
+                    translate={translate}
+                  />
+                ) : null}
               </div>
             ))}
           </div>

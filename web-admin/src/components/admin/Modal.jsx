@@ -13,6 +13,7 @@ export default function Modal({
   children,
   wide = false,
   dismissible = true,
+  actions = null,
 }) {
   useEffect(() => {
     if (!dismissible) {
@@ -47,9 +48,12 @@ export default function Modal({
             <h2>{title}</h2>
             {hint ? <span className="hint">{hint}</span> : null}
           </div>
-          <button type="button" className="btn btn-compact" onClick={onClose}>
-            {closeLabel}
-          </button>
+          <div className="modal-titlebar-actions">
+            <button type="button" className="btn btn-compact" onClick={onClose}>
+              {closeLabel}
+            </button>
+            {actions}
+          </div>
         </div>
         <div className="panel-body modal-dialog-body">{children}</div>
       </section>

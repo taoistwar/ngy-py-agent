@@ -99,6 +99,46 @@ class ToolApiTest(unittest.TestCase):
         self.assertIn(created["agent_id"], tools["get_current_time"]["agent_ids"])
         self.assertNotIn(created["agent_id"], tools["read_file"]["agent_ids"])
 
+    # ------------------------------------------------------------------ running
+
+    def run_tool(self, name, arguments):
+        return self.client.post(f"/api/tools/{name}/test", json={"arguments": arguments})
+
+    def test_runs_a_tool_with_the_given_arguments(self):
+        response = self.run_tool("get_current_time", {"timezone": "UTC"})
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["tool"], "get_current_time")
+        self.assertTrue(body["result"])
+        self.assertEqual(body["error"], "")
+        self.assertGreaterEqual(body["duration_ms"], 0)
+
+    def test_tool_failure_comes_back_as_a_result(self):
+        # ``read_file`` has a required argument, so calling it without one raises
+        # inside the handler - which is what the caller is testing for.
+        response = self.run_tool("read_file", {})
+        body = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(body["ok"])
+        self.assertIn("read_file", body["error"])
+        self.assertEqual(body["result"], "")
+
+    def test_unknown_tool_is_a_404(self):
+        response = self.run_tool("no_such_tool", {})
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_tool_errors_are_returned_as_text_not_status_codes(self):
+        # A path the file policy or the filesystem rejects is the tool reporting,
+        # not the route failing: the dialog must be able to show it.
+        body = self.run_tool("read_file", {"file_path": "does-not-exist.txt"}).json()
+
+        self.assertTrue(body["ok"])
+        self.assertIn("does-not-exist.txt", body["result"])
+
 
 if __name__ == "__main__":
     unittest.main()
