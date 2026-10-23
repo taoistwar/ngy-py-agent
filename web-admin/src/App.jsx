@@ -75,7 +75,6 @@ import AgentPicker from "./components/AgentPicker"
 import { AgentIcon, agentIconName } from "./components/agentIcons"
 import { PROVIDER_OPTIONS, agentDisplayName } from "./components/admin/shared"
 import { formatTime, safeStringify } from "./utils/format"
-import "./App.css"
 
 const EVENT_PAGE_SIZE = 30
 const TASK_PAGE_SIZE = 12

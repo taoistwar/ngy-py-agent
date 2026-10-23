@@ -1,80 +1,37 @@
 import { useEffect, useState } from "react"
-import { default as MonacoEditor } from "@monaco-editor/react"
 import { getEventCategoryText } from "../i18n"
-import { formatTime, safeStringify } from "../utils/format"
-import EventFriendlyView from "./EventFriendlyView"
+import { formatTime } from "../utils/format"
+import { EventDetailBody, EventDetailOverlay, eventDetailUrl, getTagClass } from "./EventDetail"
+import { ExpandIcon, ExternalLinkIcon } from "./icons"
 
-// LLM payloads are long provider-shaped JSON; the rest fit in a small window.
-const LLM_EDITOR_HEIGHT = "450px"
-const DEFAULT_EDITOR_HEIGHT = "150px"
+function EventItem({ event, taskId, collapsed, onToggle, translate, locale }) {
+  const [fullscreen, setFullscreen] = useState(false)
+  const openLabel = translate("eventOpenInNewTab")
+  const fullscreenLabel = translate("eventFullscreen")
 
-function getRawEventPayload(event) {
-  const category = String(event?.category || "").toLowerCase()
-  const data = event?.data
-  if (!data || typeof data !== "object") {
-    return data
-  }
-
-  if (category === "llm_request") {
-    if (data.raw_request !== undefined) {
-      return data.raw_request
-    }
-    if (data.request_payload !== undefined) {
-      return data.request_payload
-    }
-  }
-
-  if (category === "llm_response") {
-    if (data.response !== undefined) {
-      return data.response
-    }
-    if (data.raw_response !== undefined) {
-      return data.raw_response
-    }
-    if (data.response_payload !== undefined) {
-      return data.response_payload
-    }
-  }
-
-  return data
-}
-
-function getTagClass(category) {
-  return `tag ${category}`
-}
-
-function RawEventView({ event }) {
-  const isLlmPayload = event.category === "llm_request" || event.category === "llm_response"
-  return (
-    <div className="event-json-editor">
-      <MonacoEditor
-        height={isLlmPayload ? LLM_EDITOR_HEIGHT : DEFAULT_EDITOR_HEIGHT}
-        defaultLanguage="json"
-        defaultValue={safeStringify(getRawEventPayload(event))}
-        options={{
-          readOnly: true,
-          minimap: {
-            enabled: false,
-          },
-          scrollBeyondLastLine: false,
-          wordWrap: "on",
-          fontSize: 14,
-          folding: true,
-          lineNumbers: "on",
-          renderLineHighlight: "none",
-          renderWhitespace: "all",
-          automaticLayout: true,
-        }}
-        theme="vs-dark"
-      />
-    </div>
+  const actions = (
+    <>
+      <a
+        className="icon-btn"
+        href={eventDetailUrl(event, taskId)}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={openLabel}
+        aria-label={openLabel}
+      >
+        <ExternalLinkIcon />
+      </a>
+      <button
+        type="button"
+        className="icon-btn"
+        title={fullscreenLabel}
+        aria-label={fullscreenLabel}
+        onClick={() => setFullscreen(true)}
+      >
+        <ExpandIcon />
+      </button>
+    </>
   )
-}
-
-function EventItem({ event, collapsed, onToggle, translate, locale }) {
-  // Friendly by default: the raw JSON stays one click away for whoever debugs the agent.
-  const [viewMode, setViewMode] = useState("friendly")
-  const friendly = viewMode === "friendly"
 
   return (
     <div className="event-card">
@@ -89,32 +46,21 @@ function EventItem({ event, collapsed, onToggle, translate, locale }) {
       </div>
       {!collapsed && (
         <div className="event-body">
-          <div className="event-view-tabs" role="tablist" aria-label={translate("eventViewSwitchAria")}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={friendly}
-              className={`event-view-tab ${friendly ? "active" : ""}`}
-              onClick={() => setViewMode("friendly")}
-            >
-              {translate("eventViewFriendly")}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!friendly}
-              className={`event-view-tab ${friendly ? "" : "active"}`}
-              onClick={() => setViewMode("raw")}
-            >
-              {translate("eventViewRaw")}
-            </button>
-          </div>
-          {friendly ? (
-            <EventFriendlyView event={event} locale={locale} translate={translate} />
-          ) : (
-            <RawEventView event={event} />
-          )}
+          <EventDetailBody
+            event={event}
+            locale={locale}
+            translate={translate}
+            actions={actions}
+          />
         </div>
+      )}
+      {fullscreen && (
+        <EventDetailOverlay
+          event={event}
+          locale={locale}
+          translate={translate}
+          onClose={() => setFullscreen(false)}
+        />
       )}
     </div>
   )
@@ -122,6 +68,7 @@ function EventItem({ event, collapsed, onToggle, translate, locale }) {
 
 export default function EventTimeline({ task, events, hasMore, loadingMore, onLoadMore, translate, locale }) {
   const [collapsedMap, setCollapsedMap] = useState({})
+  const taskId = task?.task_id || ""
 
   useEffect(() => {
     const next = {}
@@ -152,6 +99,7 @@ export default function EventTimeline({ task, events, hasMore, loadingMore, onLo
             <EventItem
               key={event.event_id}
               event={event}
+              taskId={taskId}
               collapsed={collapsedMap[event.event_id]}
               onToggle={() =>
                 setCollapsedMap((prev) => ({
