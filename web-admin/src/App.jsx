@@ -58,6 +58,7 @@ import PermissionPrompt from "./components/PermissionPrompt"
 import QuestionPrompt from "./components/QuestionPrompt"
 import TaskRowActions from "./components/TaskRowActions"
 import TaskToolbarActions from "./components/TaskToolbarActions"
+import { SkillIcon } from "./components/icons"
 import AgentManager from "./components/admin/AgentManager"
 import McpServerManager from "./components/admin/McpServerManager"
 import ModelManager from "./components/admin/ModelManager"
@@ -1052,6 +1053,8 @@ function TaskComposer({
                 ref={skillsButtonRef}
                 type="button"
                 className={`composer-skills-btn ${skillsOpen ? "active" : ""}`}
+                title={translate("taskFormSkills")}
+                aria-label={translate("taskFormSkills")}
                 onClick={(event) => {
                   event.stopPropagation()
                   if (skillsOpen) {
@@ -1063,7 +1066,7 @@ function TaskComposer({
                   setSkillsOpen(true)
                 }}
               >
-                {translate("taskFormSkills")}
+                <SkillIcon />
                 {pickedSkills.length > 0 && (
                   <span className="composer-skill-count">{pickedSkills.length}</span>
                 )}

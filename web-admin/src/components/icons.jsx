@@ -35,6 +35,16 @@ export function RerunIcon() {
   )
 }
 
+export function SkillIcon() {
+  return (
+    <Icon>
+      <path d="M10 3l1.7 4.3L16 9l-4.3 1.7L10 15l-1.7-4.3L4 9l4.3-1.7z" />
+      <line x1="18" y1="14" x2="18" y2="20" />
+      <line x1="15" y1="17" x2="21" y2="17" />
+    </Icon>
+  )
+}
+
 export function TrashIcon() {
   return (
     <Icon>

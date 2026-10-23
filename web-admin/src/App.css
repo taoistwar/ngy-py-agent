@@ -766,16 +766,23 @@
 }
 
 .composer-skills-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 1px solid #2f4369;
-  border-radius: 999px;
+  border-radius: 6px;
   background: #16284a;
   color: #dbe4ff;
-  padding: 5px 12px;
-  font-size: 12px;
   cursor: pointer;
+}
+
+.composer-skills-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .composer-skills-btn.active {
@@ -785,10 +792,18 @@
 }
 
 .composer-skill-count {
-  font-size: 10px;
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 14px;
+  padding: 0 3px;
+  font-size: 9px;
+  line-height: 13px;
+  text-align: center;
+  border: 1px solid #0d1730;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.35);
-  padding: 1px 6px;
+  background: #4f78cb;
+  color: #fff;
 }
 
 .composer-icon-btn {
