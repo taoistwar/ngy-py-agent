@@ -307,6 +307,30 @@ function responseUsage(data) {
   return isPlainObject(raw) && isPlainObject(raw.usage) ? raw.usage : null
 }
 
+function thinkingText(value) {
+  if (typeof value === "string") return value
+  if (Array.isArray(value)) {
+    return value.map(thinkingText).filter(Boolean).join("\n\n")
+  }
+  if (isPlainObject(value)) {
+    if (typeof value.text === "string") return value.text
+    if (typeof value.thinking === "string") return value.thinking
+  }
+  return ""
+}
+
+// Providers disagree on the field name and a few send an array of blocks, so all
+// known spellings are folded into one string.
+function responseThinking(data) {
+  const message = responseMessage(data)
+  if (!message) return ""
+  return ["reasoning", "reasoning_content", "thinking"]
+    .map((key) => thinkingText(message[key]))
+    .filter(Boolean)
+    .join("\n\n")
+    .trim()
+}
+
 function messageItems(dict, messages) {
   return messages.map((message, index) => {
     const calls = toolCallsOf(message)
@@ -409,6 +433,16 @@ function buildLlmResponse({ data, dict }) {
   if (callCount) fields.push(makeField(dict, "tool_call_count", callCount))
 
   const sections = []
+  // Reasoning first: it is what the model thought before producing the answer below.
+  const thinking = responseThinking(data)
+  if (thinking) {
+    sections.push({
+      kind: "thinking",
+      title: dict.text.sectionThinking,
+      text: thinking,
+      meta: fillTemplate(dict.text.thinkingMeta, { lines: thinking.split("\n").length }),
+    })
+  }
   const content = data.content ?? message?.content
   const contentText = messageContentText(dict, content)
   if (contentText && contentText !== dict.text.emptyMessage) {
@@ -643,7 +677,7 @@ export function buildFriendlyEvent(event, locale) {
     fields: (view.fields || []).filter((field) => field && field.value !== undefined),
     sections: (view.sections || []).filter((section) => {
       if (!section) return false
-      if (section.kind === "text") return Boolean(section.text)
+      if (section.kind === "text" || section.kind === "thinking") return Boolean(section.text)
       if (section.kind === "entries") return Array.isArray(section.rows) && section.rows.length > 0
       if (section.kind === "blocks") return Array.isArray(section.items) && section.items.length > 0
       return false

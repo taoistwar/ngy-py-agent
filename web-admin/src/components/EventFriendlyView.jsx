@@ -44,7 +44,35 @@ function KeyValueTable({ rows }) {
   )
 }
 
+function ThinkingBlock({ section, translate }) {
+  const [open, setOpen] = useState(false)
+
+  // The body is mounted only once the reader opens it: a reasoning trace can run to
+  // thousands of characters and every LLM step in the log carries one.
+  return (
+    <div className="event-friendly-section">
+      <button
+        type="button"
+        className="event-thinking-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span className="event-thinking-title">{section.title}</span>
+        <span className="event-thinking-meta">{section.meta}</span>
+        <span className="event-thinking-action">
+          {open ? translate("eventShowLess") : translate("eventShowMore")}
+        </span>
+      </button>
+      {open && <pre className="event-friendly-text mono">{section.text}</pre>}
+    </div>
+  )
+}
+
 function Section({ section, translate }) {
+  if (section.kind === "thinking") {
+    return <ThinkingBlock section={section} translate={translate} />
+  }
+
   return (
     <div className="event-friendly-section">
       <p className="event-friendly-section-title">{section.title}</p>
