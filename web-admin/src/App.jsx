@@ -46,7 +46,6 @@ import {
 } from "./api"
 import {
   getDefaultLocale,
-  getEventCategoryText,
   getLocaleOptions,
   getTaskStatusClass,
   getTaskStatusText,
@@ -54,6 +53,7 @@ import {
   LOCALE_KEY,
   t,
 } from "./i18n"
+import EventTimeline from "./components/EventTimeline"
 import PermissionPrompt from "./components/PermissionPrompt"
 import QuestionPrompt from "./components/QuestionPrompt"
 import TaskRowActions from "./components/TaskRowActions"
@@ -74,6 +74,7 @@ import WorkspaceManager from "./components/admin/WorkspaceManager"
 import AgentPicker from "./components/AgentPicker"
 import { AgentIcon, agentIconName } from "./components/agentIcons"
 import { PROVIDER_OPTIONS, agentDisplayName } from "./components/admin/shared"
+import { formatTime, safeStringify } from "./utils/format"
 import "./App.css"
 
 const EVENT_PAGE_SIZE = 30
@@ -175,15 +176,6 @@ const MODE_LABEL_KEYS = {
 
 const modeLabelKey = (mode) => MODE_LABEL_KEYS[mode] || "modeBuild"
 
-function formatTime(value) {
-  if (!value) return ""
-  const time = new Date(value)
-  if (Number.isNaN(time.getTime())) {
-    return String(value)
-  }
-  return time.toLocaleString()
-}
-
 // The task list is served oldest first, so the task to resume is the last one
 // in the list - "the first entry" would be the oldest task of the session.
 function latestTaskId(list) {
@@ -195,53 +187,6 @@ function shortenText(value, maxLength) {
   const text = String(value)
   if (text.length <= maxLength) return text
   return `${text.slice(0, maxLength - 1)}...`
-}
-
-function safeStringify(value) {
-  if (value === undefined) return ""
-  if (typeof value === "string") {
-    try {
-      return JSON.stringify(JSON.parse(value), null, 2)
-    } catch {
-      return value
-    }
-  }
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
-}
-
-function getRawEventPayload(event) {
-  const category = String(event?.category || "").toLowerCase()
-  const data = event?.data
-  if (!data || typeof data !== "object") {
-    return data
-  }
-
-  if (category === "llm_request") {
-    if (data.raw_request !== undefined) {
-      return data.raw_request
-    }
-    if (data.request_payload !== undefined) {
-      return data.request_payload
-    }
-  }
-
-  if (category === "llm_response") {
-    if (data.response !== undefined) {
-      return data.response
-    }
-    if (data.raw_response !== undefined) {
-      return data.raw_response
-    }
-    if (data.response_payload !== undefined) {
-      return data.response_payload
-    }
-  }
-
-  return data
 }
 
 function getTaskResultFromEvents(events) {
@@ -266,10 +211,6 @@ function getTaskResult(task, events) {
     return task.result
   }
   return getTaskResultFromEvents(events)
-}
-
-function getTagClass(category) {
-  return `tag ${category}`
 }
 
 function getHealthClass(healthStatus) {
@@ -1223,7 +1164,7 @@ function TaskDetail({ task, result, agents, translate }) {
   )
 }
 
-function TaskDetailPage({ task, taskResult, agents, taskTab, setTaskTab, events, hasMoreEvents, isLoadingEvents, onLoadMore, translate }) {
+function TaskDetailPage({ task, taskResult, agents, taskTab, setTaskTab, events, hasMoreEvents, isLoadingEvents, onLoadMore, translate, locale }) {
   return (
     <section className="panel">
       <div className="task-page-titlebar">
@@ -1248,118 +1189,18 @@ function TaskDetailPage({ task, taskResult, agents, taskTab, setTaskTab, events,
         {taskTab === "detail" ? (
           <TaskDetail task={task} result={taskResult} agents={agents} translate={translate} />
         ) : (
-          <EventTimeline task={task} events={events} hasMore={hasMoreEvents} loadingMore={isLoadingEvents} onLoadMore={onLoadMore} translate={translate} />
+          <EventTimeline
+            task={task}
+            events={events}
+            hasMore={hasMoreEvents}
+            loadingMore={isLoadingEvents}
+            onLoadMore={onLoadMore}
+            translate={translate}
+            locale={locale}
+          />
         )}
       </div>
     </section>
-  )
-}
-
-function EventItem({ event, collapsed, onToggle, translate }) {
-  const rawPayload = getRawEventPayload(event)
-  const jsonBody = safeStringify(rawPayload)
-  const isLlmPayload = event.category === "llm_request" || event.category === "llm_response"
-  const editorHeight = isLlmPayload ? "450px" : "150px"
-
-  return (
-    <div className="event-card">
-      <div className="event-header" onClick={onToggle}>
-        <div className="event-title">
-          <span className={getTagClass(event.category)}>
-            {getEventCategoryText(translate, event.category)}
-          </span>
-          <span>{event.title}</span>
-        </div>
-        <div className="hint">{formatTime(event.timestamp)}</div>
-      </div>
-      {!collapsed && (
-        <div className="event-body">
-          <div className="event-json-editor">
-            <MonacoEditor
-              height={editorHeight}
-              defaultLanguage="json"
-              defaultValue={jsonBody}
-              options={{
-                readOnly: true,
-                minimap: {
-                  enabled: false,
-                },
-                scrollBeyondLastLine: false,
-                wordWrap: "on",
-                fontSize: 14,
-                folding: true,
-                lineNumbers: "on",
-                renderLineHighlight: "none",
-                renderWhitespace: "all",
-                automaticLayout: true,
-              }}
-              theme="vs-dark"
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function EventTimeline({ task, events, hasMore, loadingMore, onLoadMore, translate }) {
-  const [collapsedMap, setCollapsedMap] = useState({})
-
-  useEffect(() => {
-    const next = {}
-    events.forEach((event) => {
-      if (collapsedMap[event.event_id] === undefined) {
-        next[event.event_id] = event.collapsed ?? true
-      }
-    })
-    if (Object.keys(next).length > 0) {
-      setCollapsedMap((prev) => ({ ...prev, ...next }))
-    }
-  }, [events])
-
-  if (!task) {
-    return <div className="timeline-empty">{translate("taskEventsNoTask")}</div>
-  }
-
-  // Keep creation order so the earliest event appears first.
-  const ordered = events
-
-  return (
-    <div>
-      {ordered.length === 0 ? (
-        <div className="timeline-empty">{translate("taskEventsNoRecords")}</div>
-      ) : (
-        <div className="timeline">
-          {ordered.map((event) => (
-            <EventItem
-              key={event.event_id}
-              event={event}
-              collapsed={collapsedMap[event.event_id]}
-              onToggle={() =>
-                setCollapsedMap((prev) => ({
-                  ...prev,
-                  [event.event_id]: !prev[event.event_id],
-                }))
-              }
-              translate={translate}
-            />
-          ))}
-        </div>
-      )}
-      {events.length > 0 && (
-        <div className="load-more">
-          <button
-            type="button"
-            className="btn"
-            onClick={onLoadMore}
-            disabled={loadingMore || !hasMore}
-          >
-            {loadingMore ? translate("eventsLoading") : translate("eventsLoadMore")}
-          </button>
-          {!hasMore && <span className="hint">{translate("eventsNoMore")}</span>}
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -2519,6 +2360,7 @@ export default function App() {
                 isLoadingEvents={isLoadingEvents}
                 onLoadMore={() => loadEvents(selectedId, false, null, true)}
                 translate={translate}
+                locale={locale}
               />
             </section>
           </div>
