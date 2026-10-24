@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agent.agent_loop.config import DEFAULT_MAX_STEPS
 from agent.agent_loop.messages import _with_base_dir, _with_history
+from agent.agent_loop.result_budget import apply_result_budget
 from agent.agent_loop.runtime import (
     _build_runtime,
     _emit,
@@ -189,6 +190,9 @@ def run_react_loop(
             # user message after every tool result, because the OpenAI chat API only
             # accepts text in a ``tool`` message (see ``agent.vision``).
             pending_images: List[Tuple[str, ToolImage]] = []
+            # Where this step's tool results start. The budget sweep only looks at
+            # these: older results already left the context as paths (ADR 0012).
+            batch_start = len(messages)
             for name, args, call_id in turn.tool_calls:
                 if should_stop is not None and should_stop():
                     stopped = True
@@ -211,6 +215,18 @@ def run_react_loop(
 
                 if verbose:
                     print(f"[tool:{name}] {result}")
+
+            if not stopped:
+                # A stopped step returns right after this block, so moving its
+                # results to disk would only leave files nobody reads.
+                apply_result_budget(
+                    messages,
+                    batch_start,
+                    base_dir=getattr(registry, "base_dir", None),
+                    event_sink=event_sink,
+                    task_id=task_id,
+                    step=step,
+                )
 
             if pending_images and not stopped:
                 image_message = build_image_message(pending_images, provider)

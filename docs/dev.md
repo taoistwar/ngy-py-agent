@@ -258,6 +258,15 @@ npm run i18n:check
 - 全局策略依然作用于它：`allow_dirs` 非空时输出目录会不可达，这是有意的。
 - 进入事件 `details` 的 stdout/stderr 截到 64 KiB（命令输出无上限），完整文本只在磁盘上。
 
+### 工具结果预算（一步的结果太多）
+
+- 触发点在循环里：一步的工具全部返回之后，只处理本步新追加的 `role="tool"` 消息（`loop.py` 的 `batch_start`）。工具内部的 per-result 预算管不到"一次读 30 个文件"，这一层管。见 [ADR 0012](decisions/0012-tool-result-budget.md)。
+- 两遍扫描：先动 `> 30,000` 字符的单条；若总量仍超 `200,000`，再按大小兜底，不设下限。少了第二遍，`30 × 20k` 的批次会一条都不处理。
+- 落盘在**工作空间内** `.task_outputs/tool-results/`，是 temp 输出树的显式例外（历史里的绝对路径要一直有效）；它同时是只读根，模型能读回、不能改写。
+- 落盘失败**保留原文**并报 `error` 事件：静默丢内容比超预算危险，超预算看得见，丢内容看不见。
+- 占位文本必须**比原文短**才替换，且每个下标只访问一次——否则 2,000 字符左右的小结果会被"落盘"成更长的路径，第二遍还会把全文覆盖成占位文本。
+- 不移除任何 provider 适配：这一层在消息层，不碰 Anthropic 的 `tool_result` block。
+
 ### 工具结果分流（模型 vs UI）
 
 - 工具若需要把结构化记录交给 UI/外部消费者，**不要**把它塞进返回给模型的字符串：返回 `ToolOutcome`（`model_text` + 事件类别/标题 + `details`），由 `agent_loop` 拆分。
@@ -332,6 +341,8 @@ npm run i18n:check
   - [ADR 0008 `write_stdin` 工具与"还活着的会话"](decisions/0008-write-stdin-tool.md)
   - [ADR 0009 `exec_command` 的 `tty`（伪终端）](decisions/0009-exec-tty.md)
   - [ADR 0010 `ask_user_question` 工具与"提问通道"](decisions/0010-ask-user-question.md)
+  - [ADR 0011 桌面操作（`computer_observe` / `computer_control`）](decisions/0011-computer-use.md)
+  - [ADR 0012 工具结果预算（tool result budget）](decisions/0012-tool-result-budget.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 

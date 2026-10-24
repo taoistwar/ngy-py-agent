@@ -17,6 +17,11 @@ Layout::
 
 Files here are scratch. Nothing prunes them automatically; the OS temp cleaner
 does, and a runaway command is bounded by its timeout instead.
+
+The one exception is :func:`workspace_result_directory`: persisted *tool results*
+(``<workspace>/.task_outputs/tool-results``) live inside the workspace instead, so a
+later turn of the same session can still reach them by their absolute path
+(ADR 0012). They are registered as a read-only root, exactly like this tree.
 """
 
 from __future__ import annotations
@@ -31,8 +36,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from agent.tools.file_access import default_workspace_root
+
 OUTPUT_DIR_ENV = "EXEC_OUTPUT_DIR"
 DEFAULT_OUTPUT_DIR_NAME = ("ngy-py-agent", "output")
+
+# Persisted tool results: workspace-relative, so they outlive the temp tree.
+RESULT_DIR_NAME = ".task_outputs"
+RESULT_SUBDIR_NAME = "tool-results"
+RESULT_GITIGNORE = "*\n"
 
 # Preview kept in the model's context when the full output is persisted.
 DEFAULT_PREVIEW_CHARS = 2000
@@ -78,6 +90,50 @@ def ensure_dir(directory: Path) -> Path:
 def output_root(base_dir: Optional[str] = None, scope: Optional[str] = None) -> Path:
     """Like :func:`output_root_path`, but creates the directory."""
     return ensure_dir(output_root_path(base_dir, scope))
+
+
+def workspace_result_directory(base_dir: Optional[str] = None) -> Path:
+    """Where persisted *tool results* go: ``<workspace>/.task_outputs/tool-results``.
+
+    Inside the workspace on purpose (ADR 0012): a session keeps the absolute path of
+    every result it moved out of the context, so the files must still be there when a
+    follow-up turn reads one back. Unlike this module's temp tree, nothing prunes
+    them; that is the caller's call, not a side effect of reading.
+
+    The directory is registered as a read-only root, so the file tools can read a
+    result but never rewrite it: a result the model can edit is a result it can
+    mistake for the original.
+
+    Not created here - deciding where output would go must not leave a folder
+    behind. Writers call :func:`ensure_dir` (or :func:`persist_text`).
+    """
+    text = (base_dir or "").strip()
+    root = Path(text).expanduser() if text else default_workspace_root()
+    try:
+        root = root.resolve()
+    except OSError:  # pragma: no cover - platform specific
+        root = root.absolute()
+    return root / RESULT_DIR_NAME / RESULT_SUBDIR_NAME
+
+
+def ensure_result_directory(directory: Path) -> Path:
+    """Create the result directory and keep it out of git.
+
+    A nested ``.gitignore`` holding ``*`` instead of an entry in the workspace's own
+    ignore file: the workspace belongs to the user, and appending to their rules on
+    our every run is not ours to do. Nested rules make the folder disappear from
+    ``git status`` while the delete of the folder takes the rule with it.
+    """
+    ensure_dir(directory)
+    ignore = directory / ".gitignore"
+    if not ignore.exists():
+        try:
+            ignore.write_text(RESULT_GITIGNORE, encoding="utf-8")
+        except OSError:
+            # Losing the rule is cosmetic; losing the result is not. The caller
+            # reports the failure that actually matters when it writes the result.
+            pass
+    return directory
 
 
 def new_stem(prefix: str = "") -> str:

@@ -26,6 +26,8 @@
 | **双通道（dual channel）** | 一次工具调用产生两份输出：给**模型**的精简文本、给 **UI/外部消费者**的结构化记录。二者不再共用同一条消息。见 [ADR 0001](decisions/0001-file-edit-tool.md)。 | `agent/agent_loop/` |
 | **`model_text`** | `ToolOutcome` 中回填进 `messages`（`role="tool"`）的文本，是模型实际"看到"的内容。 | `agent/models.py` |
 | **`details`** | `ToolOutcome` 中随事件发送的结构化负载，模型看不到。 | `agent/models.py` |
+| **tool_result 预算（tool result budget）** | **一步**的全部工具结果允许占用的字符上限，默认 200,000（`TOOL_RESULT_BUDGET_CHARS` 覆盖，`<= 0` 关闭）。超出时按大小降序把结果移出上下文，只留路径 + 2,000 字符预览。只处理**最新一批**（本步追加的消息）。与 **token 预算**分工不同：后者管单条工具输出，前者管整轮批量。 | [ADR 0012](decisions/0012-tool-result-budget.md) |
+| **大结果落盘 / 占位文本（`<persisted-output>`）** | 超过 `TOOL_RESULT_LARGE_CHAR_LIMIT`（默认 30,000 字符）的结果整份写进 `<workspace>/.task_outputs/tool-results/<tool_call_id>.txt`，消息里换成 `<persisted-output>` 路径 + 预览。目录是**只读根**（`read_file` 读得到，`write_file`/`edit_file` 报 `read_only_root`），自带 `*` 的 `.gitignore`，**不自动清理**。与 `persistedOutputPath`（`exec_command` 落在 temp 的那棵树）是两处不同的树。 | [ADR 0012](decisions/0012-tool-result-budget.md) |
 
 ## 事件
 

@@ -14,7 +14,7 @@ from agent.tools.get_current_temperature import (
     get_current_temperature as _get_current_temperature,
 )
 from agent.tools.get_current_time import get_current_time as _get_current_time
-from agent.tools.output_store import output_root_path
+from agent.tools.output_store import output_root_path, workspace_result_directory
 from agent.tools.permissions import (
     PERMISSION_NONE,
     SCOPES,
@@ -104,7 +104,14 @@ class ToolRegistry:
         # Scratch space for large command output. It is readable but never
         # writable by the file tools (see docs/decisions/0005-exec-tool.md).
         self.output_directory = output_root_path(self.base_dir, self.session_id)
-        self.read_only_roots = (self.output_directory.as_posix(),)
+        # Tool results the loop moved out of the context (ADR 0012). Inside the
+        # workspace, but read-only for the same reason as the scratch tree: the
+        # model must read the result back, never rewrite what it "saw".
+        self.result_directory = workspace_result_directory(self.base_dir)
+        self.read_only_roots = (
+            self.output_directory.as_posix(),
+            self.result_directory.as_posix(),
+        )
         self.tools = {}
         self._register_default_tools(enabled_tools)
 
