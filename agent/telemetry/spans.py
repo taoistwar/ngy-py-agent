@@ -134,6 +134,20 @@ def record_llm_response(
         return
 
 
+def record_throttle_wait(span: Any, milliseconds: int) -> None:
+    """Attribute the part of a request that was spent waiting for the rate limit.
+
+    Separate from the request duration because "slow model" and "we are rationing
+    ourselves" are different problems with different fixes.
+    """
+    if span is None:
+        return
+    try:
+        span.set_attribute("llm.rpm.wait_ms", max(0, int(milliseconds)))
+    except Exception:  # noqa: BLE001 - telemetry must never break the caller
+        return
+
+
 def current_trace_ids() -> dict[str, str]:
     """Trace/span identifiers of the active span, for the event stream to carry."""
     try:

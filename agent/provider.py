@@ -6,6 +6,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Protocol
 
+from agent.rate_limit import provider_throttle
+
 
 class ProviderError(RuntimeError):
     pass
@@ -23,6 +25,17 @@ _SEPARATOR_TO_UNDERSCORE = str.maketrans({"-": "_", ".": "_"})
 
 # What "nothing usable was configured" means, as it always has.
 DEFAULT_PROVIDER = "openai"
+
+# The canonical names ``build_provider`` can actually construct. The RPM table in the
+# admin UI lists these, so a limit can never be saved for a provider that would not
+# be built (and silently ignored).
+SUPPORTED_PROVIDERS = (
+    "openai",
+    "anthropic",
+    "anthropic_compatible",
+    "gemini",
+    "bedrock",
+)
 
 # Spellings that mean a provider other than their own name: the runtime names people
 # know (``claude``, ``aws``, ``google``) and the OpenAI-compatible shorthand.
@@ -192,6 +205,15 @@ class BaseProvider(ChatCompletionProtocol):
     def __init__(self, config: "ProviderConfig") -> None:
         self.config = config
 
+    def _throttle(self) -> None:
+        """Spend this provider's per-minute request budget before the call goes out.
+
+        Called by every wire adapter rather than by the callers: the ReAct loop is not
+        the only thing asking the endpoint (task naming does too), and a limit that
+        some path can skip is not a limit.
+        """
+        provider_throttle.acquire(self.config.provider)
+
     def chat_completion(
         self,
         messages: List[Dict[str, Any]],
@@ -269,6 +291,7 @@ class OpenAIProvider(BaseProvider):
         tools: Optional[List[Dict[str, Any]]] = None,
         **kwargs: Any
     ) -> Any:
+        self._throttle()
         return self._client.chat.completions.create(**self.build_request_payload(messages, tools=tools, **kwargs))
 
 
@@ -357,6 +380,7 @@ class AnthropicProvider(BaseProvider):
         tools: Optional[List[Dict[str, Any]]] = None,
         **kwargs: Any
     ) -> Any:
+        self._throttle()
         system_prompt, anthropic_messages = self._to_anthropic_messages(messages)
         kwargs = dict(kwargs)
         request_params: Dict[str, Any] = {
@@ -451,6 +475,7 @@ class AnthropicOllamaProvider(BaseProvider):
         tools: Optional[List[Dict[str, Any]]] = None,
         **kwargs: Any
     ) -> Any:
+        self._throttle()
         system_prompt, anthropic_messages = AnthropicProvider._to_anthropic_messages(self, messages)  # type: ignore[union-attr]
         if not anthropic_messages:
             anthropic_messages = []
@@ -638,6 +663,7 @@ class GeminiProvider(BaseProvider):
         tools: Optional[List[Dict[str, Any]]] = None,
         **kwargs: Any
     ) -> Any:
+        self._throttle()
         try:
             import requests
         except Exception as exc:  # pragma: no cover

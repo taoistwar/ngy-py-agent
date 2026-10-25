@@ -25,10 +25,12 @@ from agent.models import (
     ToolOutcome,
     ToolResultData,
 )
+from agent.rate_limit import provider_throttle
 from agent.telemetry import (
     current_trace_ids,
     llm_span,
     record_llm_response,
+    record_throttle_wait,
     set_error_status,
     tool_span,
 )
@@ -42,6 +44,46 @@ class ModelTurn:
     assistant_content: str
     tool_calls: List[Tuple[str, Dict[str, Any], str]]
     response_payload: Any
+
+
+def _report_throttle_wait(
+    span: Any,
+    provider: Any,
+    step: int,
+    event_sink: EventSink | None,
+    task_id: str | None,
+) -> None:
+    """Surface the part of the request that waited for the provider's RPM budget.
+
+    The wait happens inside the adapter, so it is read back from the limiter rather
+    than timed here: "the model is slow" and "we rationed ourselves" look identical
+    from the outside and have different fixes. Reported once per request, because
+    the limiter hands the figure over with ``take_last_wait``.
+    """
+    waited = provider_throttle.take_last_wait()
+    if waited <= 0:
+        return
+    waited_ms = int(round(waited * 1000))
+    record_throttle_wait(span, waited_ms)
+    provider_name = getattr(provider.config, "provider", "")
+    _emit(
+        event_sink,
+        task_id,
+        TaskEvent(
+            task_id=task_id or "",
+            category=EventCategory.DEBUG,
+            title=f"LLM rate limit wait Step {step}",
+            data={
+                "step": step,
+                "provider": provider_name,
+                "model": getattr(provider.config, "model", ""),
+                "rpm_limit": provider_throttle.limit_for(provider_name),
+                "waited_ms": waited_ms,
+                **current_trace_ids(),
+            },
+            collapsed=True,
+        ),
+    )
 
 
 def run_model_turn(
@@ -93,6 +135,7 @@ def run_model_turn(
         try:
             response = provider.chat_completion(**raw_request_payload)
         except Exception as exc:  # noqa: BLE001 - every provider failure is reported
+            _report_throttle_wait(span, provider, step, event_sink, task_id)
             failure = describe_llm_failure(exc, provider)
             _emit(
                 event_sink,
@@ -114,6 +157,8 @@ def run_model_turn(
                 ),
             )
             raise failure from exc
+
+        _report_throttle_wait(span, provider, step, event_sink, task_id)
 
         assistant_message = response.choices[0].message
         message_dict = _to_dict(assistant_message)
