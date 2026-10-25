@@ -23,6 +23,7 @@ cd ..
 - `NGY_PY_AGENT_MODE=dev`
 - `NGY_PY_AGNET_QUERY=...`
 - `REACT_MAX_STEPS=8`（ReAct 全局最大步数的环境变量默认值；Web Admin「全局配置」页可在前端修改并落库到 `settings` 表，`agent_max_steps` 优先于环境变量）
+- `LLM_RPM=openai=60,anthropic=20`（按 provider 的每分钟请求上限；未列出的 provider 不限速，`0` 亦表示不限。Web Admin「全局配置」页可覆盖并落库到 `settings` 表 `llm_rpm_limits`，见 [ADR 0013](decisions/0013-llm-rpm-limit.md)）
 - `WEB_MONITOR_HOST=127.0.0.1`
 - `WEB_MONITOR_PORT=8001`
 - `TASK_RETENTION_DAYS=36600`（默认 36600 天，约 100 年）
@@ -258,6 +259,15 @@ npm run i18n:check
 - 全局策略依然作用于它：`allow_dirs` 非空时输出目录会不可达，这是有意的。
 - 进入事件 `details` 的 stdout/stderr 截到 64 KiB（命令输出无上限），完整文本只在磁盘上。
 
+### 模型请求频率（RPM）
+
+- 桶按 **provider 名**分（`agent/rate_limit.py`），进程级单例：provider 实例每个任务重建，挂在实例上的计数器等于每任务清零（[ADR 0013](decisions/0013-llm-rpm-limit.md)）。
+- 滑动窗口而不是固定窗口：第 N+1 个请求等"最老的那个请求满 60 秒"，因此任意 60 秒跨度内都不超限，也没有窗口边界突刺。
+- **钩子在 wire 层**（四个 `chat_completion` 的第一行 `self._throttle()`），不在 `steps.py`：任务命名线程也打同一个端点，能绕过的限流不是限流。新增 provider 适配器时必须记得加这一行。
+- 等待有上限（60 秒），超过就抛 `RpmLimitError`。循环会把它转成 `LLMCallError` 并给出"调高限制或稍后重试"的文案；**不要**改成无限等待，那会让"配错成 1 RPM"表现为任务假死。
+- 等待时长经 `provider_throttle.take_last_wait()` 回读（线程局部，取一次即清零），落成 `debug` 事件 + span 属性 `llm.rpm.wait_ms`：模型慢和自己在配额里打转是两件事，排障时要分得开。
+- 配置三层：`LLM_RPM` 环境变量 → `settings.llm_rpm_limits`（数据库优先）→ `PUT /api/admin/llm-rpm` 热更新。PUT 是**整表替换**：漏掉某个 provider 等于解除它的限制。
+
 ### 工具结果预算（一步的结果太多）
 
 - 触发点在循环里：一步的工具全部返回之后，只处理本步新追加的 `role="tool"` 消息（`loop.py` 的 `batch_start`）。工具内部的 per-result 预算管不到"一次读 30 个文件"，这一层管。见 [ADR 0012](decisions/0012-tool-result-budget.md)。
@@ -343,6 +353,7 @@ npm run i18n:check
   - [ADR 0010 `ask_user_question` 工具与"提问通道"](decisions/0010-ask-user-question.md)
   - [ADR 0011 桌面操作（`computer_observe` / `computer_control`）](decisions/0011-computer-use.md)
   - [ADR 0012 工具结果预算（tool result budget）](decisions/0012-tool-result-budget.md)
+  - [ADR 0013 按 provider 的模型请求限流（RPM）](decisions/0013-llm-rpm-limit.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 

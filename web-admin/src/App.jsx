@@ -24,6 +24,8 @@ import {
   fetchRetentionConfig,
   fetchMaxStepsConfig,
   updateMaxStepsConfig,
+  fetchRpmLimitsConfig,
+  updateRpmLimitsConfig,
   fetchPermissionModeConfig,
   updatePermissionModeConfig,
   fetchPermissionRules,
@@ -67,6 +69,7 @@ import {
   PermissionModeManager,
   PermissionRulesManager,
   RetentionManager,
+  RpmLimitsManager,
 } from "./components/admin/SettingsPanels"
 import SkillManager from "./components/admin/SkillManager"
 import ToolManager from "./components/admin/ToolManager"
@@ -1229,6 +1232,7 @@ export default function App() {
   const [error, setError] = useState("")
   const [retentionConfig, setRetentionConfig] = useState(null)
   const [maxStepsConfig, setMaxStepsConfig] = useState(null)
+  const [rpmConfig, setRpmConfig] = useState(null)
   const [permissionModeConfig, setPermissionModeConfig] = useState(null)
   const [permissionRules, setPermissionRules] = useState(null)
   const [health, setHealth] = useState("unknown")
@@ -2005,6 +2009,24 @@ export default function App() {
     [translate]
   )
 
+  const refreshRpmLimits = useCallback(async () => {
+    const config = await fetchRpmLimitsConfig()
+    setRpmConfig(config)
+    return config
+  }, [])
+
+  const updateRpmLimits = useCallback(
+    async (limits) => {
+      try {
+        const config = await updateRpmLimitsConfig(limits)
+        setRpmConfig(config)
+      } catch (rpmError) {
+        setError(rpmError?.message || translate("errorUnknown"))
+      }
+    },
+    [translate]
+  )
+
   const refreshPermissionMode = useCallback(async () => {
     const config = await fetchPermissionModeConfig()
     setPermissionModeConfig(config)
@@ -2123,6 +2145,9 @@ export default function App() {
     refreshMaxSteps().catch((maxStepsError) =>
       setError(maxStepsError?.message || translate("errorLoadFailed"))
     )
+    refreshRpmLimits().catch((rpmError) =>
+      setError(rpmError?.message || translate("errorLoadFailed"))
+    )
     refreshPermissionMode().catch((permissionError) =>
       setError(permissionError?.message || translate("errorLoadFailed"))
     )
@@ -2164,6 +2189,7 @@ export default function App() {
       }
       if (activeMenu === "config") {
         refreshMaxSteps().catch(() => {})
+        refreshRpmLimits().catch(() => {})
         refreshPermissionMode().catch(() => {})
         refreshPermissionRules().catch(() => {})
       }
@@ -2173,7 +2199,7 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [activeMenu, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWorkspaces, translate])
+  }, [activeMenu, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshRpmLimits, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWorkspaces, translate])
 
   useEffect(() => {
     if (!selectedId || activeMenu !== "tasks") return
@@ -2427,6 +2453,16 @@ export default function App() {
               maxStepsConfig={maxStepsConfig}
               onSave={updateMaxSteps}
               onRefresh={refreshMaxSteps}
+              translate={translate}
+            />
+            <RpmLimitsManager
+              rpmConfig={rpmConfig}
+              onSave={updateRpmLimits}
+              onRefresh={() =>
+                refreshRpmLimits().catch((refreshError) =>
+                  setError(refreshError?.message || translate("errorLoadFailed"))
+                )
+              }
               translate={translate}
             />
             <PermissionModeManager

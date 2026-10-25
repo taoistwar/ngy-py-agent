@@ -380,3 +380,17 @@ export async function updateMaxStepsConfig(maxSteps) {
     body: JSON.stringify({ max_steps: maxSteps }),
   })
 }
+
+export async function fetchRpmLimitsConfig() {
+  return requestJson(`${API_BASE}/api/admin/llm-rpm`)
+}
+
+export async function updateRpmLimitsConfig(limits) {
+  return requestJson(`${API_BASE}/api/admin/llm-rpm`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ limits }),
+  })
+}

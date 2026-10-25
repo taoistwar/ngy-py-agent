@@ -768,6 +768,45 @@ class _SqliteTaskStore:
             )
         self._conn.commit()
 
+    def get_llm_rpm_limits(self) -> dict[str, int] | None:
+        """Per-provider requests-per-minute limits, as saved by the admin API."""
+        row = self._conn.execute(
+            "SELECT value FROM settings WHERE key = ?",
+            ("llm_rpm_limits",),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            payload = json.loads(row["value"])
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        limits: dict[str, int] = {}
+        for provider, value in payload.items():
+            try:
+                limits[str(provider)] = int(value)
+            except (TypeError, ValueError):
+                continue
+        return limits
+
+    def set_llm_rpm_limits(self, limits: dict[str, Any]) -> None:
+        now = datetime.now(UTC).isoformat()
+        payload = json.dumps(
+            {str(provider): int(value) for provider, value in (limits or {}).items()},
+            sort_keys=True,
+        )
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """,
+                ("llm_rpm_limits", payload, now),
+            )
+        self._conn.commit()
+
     def get_skills_root(self) -> str | None:
         row = self._conn.execute(
             "SELECT value FROM settings WHERE key = ?",

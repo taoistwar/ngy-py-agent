@@ -121,6 +121,79 @@ export function PermissionModeManager({ permissionModeConfig, onSave, onRefresh,
   )
 }
 
+export function RpmLimitsManager({ rpmConfig, onSave, onRefresh, translate }) {
+  const [values, setValues] = useState({})
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!rpmConfig) return
+    const next = {}
+    for (const provider of rpmConfig.providers || []) {
+      next[provider] = String(rpmConfig.limits?.[provider] ?? 0)
+    }
+    setValues(next)
+  }, [rpmConfig])
+
+  const submit = async (event) => {
+    event.preventDefault()
+    // Only positive values are sent: 0 and "absent" both mean "no limit", and
+    // sending them would make the table look configured when it is not.
+    const limits = {}
+    for (const [provider, raw] of Object.entries(values)) {
+      const parsed = Number(raw)
+      if (!Number.isFinite(parsed) || parsed <= 0) continue
+      limits[provider] = parsed
+    }
+    setBusy(true)
+    try {
+      await onSave(limits)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="panel-titlebar">
+        <div>
+          <h2>{translate("rpmTitle")}</h2>
+          <span className="hint">
+            {translate("rpmSource")}:{" "}
+            {rpmConfig?.source === "database"
+              ? translate("maxStepsSourceDb")
+              : translate("maxStepsSourceEnv")}
+          </span>
+        </div>
+        <button type="button" className="btn btn-compact" onClick={onRefresh}>
+          {translate("sidebarQuickRefreshRpm")}
+        </button>
+      </div>
+      <div className="panel-body">
+        <form className="form-grid" onSubmit={submit}>
+          {(rpmConfig?.providers || []).map((provider) => (
+            <label key={provider}>
+              <span>{provider}</span>
+              <input
+                type="number"
+                min="0"
+                max={rpmConfig?.max_limit ?? undefined}
+                value={values[provider] ?? ""}
+                onChange={(event) =>
+                  setValues((current) => ({ ...current, [provider]: event.target.value }))
+                }
+              />
+            </label>
+          ))}
+          <button type="submit" className="btn" disabled={busy}>
+            {busy ? translate("rpmSaving") : translate("rpmSave")}
+          </button>
+        </form>
+        <div className="hint">{translate("rpmHint")}</div>
+      </div>
+    </section>
+  )
+}
+
 export function PermissionRulesManager({ rules, onDelete, onRefresh, translate }) {
   const [busy, setBusy] = useState("")
   const list = rules?.rules || []

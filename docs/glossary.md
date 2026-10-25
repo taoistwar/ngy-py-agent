@@ -12,6 +12,8 @@
 | **会话默认目录（`default_workspace`）** | 未绑定会话里相对路径的起点：`<程序启动路径>/data/default_workspace`（`DEFAULT_WORKSPACE_DIR` 可覆盖）。**是基目录不是边界**——`..` 仍可离开，全局策略照旧生效。写入按需创建它，读取不创建。 | [ADR 0007](decisions/0007-default-workspace.md) |
 | **token 预算** | 单次工具输出允许占用的 token 上限，超限即报错而非截断。`read_file` 依赖它防止撑爆上下文。 | `agent/tools/token_budget.py` |
 | **行号前缀** | `read_file` 输出中每行开头的 `N<分隔符>`，分隔符是**制表符**。模型看不到真实行号，因此永远带前缀、不提供关闭开关。 | `agent/tools/read_file/lines.py` |
+| **RPM 限流（`ProviderThrottle`）** | 按 **provider 名**分桶的每分钟请求上限，进程级单例、滑动窗口。超限的请求阻塞到有配额为止；等待超过 60 秒即抛 `RpmLimitError`（可见的失败，不是假死）。钩子在四个 `chat_completion` 的 `_throttle()` 上，因此任务命名等旁路调用一并受限。配置：`LLM_RPM` → `settings.llm_rpm_limits` → `PUT /api/admin/llm-rpm`（整表替换，未知 provider 400）。 | [ADR 0013](decisions/0013-llm-rpm-limit.md) |
+| **`llm.rpm.wait_ms`** | span 属性（同时有一条 `debug` 事件），记录这次请求为配额等待了多久。把"模型慢"与"自己被限流"分开，排障时才不会查错方向。 | [ADR 0013](decisions/0013-llm-rpm-limit.md) |
 
 ## 工具与结果
 

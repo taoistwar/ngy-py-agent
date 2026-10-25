@@ -41,6 +41,10 @@ agent_max_steps: int = DEFAULT_MAX_STEPS
 agent_max_steps_source: str = "env"
 permission_mode: PermissionMode = PermissionMode.ASK
 permission_mode_source: str = "env"
+# Per-provider requests-per-minute limits (ADR 0013). Applied to
+# ``agent.rate_limit.provider_throttle`` at startup and on every admin update.
+llm_rpm_limits: Dict[str, int] = {}
+llm_rpm_limits_source: str = "env"
 
 # Cooperative stop flags, one per running task.
 _task_stop_events: Dict[str, threading.Event] = {}

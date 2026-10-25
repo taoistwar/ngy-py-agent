@@ -150,6 +150,24 @@ class MaxStepsConfigResponse(BaseModel):
     source: str
 
 
+class RpmLimitsConfigRequest(BaseModel):
+    """Per-provider requests-per-minute limits (replaces the whole table)."""
+
+    limits: dict[str, int] = Field(
+        default_factory=dict,
+        description="Provider name -> requests per minute. 0 (or a missing provider) means no limit.",
+    )
+
+
+class RpmLimitsConfigResponse(BaseModel):
+    """Current RPM limits, plus what the admin form needs to render them."""
+
+    limits: dict[str, int]
+    source: str
+    providers: list[str] = Field(default_factory=list)
+    max_limit: int = 0
+
+
 class PermissionModeConfigRequest(BaseModel):
     """Global tool permission mode request."""
 
