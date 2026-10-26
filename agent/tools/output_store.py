@@ -37,6 +37,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from agent.tools.file_access import default_workspace_root
+from agent.tools.read_file.description import MAX_FULL_READ_BYTES
+from agent.tools.text_lines import split_lines
 
 OUTPUT_DIR_ENV = "EXEC_OUTPUT_DIR"
 DEFAULT_OUTPUT_DIR_NAME = ("ngy-py-agent", "output")
@@ -45,6 +47,10 @@ DEFAULT_OUTPUT_DIR_NAME = ("ngy-py-agent", "output")
 RESULT_DIR_NAME = ".task_outputs"
 RESULT_SUBDIR_NAME = "tool-results"
 RESULT_GITIGNORE = "*\n"
+
+# Result file names come from a tool call id, which is provider supplied.
+_SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
+_FALLBACK_STEM = "tool-result"
 
 # Archived conversations (ADR 0015): same workspace, same read-only treatment.
 TRANSCRIPT_DIR_NAME = ".transcripts"
@@ -135,6 +141,18 @@ def _workspace_directory(base_dir: Optional[str], *parts: str) -> Path:
     return root.joinpath(*parts)
 
 
+def result_file_name(tool_call_id: Any) -> str:
+    """``<tool_call_id>.txt``, reduced to something every filesystem accepts.
+
+    Deterministic on purpose (ADR 0012): it lets a later step tell whether this
+    result already has a file (``micro_compact``, ADR 0016) without keeping a
+    content -> path table around.
+    """
+    raw = str(tool_call_id or "").strip()
+    stem = _SAFE_NAME.sub("-", raw).strip("-.")[:80]
+    return f"{stem or _FALLBACK_STEM}.txt"
+
+
 def ensure_result_directory(directory: Path) -> Path:
     """Create a persisted-output directory (results or transcripts) and ignore it in git.
 
@@ -191,3 +209,33 @@ def preview(text: str, limit: int = DEFAULT_PREVIEW_CHARS) -> str:
 
 def describe_size(text: str) -> Dict[str, Any]:
     return {"characters": len(text), "bytes": len(text.encode("utf-8", errors="replace"))}
+
+
+def persisted_note(
+    path: Path,
+    content: str,
+    preview_chars: int = DEFAULT_PREVIEW_CHARS,
+) -> str:
+    """What the model sees instead of the result: where it went, and how to read it.
+
+    Shared by the size budget (2,000 characters, ADR 0012) and by
+    :mod:`agent.agent_loop.micro_compact`'s unread-result fitting (1,000, ADR 0016):
+    one wording, so the model never has to learn two formats for the same promise.
+
+    The read-back note is part of the budget, not decoration: ``read_file`` rejects a
+    whole-file read above :data:`MAX_FULL_READ_BYTES` and rejects any single call
+    above the output token budget, so a model that only gets a path spends a step
+    learning that. It also always numbers the lines it returns, which the note says
+    out loud - otherwise the prefixes look like file content.
+    """
+    return (
+        "<persisted-output>\n"
+        f"Full output: {path.as_posix()} ({len(content):,} chars, "
+        f"{len(split_lines(content)):,} lines)\n"
+        f"Preview (first {preview_chars:,} chars):\n"
+        f"{content[:preview_chars]}\n"
+        "Read it back with read_file (offset/limit): one call is capped by the output\n"
+        f"token budget, a file above {MAX_FULL_READ_BYTES // 1024} KB cannot be read whole, "
+        "and the `N<TAB>` prefixes are line numbers, not file content.\n"
+        "</persisted-output>"
+    )

@@ -27,6 +27,7 @@ cd ..
 - `WEB_MONITOR_PORT=8001`
 - `TASK_RETENTION_DAYS=36600`（默认 36600 天，约 100 年）
 - `TRANSCRIPT_MAX_MESSAGES=50`（对话窗口条数上限，超出后旧消息归档到 `<workspace>/.transcripts/`，`<= 0` 关闭，见 [ADR 0015](decisions/0015-snip-compact.md)）
+- `CONTEXT_CHAR_LIMIT`（整段上下文的字符上限，超出后缩短模型已读过的旧工具结果；未配置时取模型 `max_input_tokens × 4`，再退回 200,000，`<= 0` 关闭，见 [ADR 0016](decisions/0016-micro-compact.md)）
 - 供应商相关：
   - `TOOL_SCHEMA_PROVIDER=openai`
   - `OLLAMA_BASE_URL`
@@ -297,6 +298,17 @@ npm run i18n:check
 - 压缩后跑一次 O(n) 配对自检（`_find_orphans`），发现孤儿只发 `error` 事件、不阻断——否则症状会漂到**下一次请求的 400** 上，而那和压缩看不出关系。
 - 不移除任何 provider 适配：这一层在消息层，不碰 Anthropic 的 `tool_result` block。
 
+### 上下文微型压缩（micro_compact）
+
+- 前三步是固定管线，性质不同：`result_budget`（步末、字节）与 `snip_compact`（步首、条数）**每步必跑且无损**；`micro_compact`（步首、总量）**只在估算超限时**跑。顺序不能换：`snip_compact` 先重排列表，`seen` 才按 id 而不是下标判定（见 [ADR 0016](decisions/0016-micro-compact.md)）。
+- 估算一次结构化遍历（`estimate_chars`），不要退回 `len(json.dumps(messages))`：那会把截图按 base64 实长计入，带图的会话因此永久超限，任何压缩都修不好。图片按 `IMAGE_CHAR_COST = 1,600` 名义计价，替换时用运行总量增减，不做全表重算。
+- 阈值解析顺序：显式参数 → `CONTEXT_CHAR_LIMIT` → `max_input_tokens × 4` → `200,000`。模型窗口是模型属性，不该让用户在模型记录和压缩配置里各写一遍。目标线是阈值的 80%，压到线上等于下一步再压一次。
+- 能缩短的只有**已读**结果，且保留最近 `KEEP_RECENT_RESULTS = 3` 条：当前的活儿建立在这几条上，换成路径等于让模型为自己正看着的内容再付一次工具调用。`seen` 是 `run_react_loop` 内的局部集合，`mark_seen` 在**请求发出前**记录——所以刚返回的结果在下一步仍算未读。
+- 占位分两种形状：已读结果用单行 `[Earlier tool result saved at <路径>]`（模型知道它是什么，只需知道去哪儿找）；未读结果用 `<persisted-output>` + 1,000 字符预览（模型没读过，只给路径等于让它盲读）。措辞都来自 `output_store.persisted_note`，与第一步同一套。
+- 文件名由 `tool_call_id` 决定（ADR 0012），所以"是否已落盘"只需按 id 算路径 + `exists()`：第一步落过的结果直接复用，不产生第二份副本，模型也不必在两个路径里挑。
+- 单条写盘失败：保留原文、记入 `failed`、继续下一条，最后发一条 `error`。宁可超限（看得见），不可丢内容（看不见）。
+- 两步之后仍超限（`still_over`）**只记事件**，不进入需要模型调用的摘要压缩：那会是另一步的设计，不是这一步的隐藏分支。
+
 ### 工具结果分流（模型 vs UI）
 
 - 工具若需要把结构化记录交给 UI/外部消费者，**不要**把它塞进返回给模型的字符串：返回 `ToolOutcome`（`model_text` + 事件类别/标题 + `details`），由 `agent_loop` 拆分。
@@ -379,6 +391,7 @@ npm run i18n:check
   - [ADR 0013 按 provider 的模型请求限流（RPM）](decisions/0013-llm-rpm-limit.md)
   - [ADR 0014 Provider 与模型分离，RPM 按 provider + base_url 计](decisions/0014-provider-model-split.md)
   - [ADR 0015 snip_compact（对话窗口裁剪）](decisions/0015-snip-compact.md)
+  - [ADR 0016 micro_compact（只缩短模型已读过的结果）](decisions/0016-micro-compact.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 

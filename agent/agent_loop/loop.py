@@ -1,9 +1,10 @@
 """The ReAct execution loop itself."""
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from agent.agent_loop.config import DEFAULT_MAX_STEPS
 from agent.agent_loop.messages import _with_base_dir, _with_history
+from agent.agent_loop.micro_compact import mark_seen, prepare_context
 from agent.agent_loop.result_budget import apply_result_budget
 from agent.agent_loop.runtime import (
     _build_runtime,
@@ -138,6 +139,10 @@ def run_react_loop(
 
     final_output: Optional[str] = None
     stopped = False
+    # Tool results this run has already sent to the model, by ``tool_call_id``. Scoped
+    # to the run: a compaction must never shorten a result the model has not read, and
+    # "read" is only meaningful for requests this loop made (ADR 0016).
+    seen_results: Set[str] = set()
 
     for step in range(1, max_steps + 1):
         if should_stop is not None and should_stop():
@@ -152,6 +157,17 @@ def run_react_loop(
             task_id=task_id,
             step=step,
         )
+        # The conditional third step: only when the estimate is over the limit, and
+        # before ``mark_seen`` below claims the results that just arrived unread.
+        prepare_context(
+            messages,
+            seen_results,
+            base_dir=getattr(registry, "base_dir", None),
+            event_sink=event_sink,
+            task_id=task_id,
+            step=step,
+            model_max_input_tokens=int(getattr(provider.config, "max_input_tokens", 0) or 0),
+        )
         if verbose:
             print(f"\n=== ReAct Step {step}/{max_steps} ===")
 
@@ -162,6 +178,10 @@ def run_react_loop(
             request_kwargs["extra_body"] = {
                 "chat_template_kwargs": {"enable_thinking": True}
             }
+
+        # Everything now in ``messages`` is about to go out, so from the next step on
+        # it counts as read: that is what licenses shortening it (ADR 0016).
+        mark_seen(seen_results, messages)
 
         with react_step_span(step, max_steps):
             turn = run_model_turn(

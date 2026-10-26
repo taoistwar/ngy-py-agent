@@ -22,7 +22,6 @@ prompt cache.
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -30,13 +29,12 @@ from agent.agent_loop.runtime import _emit
 from agent.models import EventCategory, EventSink, TaskEvent
 from agent.telemetry import current_trace_ids
 from agent.tools.output_store import (
-    DEFAULT_PREVIEW_CHARS,
     ensure_result_directory,
     persist_text,
+    persisted_note,
+    result_file_name,
     workspace_result_directory,
 )
-from agent.tools.read_file.description import MAX_FULL_READ_BYTES
-from agent.tools.text_lines import split_lines
 
 # Batch budget for the tool results of one step, in characters.
 BUDGET_CHARS_ENV = "TOOL_RESULT_BUDGET_CHARS"
@@ -45,9 +43,6 @@ DEFAULT_MAX_CHARS = 200_000
 # A single result above this is persisted even when the batch is still fine.
 LARGE_LIMIT_ENV = "TOOL_RESULT_LARGE_CHAR_LIMIT"
 DEFAULT_LARGE_RESULT_CHAR_LIMIT = 30_000
-
-_SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
-_FALLBACK_STEM = "tool-result"
 
 
 def resolve_max_chars(configured: Optional[int] = None) -> int:
@@ -168,13 +163,13 @@ def _persist(
 ) -> Optional[str]:
     """Write one result out and return its replacement, or ``None`` if that failed."""
     content = block["content"]
-    name = _file_name(block)
+    name = result_file_name(block.get("tool_call_id"))
     # A NUL byte makes the file look binary to read_file, which would leave the path
     # this very message points at unreadable. ``persist_text`` already encodes with
     # errors="replace", so this is the same trade-off applied one step earlier: a
     # readable result that lost a byte beats an unreadable one that kept it.
     stored = content.replace("\x00", "\ufffd")
-    placeholder = _placeholder(directory / name, stored)
+    placeholder = persisted_note(directory / name, stored)
     if len(placeholder) >= len(content):
         # Persisting would make the message longer; the budget is not served.
         return None
@@ -242,30 +237,4 @@ def _report(
     )
 
 
-def _file_name(block: Dict[str, Any]) -> str:
-    """``<tool_call_id>.txt``, reduced to something every filesystem accepts."""
-    raw = str(block.get("tool_call_id") or "").strip()
-    stem = _SAFE_NAME.sub("-", raw).strip("-.")[:80]
-    return f"{stem or _FALLBACK_STEM}.txt"
 
-
-def _placeholder(path: Path, content: str) -> str:
-    """What the model sees instead of the result: where it went, and how to read it.
-
-    The read-back note is part of the budget, not decoration: ``read_file`` rejects a
-    whole-file read above :data:`MAX_FULL_READ_BYTES` and rejects any single call
-    above the output token budget, so a model that only gets a path spends a step
-    learning that. It also always numbers the lines it returns, which the note says
-    out loud - otherwise the prefixes look like file content.
-    """
-    return (
-        "<persisted-output>\n"
-        f"Full output: {path.as_posix()} ({len(content):,} chars, "
-        f"{len(split_lines(content)):,} lines)\n"
-        f"Preview (first {DEFAULT_PREVIEW_CHARS:,} chars):\n"
-        f"{content[:DEFAULT_PREVIEW_CHARS]}\n"
-        "Read it back with read_file (offset/limit): one call is capped by the output\n"
-        f"token budget, a file above {MAX_FULL_READ_BYTES // 1024} KB cannot be read whole, "
-        "and the `N<TAB>` prefixes are line numbers, not file content.\n"
-        "</persisted-output>"
-    )
