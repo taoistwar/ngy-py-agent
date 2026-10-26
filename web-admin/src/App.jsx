@@ -241,7 +241,7 @@ function getHealthText(healthStatus, translate) {
   return translate("unknown")
 }
 
-function TopBar({ activeMenu, onChangeMenu, health, tasks, locale, localeOptions, setLocale, systemTime, translate }) {
+function TopBar({ activeMenu, onChangeMenu, health, locale, localeOptions, setLocale, systemTime, translate }) {
   return (
     <header className="admin-topbar">
       <div className="topbar-brand">
@@ -264,10 +264,6 @@ function TopBar({ activeMenu, onChangeMenu, health, tasks, locale, localeOptions
         <div className="metric-item">
           <em>{translate("healthLabel")}:</em>
           <strong className={`status ${getHealthClass(health)}`}>{getHealthText(health, translate)}</strong>
-        </div>
-        <div className="metric-item">
-          <em>{translate("headerTaskCount")}:</em>
-          <strong>{tasks.length}</strong>
         </div>
         <label className="lang-switch">
           <span>{translate("languageLabel")}</span>
@@ -2293,7 +2289,6 @@ export default function App() {
           setTaskTab("detail")
         }}
         health={health}
-        tasks={tasks}
         locale={locale}
         localeOptions={localeOptions}
         setLocale={setLocale}

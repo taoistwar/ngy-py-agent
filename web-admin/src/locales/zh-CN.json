@@ -17,7 +17,6 @@
   "sidebarSystemTime": "系统时间",
   "taskSectionTitle": "任务控制台",
   "backupSectionTitle": "备份控制台",
-  "headerTaskCount": "任务总数",
   "taskSearchPlaceholder": "输入任务 ID、提示词、提供商或状态",
   "sidebarQuickCreate": "快速创建",
   "sidebarQuickRefresh": "刷新任务列表",

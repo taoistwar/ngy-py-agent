@@ -17,7 +17,6 @@
   "sidebarSystemTime": "System time",
   "taskSectionTitle": "Task Console",
   "backupSectionTitle": "Backup Console",
-  "headerTaskCount": "Task Total",
   "taskSearchPlaceholder": "Type task id, prompt, provider or status",
   "sidebarQuickCreate": "Create quickly",
   "sidebarQuickRefresh": "Refresh task list",
