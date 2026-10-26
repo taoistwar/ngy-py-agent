@@ -35,6 +35,8 @@ from agent.tools.output_store import (
     persist_text,
     workspace_result_directory,
 )
+from agent.tools.read_file.description import MAX_FULL_READ_BYTES
+from agent.tools.text_lines import split_lines
 
 # Batch budget for the tool results of one step, in characters.
 BUDGET_CHARS_ENV = "TOOL_RESULT_BUDGET_CHARS"
@@ -167,13 +169,18 @@ def _persist(
     """Write one result out and return its replacement, or ``None`` if that failed."""
     content = block["content"]
     name = _file_name(block)
-    placeholder = _placeholder(directory / name, content)
+    # A NUL byte makes the file look binary to read_file, which would leave the path
+    # this very message points at unreadable. ``persist_text`` already encodes with
+    # errors="replace", so this is the same trade-off applied one step earlier: a
+    # readable result that lost a byte beats an unreadable one that kept it.
+    stored = content.replace("\x00", "\ufffd")
+    placeholder = _placeholder(directory / name, stored)
     if len(placeholder) >= len(content):
         # Persisting would make the message longer; the budget is not served.
         return None
     try:
         ensure_result_directory(directory)
-        path = persist_text(directory, name, content)
+        path = persist_text(directory, name, stored)
     except OSError as exc:
         summary["failed"].append(
             {"tool_call_id": block.get("tool_call_id"), "name": block.get("name"), "error": str(exc)}
@@ -201,7 +208,7 @@ def _persist(
         {
             "tool_call_id": block.get("tool_call_id"),
             "name": block.get("name"),
-            "chars": len(content),
+            "chars": len(stored),
             "path": path.as_posix(),
         }
     )
@@ -243,11 +250,22 @@ def _file_name(block: Dict[str, Any]) -> str:
 
 
 def _placeholder(path: Path, content: str) -> str:
-    """What the model sees instead of the result: where it went, and its head."""
+    """What the model sees instead of the result: where it went, and how to read it.
+
+    The read-back note is part of the budget, not decoration: ``read_file`` rejects a
+    whole-file read above :data:`MAX_FULL_READ_BYTES` and rejects any single call
+    above the output token budget, so a model that only gets a path spends a step
+    learning that. It also always numbers the lines it returns, which the note says
+    out loud - otherwise the prefixes look like file content.
+    """
     return (
         "<persisted-output>\n"
-        f"Full output: {path.as_posix()} ({len(content):,} chars)\n"
+        f"Full output: {path.as_posix()} ({len(content):,} chars, "
+        f"{len(split_lines(content)):,} lines)\n"
         f"Preview (first {DEFAULT_PREVIEW_CHARS:,} chars):\n"
         f"{content[:DEFAULT_PREVIEW_CHARS]}\n"
+        "Read it back with read_file (offset/limit): one call is capped by the output\n"
+        f"token budget, a file above {MAX_FULL_READ_BYTES // 1024} KB cannot be read whole, "
+        "and the `N<TAB>` prefixes are line numbers, not file content.\n"
         "</persisted-output>"
     )

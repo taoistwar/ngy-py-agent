@@ -25,6 +25,7 @@ if str(_REPO_ROOT) not in sys.path:
 from agent.agent_loop import result_budget, run_react_loop  # noqa: E402
 from agent.models import EventCategory  # noqa: E402
 from agent.tools import file_access  # noqa: E402
+from agent.tools.read_file.tool import make_read_file_tool  # noqa: E402
 from agent.tools.registry import ToolRegistry  # noqa: E402
 
 WORKSPACE = Path("<workspace>")
@@ -129,6 +130,32 @@ class ResultBudgetTest(unittest.TestCase):
         self.assertIn("Preview (first 2,000 chars):", content)
         self.assertIn(self.result_path("call-format").as_posix(), content)
 
+    def test_the_placeholder_says_how_to_read_the_file_back(self):
+        content = "line\r\n" * 60_000
+        messages = [_tool_message("call-lines", content)]
+
+        self.run_budget(messages)
+
+        text = messages[0]["content"]
+        # Line count first: read_file wants an offset/limit, and guessing at it is
+        # how a read-back turns into two more steps.
+        self.assertIn("60,000 lines", text)
+        self.assertIn("offset/limit", text)
+        self.assertIn("256 KB", text)
+        self.assertIn("line numbers, not file content", text)
+
+    def test_nul_bytes_do_not_leave_an_unreadable_file(self):
+        content = ("A" * 100) + "\x00" + ("B" * 250_000)
+        messages = [_tool_message("call-nul", content)]
+
+        self.run_budget(messages)
+
+        # read_file refuses anything that sniffs as binary, so a NUL left in the file
+        # would break the promise the message just made.
+        self.assertNotIn(b"\x00", self.result_path("call-nul").read_bytes())
+        self.assertNotIn("\x00", messages[0]["content"])
+        self.assertIn("\ufffd", messages[0]["content"])
+
     def test_a_result_shorter_than_its_placeholder_is_left_alone(self):
         content = "t" * 1200
         messages = [_tool_message("call-tiny", content)]
@@ -229,6 +256,42 @@ class ResultDirectoryIsReadOnlyTest(unittest.TestCase):
                 target, base_dir=str(self.workspace), extra_read_roots=registry.read_only_roots
             )
         self.assertEqual(caught.exception.reason, file_access.REASON_READ_ONLY_ROOT)
+
+
+class PersistedResultReadBackTest(unittest.TestCase):
+    """Round trip through the real tool: the point of persisting is that it can be read.
+
+    The read-only-root test below only covers path resolution; without this one, a
+    change to either the placeholder or ``read_file``'s limits could make every
+    persisted result unreadable and the suite would stay green.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.workspace = Path(self._tmp.name) / "workspace"
+        self.workspace.mkdir()
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_read_file_reads_a_slice_of_a_persisted_result(self):
+        registry = ToolRegistry(enabled_tools=[], base_dir=str(self.workspace))
+        content = "".join(f"line {index}\n" for index in range(80_000))
+        messages = [_tool_message("call-read", content)]
+
+        result_budget.apply_result_budget(messages, 0, base_dir=str(self.workspace))
+
+        stored = self.workspace / ".task_outputs" / "tool-results" / "call-read.txt"
+        self.assertTrue(stored.exists())
+        read_file = make_read_file_tool(
+            base_dir=str(self.workspace), extra_read_roots=registry.read_only_roots
+        )
+        payload = read_file(file_path=stored.as_posix(), encoding="utf-8", limit=3)
+
+        self.assertEqual(payload["path"], ".task_outputs/tool-results/call-read.txt")
+        self.assertTrue(payload["token_budget"]["ok"])
+        self.assertTrue(payload["truncated"])
+        self.assertTrue(payload["content"].startswith("1\tline 0"))
 
 
 class _Message:

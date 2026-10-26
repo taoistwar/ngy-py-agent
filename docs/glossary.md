@@ -32,6 +32,7 @@
 | **`details`** | `ToolOutcome` 中随事件发送的结构化负载，模型看不到。 | `agent/models.py` |
 | **tool_result 预算（tool result budget）** | **一步**的全部工具结果允许占用的字符上限，默认 200,000（`TOOL_RESULT_BUDGET_CHARS` 覆盖，`<= 0` 关闭）。超出时按大小降序把结果移出上下文，只留路径 + 2,000 字符预览。只处理**最新一批**（本步追加的消息）。与 **token 预算**分工不同：后者管单条工具输出，前者管整轮批量。 | [ADR 0012](decisions/0012-tool-result-budget.md) |
 | **大结果落盘 / 占位文本（`<persisted-output>`）** | 超过 `TOOL_RESULT_LARGE_CHAR_LIMIT`（默认 30,000 字符）的结果整份写进 `<workspace>/.task_outputs/tool-results/<tool_call_id>.txt`，消息里换成 `<persisted-output>` 路径 + 预览。目录是**只读根**（`read_file` 读得到，`write_file`/`edit_file` 报 `read_only_root`），自带 `*` 的 `.gitignore`，**不自动清理**。与 `persistedOutputPath`（`exec_command` 落在 temp 的那棵树）是两处不同的树。 | [ADR 0012](decisions/0012-tool-result-budget.md) |
+| **回读契约** | 落盘结果只能经 `read_file` 取回：输出**永远带 `N<TAB>` 行号**，单次调用受输出 token 预算约束，整读上限 256 KB。因此占位文本必须同时给路径、行数与"用 `offset/limit` 读"的提示；含 NUL 的内容在落盘前被归一为 `\ufffd`，否则会被判二进制而打不开。 | [ADR 0012](decisions/0012-tool-result-budget.md) |
 
 ## 事件
 

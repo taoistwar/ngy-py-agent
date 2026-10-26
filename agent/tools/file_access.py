@@ -226,8 +226,8 @@ def _resolve_path(
     if any(is_within(resolved, extra) for extra in _normalized_roots(extra_read_roots)):
         if action == "modified":
             raise AccessDenied(
-                "This is the read-only scratch area for tool output; it can be read but not "
-                "modified. Write to the workspace instead.",
+                "This area holds tool output that was moved out of the conversation; it is "
+                "read-only, so read it but do not modify it. Write the file somewhere else.",
                 resolved.as_posix(),
                 REASON_READ_ONLY_ROOT,
             )
