@@ -1,0 +1,124 @@
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.badge-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-mode-build {
+  border-color: var(--success-border);
+  color: var(--success);
+}
+
+.badge-mode-ask {
+  border-color: var(--info-border);
+  color: var(--info);
+}
+
+.badge-mode-plan {
+  border-color: var(--warning-border);
+  color: var(--warning);
+}
+
+/* Tool confirmation kinds, mirroring PERMISSION_KINDS in agent/tools/permissions.py. */
+.badge-permission-none {
+  border-color: var(--success-border);
+  color: var(--success);
+}
+
+.badge-permission-read {
+  border-color: var(--info-border);
+  color: var(--info);
+}
+
+.badge-permission-write {
+  border-color: var(--warning-border);
+  color: var(--warning);
+}
+
+.badge-permission-exec {
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.badge-permission-computer {
+  border-color: var(--violet-border);
+  color: var(--violet);
+}
+
+.task-detail-pane {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: auto;
+}
+
+/* The detail panel is the only column that is meant to be long, so it scrolls
+   inside its own frame instead of stretching the whole workspace. */
+.task-detail-pane .panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.model-manager .panel-body {
+  /* The body owns the leftover height of the panel, so the list below can scroll
+     instead of being clipped by the panel's overflow: hidden. */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Only the list scrolls, which keeps the search box in view. */
+.model-manager .panel-body > .model-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.config-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.manager-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.manager-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.manager-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.manager-search-meta {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+

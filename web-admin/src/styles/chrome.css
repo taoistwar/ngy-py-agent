@@ -1,0 +1,145 @@
+/* Shell chrome that only exists with the themed UI (brand mark, skin switch) plus
+   the cross-module refinements that are easier to read as one layer than as
+   scattered tweaks in the component files. */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-inset);
+}
+
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.theme-toggle-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.theme-toggle-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.theme-toggle-btn.active {
+  background: var(--accent-gradient);
+  color: var(--accent-contrast);
+  box-shadow: 0 3px 10px var(--accent-glow);
+}
+
+/* One focus treatment for every text field, instead of a per-selector list. */
+.admin-root input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+.admin-root select:focus,
+.admin-root textarea:focus,
+.event-standalone input:focus,
+.event-standalone select:focus,
+.event-standalone textarea:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.admin-root input::placeholder,
+.admin-root textarea::placeholder {
+  color: var(--muted-dim);
+}
+
+/* Dialogs float above a blurred page, which reads as depth in both skins. */
+.modal-overlay,
+.session-history-overlay,
+.task-create-overlay {
+  backdrop-filter: blur(var(--overlay-blur));
+  -webkit-backdrop-filter: blur(var(--overlay-blur));
+}
+
+/* The active row keeps a quiet accent rail, matching the selected nav pill. */
+.session-task-row.active,
+.session-node.active {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.event-card {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.event-card:hover {
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.icon-btn:hover:not(:disabled),
+.event-bulk-btn:hover,
+.event-fullscreen-btn:hover {
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.nav-item {
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* Writing a task should feel like the focused part of the screen. */
+.task-composer-panel {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.task-composer-panel:focus-within {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.status {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Grid values stretch by default, which turned the status pill into a full-width
+   bar in the task detail pane. Pills keep their own width. */
+.detail-item .status {
+  justify-self: start;
+}
+
+.metric-item {
+  font-variant-numeric: tabular-nums;
+}
+
+.model-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.model-table tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+/* Keep the bar compact on narrower screens: the icons alone still name the skin. */
+@media (max-width: 1180px) {
+  .theme-toggle-label {
+    display: none;
+  }
+
+  .theme-toggle-btn {
+    padding: 5px 7px;
+  }
+}
+
+@media (max-width: 760px) {
+  .brand-text .topbar-subtitle {
+    display: none;
+  }
+}

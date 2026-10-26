@@ -1,0 +1,342 @@
+.form-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.form-grid label,
+.form-row label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.form-grid textarea,
+.form-grid input,
+.form-row select,
+.form-grid select {
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.form-grid textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.btn {
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  background: var(--btn-primary-gradient);
+  color: var(--accent-contrast);
+  cursor: pointer;
+  padding: 6px 11px;
+  height: 34px;
+  font-size: 13px;
+  transition: filter 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.btn:hover {
+  filter: brightness(1.05);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:focus-visible,
+.lang-select:focus-visible,
+.form-grid input:focus-visible,
+.form-grid textarea:focus-visible,
+.form-row select:focus-visible,
+.lang-select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.btn-compact {
+  height: 30px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.btn-block {
+  width: 100%;
+  justify-self: stretch;
+}
+
+.btn-danger {
+  background: var(--btn-danger-gradient);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--status-default-bg);
+}
+
+.status.running {
+  background: var(--status-running-bg);
+}
+
+/* Blocked on the user: it must not read as "working" */
+.status.waiting {
+  background: var(--status-waiting-bg);
+}
+
+.status.success {
+  background: var(--status-success-bg);
+}
+
+.status.failed {
+  background: var(--status-failed-bg);
+}
+
+.status.stopped {
+  background: var(--status-stopped-bg);
+}
+
+@media (max-width: 1280px) {
+  .admin-sidebar {
+    width: 220px;
+    padding: 10px;
+  }
+
+  .tasks-layout {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+@media (max-width: 900px) {
+  .admin-root {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-sidebar {
+    height: auto;
+    position: static;
+  }
+
+  .sidebar-brand {
+    width: 100%;
+  }
+
+  .admin-workspace {
+    min-height: auto;
+  }
+
+  .admin-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .sidebar-system p {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tool confirmation dialog */
+.permission-prompt {
+  display: grid;
+  gap: 12px;
+}
+
+.permission-field {
+  display: grid;
+  gap: 4px;
+}
+
+.permission-field > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.permission-target {
+  color: var(--accent-text);
+  overflow-wrap: anywhere;
+}
+
+.permission-details {
+  display: grid;
+  gap: 8px;
+}
+
+.permission-detail {
+  display: grid;
+  gap: 4px;
+}
+
+.permission-detail em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.permission-detail pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-inset);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.permission-error {
+  margin: 0;
+  color: var(--danger-text);
+  font-size: 12px;
+}
+
+.permission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.permission-rule-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.permission-rule-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-tint);
+}
+
+.permission-rule-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.permission-rule-body code {
+  color: var(--accent-text);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* Question dialog (ask_user_question). Deliberately a plain form: one radio group
+   per question plus a free-form row, because the model is told not to send an
+   "Other" option - this dialog is what supplies it. */
+.question-prompt {
+  display: grid;
+  gap: 16px;
+}
+
+.question-block {
+  display: grid;
+  gap: 8px;
+}
+
+.question-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.question-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.question-options {
+  display: grid;
+  gap: 6px;
+}
+
+.question-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-tint);
+  cursor: pointer;
+}
+
+.question-option-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.question-option-text strong {
+  overflow-wrap: anywhere;
+}
+
+.question-option-text em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  overflow-wrap: anywhere;
+}
+
+.question-note {
+  margin-top: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-code);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.question-note:focus {
+  outline: 1px solid var(--focus);
+}

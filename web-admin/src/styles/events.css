@@ -1,0 +1,484 @@
+.timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.timeline-empty,
+.empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.event-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--row-bg);
+}
+
+.event-header {
+  padding: 7px 9px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.event-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  min-width: 0;
+}
+
+/* Fullscreen shortcut on the card header, usable before the card is expanded. */
+.event-fullscreen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--accent-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.event-fullscreen-btn:hover {
+  border-color: var(--focus);
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+.event-fullscreen-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Batch expand/collapse for the whole task log, right-aligned above the list. */
+.event-timeline-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.event-bulk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  background: var(--chip-bg);
+  color: var(--text-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.event-bulk-btn:hover {
+  border-color: var(--focus);
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+.event-bulk-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tag {
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 2px 9px;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+}
+
+.tag.llm_request,
+.tag.llm_response {
+  background: var(--tag-llm);
+}
+
+.tag.tool_call,
+.tag.tool_result {
+  background: var(--tag-tool);
+}
+
+.tag.file_edit {
+  background: var(--tag-edit);
+}
+
+.tag.file_write {
+  background: var(--tag-write);
+}
+
+.tag.exec {
+  background: var(--tag-exec);
+}
+
+.tag.computer {
+  background: var(--tag-computer);
+}
+
+.tag.permission_request {
+  background: var(--tag-permission);
+}
+
+.tag.permission_decision {
+  background: var(--tag-decision);
+}
+
+.tag.user_question {
+  background: var(--tag-question);
+}
+
+.tag.user_answer {
+  background: var(--tag-answer);
+}
+
+.tag.debug,
+.tag.error {
+  background: var(--tag-debug);
+}
+
+.event-body {
+  border-top: 1px solid var(--line);
+  padding: 7px 9px;
+  font-size: 14px;
+}
+
+.event-json-editor {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Readable event view: plain sentences first, the raw JSON stays behind a tab. */
+/* Tab row: render switch on the left, "open in new tab" / fullscreen on the right. */
+.event-view-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.event-view-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.event-view-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.event-view-actions .icon-btn {
+  width: 22px;
+  height: 22px;
+}
+
+.event-view-actions .icon-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.event-view-tab {
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.event-view-tab.active {
+  background: var(--accent);
+  border-color: var(--accent-strong);
+  color: var(--text);
+}
+
+.event-friendly {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 3px solid var(--accent);
+  padding-left: 9px;
+}
+
+.event-friendly.tone-success {
+  border-left-color: var(--success);
+}
+
+.event-friendly.tone-warning {
+  border-left-color: var(--warning);
+}
+
+.event-friendly.tone-danger {
+  border-left-color: var(--danger);
+}
+
+.event-friendly-headline {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.event-kv {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.event-kv th,
+.event-kv td {
+  border-bottom: 1px solid var(--line);
+  padding: 3px 6px;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.event-kv th {
+  width: 132px;
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.event-kv td.mono,
+.event-friendly-text.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.event-friendly-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.event-friendly-section-title {
+  margin: 0;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Reasoning trace: a dashed summary row, the text mounts only when opened. */
+.event-thinking-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 9px;
+  border: 1px dashed var(--accent-border);
+  border-radius: 6px;
+  background: var(--surface-hover);
+  color: var(--text-soft);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.event-thinking-toggle:hover {
+  border-color: var(--focus);
+  background: var(--surface-hover);
+}
+
+.event-thinking-meta {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.event-thinking-action {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.event-friendly-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.event-friendly-text {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--surface-code);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.event-friendly-toggle {
+  align-self: flex-start;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.event-friendly-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-friendly-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: var(--surface-tint);
+}
+
+.event-friendly-item header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.event-friendly-item-title {
+  font-size: 12.5px;
+}
+
+.event-friendly-item-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* Fullscreen reading view. Rendered in a portal, so it only has to beat the topbar.
+   The background must stay opaque: at 98% the console below still ghosted through. */
+.event-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.event-overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--header-bg);
+}
+
+.event-overlay-header .event-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.event-overlay-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px 20px;
+}
+
+/* Fullscreen and standalone pages have the room, so the table should use it: a
+   1100px column left half the screen empty. Type also scales up a notch; the card
+   sizing reads as a shrunken widget on a large monitor. */
+.event-overlay-body,
+.event-standalone-main {
+  padding: 16px 22px 24px;
+}
+
+.event-overlay-body .event-friendly-headline,
+.event-standalone-main .event-friendly-headline {
+  font-size: 15px;
+}
+
+.event-overlay-body .event-kv,
+.event-standalone-main .event-kv,
+.event-overlay-body .event-friendly-text,
+.event-standalone-main .event-friendly-text {
+  font-size: 13.5px;
+}
+
+.event-overlay-body .event-kv th,
+.event-overlay-body .event-kv td,
+.event-standalone-main .event-kv th,
+.event-standalone-main .event-kv td {
+  padding: 6px 10px;
+}
+
+.event-overlay-body .event-kv th,
+.event-standalone-main .event-kv th {
+  width: 180px;
+}
+
+/* Standalone page opened from the "new tab" button: one event, no console chrome. */
+.event-standalone {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  color: var(--text);
+}
+
+.event-standalone-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--topbar-bg);
+}
+
+.event-standalone-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.event-standalone-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.event-standalone-meta h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.load-more {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+

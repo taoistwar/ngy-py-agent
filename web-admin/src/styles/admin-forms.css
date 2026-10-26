@@ -1,0 +1,587 @@
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--overlay-bg);
+}
+
+.modal-dialog {
+  width: min(640px, 100%);
+  max-height: min(88vh, 900px);
+}
+
+.modal-dialog-wide {
+  width: min(920px, 100%);
+}
+
+.modal-dialog-body {
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.modal-dialog .agent-form {
+  max-width: none;
+}
+
+/* Extra dialog controls (e.g. the tool test button) sit to the right of close. */
+.modal-titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-check-list {
+  display: grid;
+  gap: 6px;
+  max-height: 280px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.agent-check-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-tint);
+}
+
+.agent-check-row:hover {
+  border-color: var(--accent-strong);
+}
+
+.agent-check-check {
+  margin: 0;
+}
+
+.agent-check-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agent-check-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agent-check-title {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: var(--accent-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-check-head .badge-builtin,
+.agent-check-head .badge-library,
+.agent-check-head .badge-warning {
+  margin-left: 0;
+  flex: 0 0 auto;
+}
+
+.agent-check-desc {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.agent-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-detail-desc {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Translation of the English text above it: same size, dimmer, pulled closer. */
+.agent-desc-i18n {
+  margin-top: -6px;
+  color: var(--text-2);
+}
+
+.agent-detail-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-detail-meta .badge-builtin,
+.agent-detail-meta .badge-library,
+.agent-detail-meta .badge-warning {
+  margin-left: 0;
+}
+
+.agent-detail-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.agent-detail-value {
+  color: var(--accent-text);
+  font-size: 12px;
+}
+
+.agent-detail-block {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-inset);
+  color: var(--accent-text);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+  max-height: 240px;
+}
+
+.agent-param-list {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-param {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-inset);
+}
+
+.agent-param-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-param-name {
+  color: var(--accent-text);
+  font-size: 12px;
+}
+
+.agent-param-type {
+  color: var(--success);
+  font-size: 11px;
+}
+
+.agent-param-desc {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Editable argument, shown by the tool test dialog under each parameter. */
+.agent-param-input {
+  width: 100%;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 7px 9px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.agent-param-input:focus {
+  outline: none;
+  border-color: var(--focus);
+}
+
+.tool-test-output {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tool-test-error {
+  color: var(--danger);
+}
+
+.model-form {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-tint);
+  padding: 12px;
+  max-width: 760px;
+}
+
+.model-form-heading {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.model-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.model-form label span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.model-form input,
+.model-form select {
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 7px 9px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.model-form-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.checkbox-label input {
+  margin: 0;
+  accent-color: var(--accent-strong);
+}
+
+.model-form-tokens {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.token-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.token-field-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.token-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.token-preset {
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-soft);
+  padding: 3px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.token-preset:hover {
+  border-color: var(--focus);
+  color: var(--text);
+}
+
+.token-preset.active {
+  border-color: var(--focus);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.token-preset-clear {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.token-preset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.token-preset:disabled:hover {
+  border-color: var(--line-soft);
+  color: var(--muted);
+}
+
+.token-field-hint {
+  min-height: 14px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.model-form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.agent-form {
+  max-width: 920px;
+  gap: 4px;
+}
+
+.agent-form label {
+  gap: 3px;
+}
+
+.agent-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-icon {
+  display: inline-flex;
+  align-items: center;
+  color: currentColor;
+}
+
+.agent-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.agent-icon-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-icon-field-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.agent-icon-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.agent-icon-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.agent-icon-option.active,
+.agent-icon-option:hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-gradient);
+  color: var(--accent-contrast);
+}
+
+.agent-prompt-field textarea {
+  min-height: 72px;
+  font-family: inherit;
+}
+
+.agent-section {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.agent-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* The agent editor packs three long option lists into one dialog, so it uses
+   tighter spacing and shorter scroll areas than the shared defaults. */
+.agent-form .agent-section {
+  padding-top: 5px;
+  gap: 4px;
+}
+
+.agent-form .agent-check-list {
+  gap: 3px;
+  max-height: 196px;
+}
+
+.agent-form .agent-check-row {
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+.agent-form .agent-check-desc {
+  line-height: 1.25;
+}
+
+.badge-builtin {
+  margin-left: 8px;
+  font-size: 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: var(--accent-text);
+}
+
+.badge-library {
+  font-size: 10px;
+  border: 1px solid var(--success-border);
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: var(--success);
+}
+
+.badge-warning {
+  font-size: 10px;
+  border: 1px solid var(--warning-border);
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: var(--warning);
+}
+
+.form-error {
+  color: var(--danger-text);
+  font-size: 12px;
+}
+
+.model-list {
+  overflow: auto;
+}
+
+/* One block per tool category, so each group keeps its own table header. */
+.tool-group + .tool-group {
+  margin-top: 18px;
+}
+
+.tool-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 2px 6px;
+}
+
+.tool-group-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tool-desc-i18n {
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.model-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.model-table th,
+.model-table td {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.model-table th {
+  color: var(--muted);
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+.model-table code {
+  color: var(--accent-text);
+  font-size: 11px;
+}
+
+.model-name {
+  font-weight: 600;
+}
+
+/* The protocol is a secondary label next to the provider name, not its own column. */
+.model-provider-protocol {
+  margin-left: 6px;
+  color: var(--muted);
+}
+
+/* Shown under the model list when no provider exists yet: one row, with the button
+   that goes and creates one instead of leaving the operator to find the menu. */
+.model-provider-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  color: var(--accent-text);
+}
+
+.flag-on {
+  color: var(--success);
+}
+
+.flag-off {
+  color: var(--muted-dim);
+}
+
+.model-actions {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+

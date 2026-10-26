@@ -1,0 +1,228 @@
+/* Design tokens for the two skins. Every component rule reads from this layer,
+   so adding a theme means adding one block here, not touching the component CSS. */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Page and shell */
+  --bg: #070c18;
+  --bg-image: radial-gradient(1100px 560px at 8% -12%, #1a2a4f 0%, #0b1327 46%, #070c18 100%);
+  --content-bg: #080f21;
+  --content-image: radial-gradient(circle at 12% -6%, rgba(94, 136, 240, 0.16), transparent 44%);
+  --topbar-bg: rgba(9, 15, 31, 0.88);
+  --header-bg: rgba(10, 17, 34, 0.9);
+  --sidebar-gradient: linear-gradient(180deg, #0b1530 0%, #091228 100%);
+
+  /* Surfaces */
+  --panel-gradient: linear-gradient(180deg, #16223e 0%, #101a31 100%);
+  --panel-header: rgba(16, 27, 49, 0.72);
+  --surface-2: #0f1a30;
+  --surface-3: #16223d;
+  --surface-soft: #1b2c50;
+  --surface-hover: rgba(96, 140, 236, 0.14);
+  --surface-hover-solid: #1c2f57;
+  --surface-active: rgba(96, 140, 236, 0.24);
+  --surface-tint: rgba(15, 26, 48, 0.62);
+  --surface-inset: rgba(9, 16, 32, 0.72);
+  --surface-code: rgba(8, 14, 28, 0.8);
+  --row-bg: rgba(20, 33, 60, 0.66);
+  --row-alt: rgba(11, 18, 36, 0.4);
+  --chip-bg: rgba(26, 42, 76, 0.7);
+
+  /* Inputs */
+  --input-bg: #0c1528;
+  --input-border: #2b3f68;
+
+  /* Lines */
+  --line: #263a5c;
+  --line-soft: #223454;
+  --panel-border: #2a3f68;
+
+  /* Text */
+  --text: #e9efff;
+  --text-strong: #ffffff;
+  --text-soft: #c8d5f2;
+  --text-2: #cdd9f0;
+  --muted: #93a3c6;
+  --muted-dim: #7c8aaa;
+
+  /* Accent */
+  --accent: #4f7ade;
+  --accent-strong: #7c9cf0;
+  --accent-border: #3f5f9e;
+  --accent-soft: rgba(88, 132, 232, 0.16);
+  --accent-glow: rgba(88, 132, 232, 0.42);
+  --accent-gradient: linear-gradient(135deg, #3c6ad0 0%, #5d88ea 100%);
+  --accent-contrast: #ffffff;
+  --accent-text: #8fc2ff;
+  --focus: #7ea2ff;
+
+  /* Buttons */
+  --btn-primary-gradient: linear-gradient(180deg, #3f6bd0, #3459b2);
+  --btn-danger-gradient: linear-gradient(180deg, #a03d4d, #8a3140);
+  --btn-stop-gradient: linear-gradient(180deg, #b24646, #9a3535);
+
+  /* Status */
+  --success: #6ee0a3;
+  --success-border: #2f6b4e;
+  --warning: #f0cd85;
+  --warning-border: #6c5a2f;
+  --danger: #ff9aa9;
+  --danger-text: #ffc8cc;
+  --danger-text-strong: #ffe4e7;
+  --danger-border: #7a3a45;
+  --danger-bg: rgba(150, 58, 72, 0.22);
+  --info: #7ec3e2;
+  --info-border: #2f4f6b;
+  --violet: #d09af0;
+  --violet-border: #6b3a7a;
+
+  /* Task status pills */
+  --status-default-bg: #2a416b;
+  --status-running-bg: #1d5e96;
+  --status-waiting-bg: #8a6d1f;
+  --status-success-bg: #2a6f45;
+  --status-failed-bg: #7a3840;
+  --status-stopped-bg: #55606f;
+
+  /* Event category tags */
+  --tag-text: #dce6ff;
+  --tag-bg: #33436d;
+  --tag-llm: #2f5b7f;
+  --tag-tool: #2f7a5f;
+  --tag-edit: #4a3f7a;
+  --tag-write: #2f5f7a;
+  --tag-exec: #7a4a2f;
+  --tag-computer: #3f6a4a;
+  --tag-permission: #8a6d1f;
+  --tag-decision: #4c5a2f;
+  --tag-question: #3f5a8a;
+  --tag-answer: #2f6a5f;
+  --tag-debug: #5f4e30;
+
+  /* Depth */
+  --shadow-sm: 0 2px 8px rgba(3, 7, 18, 0.4);
+  --shadow-lg: 0 18px 48px rgba(2, 5, 14, 0.6);
+  --overlay-bg: rgba(4, 8, 18, 0.72);
+  --overlay-blur: 3px;
+
+  /* Stats banner */
+  --stats-image: radial-gradient(circle at 16% 14%, rgba(109, 149, 255, 0.22) 0 38%, transparent 42%),
+    radial-gradient(circle at 86% 18%, rgba(255, 152, 115, 0.18) 0 34%, transparent 38%),
+    linear-gradient(145deg, rgba(25, 42, 80, 0.95) 0%, rgba(11, 19, 38, 0.95) 60%);
+  --stat-card-gradient: linear-gradient(180deg, rgba(19, 32, 58, 0.95), rgba(14, 23, 44, 0.94));
+  --stats-sheen: rgba(255, 255, 255, 0.12);
+
+  /* Misc */
+  --selection-bg: rgba(88, 132, 232, 0.34);
+  --count-badge-bg: rgba(0, 0, 0, 0.3);
+  --scrollbar-thumb: #2f4772;
+  --scrollbar-thumb-hover: #3f5d92;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #eef2f9;
+  --bg-image: radial-gradient(1200px 620px at 6% -16%, #dbe7fb 0%, #f2f6fc 50%, #eaf0f8 100%);
+  --content-bg: #f4f7fc;
+  --content-image: radial-gradient(circle at 12% -6%, rgba(90, 132, 226, 0.12), transparent 46%);
+  --topbar-bg: rgba(255, 255, 255, 0.86);
+  --header-bg: rgba(255, 255, 255, 0.9);
+  --sidebar-gradient: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
+
+  --panel-gradient: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+  --panel-header: rgba(255, 255, 255, 0.78);
+  --surface-2: #f4f7fd;
+  --surface-3: #ffffff;
+  --surface-soft: #eef3fc;
+  --surface-hover: rgba(52, 104, 208, 0.07);
+  --surface-hover-solid: #e8effb;
+  --surface-active: rgba(52, 104, 208, 0.13);
+  --surface-tint: rgba(244, 247, 253, 0.9);
+  --surface-inset: #f5f8fd;
+  --surface-code: #f3f6fc;
+  --row-bg: rgba(246, 249, 254, 0.9);
+  --row-alt: rgba(242, 246, 252, 0.9);
+  --chip-bg: #eef3fb;
+
+  --input-bg: #ffffff;
+  --input-border: #cfd9ea;
+
+  --line: #dde5f1;
+  --line-soft: #e7edf7;
+  --panel-border: #d8e2f0;
+
+  --text: #1b2640;
+  --text-strong: #0e1728;
+  --text-soft: #3c4a67;
+  --text-2: #52627f;
+  --muted: #687a99;
+  --muted-dim: #8494ae;
+
+  --accent: #3b6fe0;
+  --accent-strong: #2a56bd;
+  --accent-border: #b9cdf0;
+  --accent-soft: rgba(59, 111, 224, 0.1);
+  --accent-glow: rgba(59, 111, 224, 0.24);
+  --accent-gradient: linear-gradient(135deg, #3f70e6 0%, #5b8cf7 100%);
+  --accent-contrast: #ffffff;
+  --accent-text: #1d55b8;
+  --focus: #3b6fe0;
+
+  --btn-primary-gradient: linear-gradient(180deg, #3f70e6, #335fcc);
+  --btn-danger-gradient: linear-gradient(180deg, #c9485f, #b13a50);
+  --btn-stop-gradient: linear-gradient(180deg, #c9485f, #b13a50);
+
+  --success: #177a4c;
+  --success-border: #a9dcc3;
+  --warning: #8a6212;
+  --warning-border: #ecd9a7;
+  --danger: #c2415a;
+  --danger-text: #a82c44;
+  --danger-text-strong: #8c2138;
+  --danger-border: #f0c3cc;
+  --danger-bg: rgba(194, 65, 90, 0.09);
+  --info: #1a6a93;
+  --info-border: #b6d9ea;
+  --violet: #7a3fa0;
+  --violet-border: #d9c2ea;
+
+  --status-default-bg: #e3e9f5;
+  --status-running-bg: #d6e7fb;
+  --status-waiting-bg: #f6e4b8;
+  --status-success-bg: #d9f1e3;
+  --status-failed-bg: #f8dfe3;
+  --status-stopped-bg: #e5e9ef;
+
+  --tag-text: #24324d;
+  --tag-bg: #eef2f9;
+  --tag-llm: #e2eefc;
+  --tag-tool: #e0f5eb;
+  --tag-edit: #ece7fb;
+  --tag-write: #e2f0fb;
+  --tag-exec: #fdeee2;
+  --tag-computer: #e5f6e5;
+  --tag-permission: #fdf2d3;
+  --tag-decision: #eff4dd;
+  --tag-question: #e6edfb;
+  --tag-answer: #e0f4f0;
+  --tag-debug: #f8ecdc;
+
+  --shadow-sm: 0 1px 2px rgba(19, 35, 68, 0.06), 0 6px 18px rgba(19, 35, 68, 0.06);
+  --shadow-lg: 0 18px 44px rgba(19, 35, 68, 0.16);
+  --overlay-bg: rgba(23, 33, 52, 0.4);
+  --overlay-blur: 2px;
+
+  --stats-image: radial-gradient(circle at 16% 14%, rgba(109, 149, 255, 0.18) 0 38%, transparent 42%),
+    radial-gradient(circle at 86% 18%, rgba(255, 152, 115, 0.2) 0 34%, transparent 38%),
+    linear-gradient(145deg, #ffffff 0%, #f2f7ff 70%);
+  --stat-card-gradient: linear-gradient(180deg, #ffffff, #f6f9ff);
+  --stats-sheen: rgba(255, 255, 255, 0.85);
+
+  --selection-bg: rgba(59, 111, 224, 0.2);
+  --count-badge-bg: rgba(16, 32, 64, 0.12);
+  --scrollbar-thumb: #c6d3e6;
+  --scrollbar-thumb-hover: #aabbd4;
+}

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { default as MonacoEditor } from "@monaco-editor/react"
 import { fetchTask, fetchTaskEvents } from "../api"
 import { getEventCategoryText } from "../i18n"
+import { useTheme } from "../theme"
 import { formatTime, safeStringify } from "../utils/format"
 import EventFriendlyView from "./EventFriendlyView"
 import { CloseIcon } from "./icons"
@@ -58,6 +59,7 @@ export function getTagClass(category) {
 }
 
 function RawEventView({ event, height }) {
+  const { monacoTheme } = useTheme()
   const isLlmPayload = event.category === "llm_request" || event.category === "llm_response"
   return (
     <div className="event-json-editor">
@@ -79,7 +81,7 @@ function RawEventView({ event, height }) {
           renderWhitespace: "all",
           automaticLayout: true,
         }}
-        theme="vs-dark"
+        theme={monacoTheme}
       />
     </div>
   )

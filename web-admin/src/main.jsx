@@ -4,8 +4,8 @@ import { loader } from "@monaco-editor/react"
 import App from "./App"
 import { EventStandalonePage } from "./components/EventDetail"
 import { getDefaultLocale, t } from "./i18n"
-import "./index.css"
-import "./App.css"
+import { ThemeProvider } from "./theme"
+import "./styles/index.css"
 
 loader.config({
   paths: {
@@ -21,10 +21,12 @@ const translate = (key) => t(locale, key)
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    {standaloneEventId ? (
-      <EventStandalonePage locale={locale} translate={translate} />
-    ) : (
-      <App />
-    )}
+    <ThemeProvider>
+      {standaloneEventId ? (
+        <EventStandalonePage locale={locale} translate={translate} />
+      ) : (
+        <App />
+      )}
+    </ThemeProvider>
   </StrictMode>,
 )

@@ -1,0 +1,490 @@
+.session-tabs-panel .panel-body,
+.task-composer-panel .panel-body {
+  padding: 8px 10px;
+}
+
+.session-tabs-body {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.session-tabs {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.session-tab {
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 170px;
+}
+
+.session-tab .session-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-tab.active {
+  border-color: var(--accent-strong);
+  background: var(--accent-gradient);
+  color: var(--accent-contrast);
+}
+
+.session-tab-count {
+  font-size: 10px;
+  border-radius: 999px;
+  background: var(--count-badge-bg);
+  padding: 1px 6px;
+}
+
+.session-tree {
+  display: grid;
+  gap: 10px;
+}
+
+.session-group {
+  display: grid;
+  gap: 4px;
+}
+
+.session-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px;
+}
+
+.session-group-title {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+}
+
+.session-group-title.static {
+  cursor: default;
+}
+
+.session-group-title:not(.static):hover {
+  color: var(--text-soft);
+}
+
+.session-group-count {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.session-group-action {
+  margin-left: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.session-group-empty {
+  color: var(--muted);
+  font-size: 11px;
+  padding: 3px 6px 3px 22px;
+}
+
+.workspace-node {
+  display: grid;
+  gap: 2px;
+}
+
+.session-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-soft);
+  padding: 4px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.session-node:hover {
+  background: var(--surface-hover);
+}
+
+.session-node.active {
+  border-color: var(--accent-strong);
+  background: var(--surface-active);
+  color: var(--text-strong);
+}
+
+.workspace-node-head {
+  padding-left: 2px;
+}
+
+.session-node-caret {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.session-node-main {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  min-width: 0;
+  text-align: left;
+}
+
+.workspace-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.session-node-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-node-action {
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  font-size: 12px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.workspace-children {
+  display: grid;
+  gap: 2px;
+  padding-left: 20px;
+}
+
+.session-node-child {
+  padding-left: 4px;
+}
+
+.session-more {
+  border: 1px dashed var(--line-soft);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.session-more:hover {
+  background: var(--surface-hover);
+}
+
+.session-add-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.session-add-input {
+  flex: 1 1 auto;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.session-menu {
+  position: fixed;
+  z-index: 30;
+  min-width: 132px;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-3);
+  box-shadow: var(--shadow-lg);
+}
+
+.session-menu button {
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  padding: 7px 10px;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.session-menu button:hover {
+  background: var(--surface-hover);
+}
+
+.session-menu button.danger {
+  color: var(--danger-text);
+}
+
+.session-menu button.danger:hover {
+  background: var(--danger-bg);
+}
+
+.session-history-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--overlay-bg);
+}
+
+.session-history-dialog {
+  width: min(420px, 100%);
+  max-height: min(72vh, 540px);
+  display: flex;
+  flex-direction: column;
+}
+
+.session-history-dialog .panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.session-history-search {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-header);
+}
+
+.session-history-search .task-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.session-history-list {
+  display: grid;
+  gap: 6px;
+  overflow: auto;
+  align-content: start;
+}
+
+.session-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: var(--row-bg);
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.session-history-item:hover {
+  border-color: var(--accent-strong);
+  background: var(--surface-hover);
+}
+
+.session-history-item.active {
+  border-color: var(--accent-strong);
+  background: var(--surface-active);
+}
+
+.session-task-panel .panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+}
+
+.session-task-body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  min-height: 0;
+}
+
+.session-task-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.session-task-rows {
+  display: grid;
+  gap: 7px;
+  overflow: auto;
+  min-height: 0;
+  align-content: start;
+}
+
+.session-task-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: var(--row-bg);
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.session-task-info {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.session-task-query {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The row actions ride at the end of the meta line instead of holding a column of
+   their own, so the task name above gets the full width of the row. */
+.session-task-meta .task-row-actions {
+  margin-left: auto;
+}
+
+.session-task-row:hover {
+  border-color: var(--accent-strong);
+  background: var(--surface-hover);
+}
+
+.session-task-row.active {
+  border-color: var(--accent-strong);
+  background: var(--surface-active);
+}
+
+.task-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  background: var(--chip-bg);
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.icon-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.icon-btn:hover:not(:disabled) {
+  border-color: var(--focus);
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+.icon-btn-danger {
+  border-color: var(--danger-border);
+  color: var(--danger-text);
+}
+
+.icon-btn-danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger-text-strong);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.session-task-info {
+  min-width: 0;
+}
+
+.session-task-query {
+  color: var(--text);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+

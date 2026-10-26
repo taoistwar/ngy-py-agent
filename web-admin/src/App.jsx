@@ -74,28 +74,18 @@ import {
   RetentionManager,
 } from "./components/admin/SettingsPanels"
 import SkillManager from "./components/admin/SkillManager"
+import TopBar from "./components/admin/TopBar"
 import ToolManager from "./components/admin/ToolManager"
 import WorkspaceManager from "./components/admin/WorkspaceManager"
 import AgentPicker from "./components/AgentPicker"
 import { AgentIcon, agentIconName } from "./components/agentIcons"
 import { PROVIDER_OPTIONS, agentDisplayName } from "./components/admin/shared"
+import { useTheme } from "./theme"
 import { formatTime, safeStringify } from "./utils/format"
 
 const EVENT_PAGE_SIZE = 30
 const TASK_PAGE_SIZE = 12
 const SESSION_PREVIEW_LIMIT = 10
-
-const MENU_ITEMS = [
-  { key: "tasks", labelKey: "menuTasks" },
-  { key: "agents", labelKey: "menuAgents" },
-  { key: "tools", labelKey: "menuTools" },
-  { key: "skills", labelKey: "menuSkills" },
-  { key: "mcp", labelKey: "menuMcp" },
-  { key: "workspaces", labelKey: "menuWorkspaces" },
-  { key: "providers", labelKey: "menuProviders" },
-  { key: "models", labelKey: "menuModels" },
-  { key: "config", labelKey: "menuConfig" },
-]
 
 function resolveAgent(agentId, agents) {
   return (agents || []).find((item) => item.agent_id === agentId)
@@ -216,76 +206,6 @@ function getTaskResult(task, events) {
     return task.result
   }
   return getTaskResultFromEvents(events)
-}
-
-function getHealthClass(healthStatus) {
-  if (healthStatus === "ok") {
-    return "success"
-  }
-  if (healthStatus === "unavailable") {
-    return "failed"
-  }
-  return "running"
-}
-
-function getHealthText(healthStatus, translate) {
-  if (healthStatus === "ok") {
-    return translate("healthOk")
-  }
-  if (healthStatus === "unavailable") {
-    return translate("healthUnavailable")
-  }
-  if (healthStatus === "degraded") {
-    return translate("statusDegraded")
-  }
-  return translate("unknown")
-}
-
-function TopBar({ activeMenu, onChangeMenu, health, locale, localeOptions, setLocale, systemTime, translate }) {
-  return (
-    <header className="admin-topbar">
-      <div className="topbar-brand">
-        <h1>{translate("appTitle")}</h1>
-        <span className="topbar-subtitle">{translate("appSubtitle")}</span>
-      </div>
-      <nav className="topbar-nav">
-        {MENU_ITEMS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={`nav-item ${activeMenu === item.key ? "active" : ""}`}
-            onClick={() => onChangeMenu(item.key)}
-          >
-            {translate(item.labelKey)}
-          </button>
-        ))}
-      </nav>
-      <div className="topbar-right">
-        <div className="metric-item">
-          <em>{translate("healthLabel")}:</em>
-          <strong className={`status ${getHealthClass(health)}`}>{getHealthText(health, translate)}</strong>
-        </div>
-        <label className="lang-switch">
-          <span>{translate("languageLabel")}</span>
-          <select
-            value={locale}
-            className="lang-select"
-            onChange={(event) => setLocale(event.target.value)}
-          >
-            {localeOptions.map((item) => (
-              <option value={item.value} key={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="metric-item">
-          <em>{translate("sidebarSystemTime")}:</em>
-          <strong>{formatTime(systemTime)}</strong>
-        </div>
-      </div>
-    </header>
-  )
 }
 
 function SessionTabs({
@@ -1056,6 +976,8 @@ function TaskComposer({
 }
 
 function TaskDetail({ task, result, agents, translate }) {
+  const { monacoTheme } = useTheme()
+
   if (!task) {
     return <div className="empty">{translate("taskSelectHint")}</div>
   }
@@ -1133,7 +1055,7 @@ function TaskDetail({ task, result, agents, translate }) {
               renderLineHighlight: "none",
               automaticLayout: true,
             }}
-            theme="vs-dark"
+            theme={monacoTheme}
           />
         </div>
       </section>
@@ -1157,7 +1079,7 @@ function TaskDetail({ task, result, agents, translate }) {
               renderLineHighlight: "none",
               automaticLayout: true,
             }}
-            theme="vs-dark"
+            theme={monacoTheme}
           />
         </div>
       </section>
