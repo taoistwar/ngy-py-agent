@@ -1,8 +1,9 @@
-"""Sessions, workspaces and model configurations.
+"""Sessions and workspaces.
 
-These three are the context a task runs in - who owns it, which folder it starts in, and
-which provider it talks to - so they share one module rather than three that would each
-be a handful of thin routes over the same store.
+These two are the context a task runs in - who owns it and which folder it starts in - so
+they share one module rather than two that would each be a handful of thin routes over
+the same store. Which model and endpoint it talks to lives in :mod:`llm_api`, because
+providers and models are configuration in their own right (ADR 0014).
 """
 
 from __future__ import annotations
@@ -13,10 +14,6 @@ from fastapi import APIRouter, HTTPException
 
 import app_state
 from api_schemas import (
-    ModelItemResponse,
-    ModelListResponse,
-    ModelUpdateRequest,
-    ModelUpsertRequest,
     SessionCreateRequest,
     SessionItemResponse,
     SessionListResponse,
@@ -128,31 +125,4 @@ async def delete_workspace(workspace_id: str) -> dict[str, Any]:
     return {"workspace_id": workspace_id, "deleted": True}
 
 
-# ----------------------------------------------------------------------- models
 
-
-@router.get("/api/models", response_model=ModelListResponse)
-async def list_models() -> ModelListResponse:
-    models = app_state.monitor_store.list_models()
-    return ModelListResponse(models=[ModelItemResponse(**item) for item in models])
-
-
-@router.post("/api/models", response_model=ModelItemResponse)
-async def create_model(payload: ModelUpsertRequest) -> ModelItemResponse:
-    created = app_state.monitor_store.create_model(payload.model_dump())
-    return ModelItemResponse(**created)
-
-
-@router.put("/api/models/{model_id}", response_model=ModelItemResponse)
-async def update_model(model_id: str, payload: ModelUpdateRequest) -> ModelItemResponse:
-    updated = app_state.monitor_store.update_model(model_id, payload.model_dump(exclude_unset=True))
-    if updated is None:
-        raise HTTPException(status_code=404, detail="Model not found.")
-    return ModelItemResponse(**updated)
-
-
-@router.delete("/api/models/{model_id}")
-async def delete_model(model_id: str) -> dict[str, Any]:
-    if not app_state.monitor_store.delete_model(model_id):
-        raise HTTPException(status_code=404, detail="Model not found.")
-    return {"model_id": model_id, "deleted": True}

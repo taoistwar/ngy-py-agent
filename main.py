@@ -4,7 +4,7 @@ This module is the app assembly and the CLI: it mounts the route modules on the 
 app, serves the built frontend, and runs the ReAct loop from the command line. What it
 used to carry lives next door now - ``api_schemas`` (request/response models),
 ``app_state`` (the live state), ``task_runtime`` (what a task is), and one module per
-route group (``task_api``, ``workspace_api``, ``agent_api``, ``tool_api``,
+route group (``task_api``, ``workspace_api``, ``llm_api``, ``agent_api``, ``tool_api``,
 ``admin_api``). A single 1700-line module is neither readable nor safe to edit
 (``AGENTS.md``).
 """
@@ -25,6 +25,7 @@ from uvicorn import run as uvicorn_run
 import admin_api
 import agent_api
 import app_state
+import llm_api
 import task_api
 import tool_api
 import workspace_api
@@ -71,6 +72,7 @@ app.add_middleware(
 # route below, so an API path is never answered with index.html.
 app.include_router(mcp_router)
 app.include_router(workspace_api.router)
+app.include_router(llm_api.router)
 app.include_router(agent_api.router)
 app.include_router(tool_api.router)
 app.include_router(task_api.router)

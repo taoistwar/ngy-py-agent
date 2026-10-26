@@ -4,19 +4,16 @@ import {
   INPUT_TOKEN_PRESETS,
   ManagerSearch,
   OUTPUT_TOKEN_PRESETS,
-  PROVIDER_OPTIONS,
   TokenLimitField,
   formatTokenCount,
   matchesKeyword,
 } from "./shared"
 
-function emptyModelForm() {
+function emptyModelForm(providers) {
   return {
     model_id: "",
     name: "",
-    provider: "openai-compatible",
-    base_url: "",
-    api_key: "",
+    provider_id: providers[0]?.provider_id || "",
     supports_tool_calls: true,
     supports_image_input: false,
     thinking_mode: false,
@@ -29,9 +26,7 @@ function modelToForm(model) {
   return {
     model_id: model.model_id,
     name: model.name || "",
-    provider: model.provider || "openai-compatible",
-    base_url: model.base_url || "",
-    api_key: model.api_key || "",
+    provider_id: model.provider_id || "",
     supports_tool_calls: model.supports_tool_calls !== false,
     supports_image_input: model.supports_image_input === true,
     thinking_mode: model.thinking_mode === true,
@@ -40,16 +35,29 @@ function modelToForm(model) {
   }
 }
 
-export default function ModelManager({ models, onCreate, onUpdate, onDelete, onRefresh, translate }) {
+export default function ModelManager({
+  models,
+  providers,
+  onCreate,
+  onUpdate,
+  onDelete,
+  onRefresh,
+  onManageProviders,
+  translate,
+}) {
   const [search, setSearch] = useState("")
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
 
   const editingId = form?.model_id || ""
+  const hasProviders = providers.length > 0
 
   const filtered = useMemo(
-    () => models.filter((model) => matchesKeyword(search, model.name, model.provider, model.base_url)),
+    () =>
+      models.filter((model) =>
+        matchesKeyword(search, model.name, model.provider_name, model.protocol, model.base_url)
+      ),
     [models, search]
   )
 
@@ -57,7 +65,11 @@ export default function ModelManager({ models, onCreate, onUpdate, onDelete, onR
 
   const openCreate = () => {
     setError("")
-    setForm(emptyModelForm())
+    if (!hasProviders) {
+      setError(translate("modelProviderRequired"))
+      return
+    }
+    setForm(emptyModelForm(providers))
   }
 
   const openEdit = (model) => {
@@ -78,12 +90,14 @@ export default function ModelManager({ models, onCreate, onUpdate, onDelete, onR
       setError(translate("modelNameRequired"))
       return
     }
+    if (!form.provider_id) {
+      setError(translate("modelProviderRequired"))
+      return
+    }
     setBusy(true)
     const payload = {
       name: form.name.trim(),
-      provider: form.provider,
-      base_url: form.base_url.trim(),
-      api_key: form.api_key,
+      provider_id: form.provider_id,
       supports_tool_calls: form.supports_tool_calls,
       supports_image_input: form.supports_image_input,
       thinking_mode: form.thinking_mode,
@@ -152,7 +166,6 @@ export default function ModelManager({ models, onCreate, onUpdate, onDelete, onR
                 <tr>
                   <th>{translate("modelListName")}</th>
                   <th>{translate("modelListProvider")}</th>
-                  <th>{translate("modelListBaseUrl")}</th>
                   <th>{translate("modelListToolCalls")}</th>
                   <th>{translate("modelListImageInput")}</th>
                   <th>{translate("modelListThinking")}</th>
@@ -165,9 +178,11 @@ export default function ModelManager({ models, onCreate, onUpdate, onDelete, onR
                   <tr key={model.model_id}>
                     <td className="model-name">{model.name}</td>
                     <td>
-                      <code>{model.provider}</code>
+                      {model.provider_name || "-"}
+                      {model.protocol ? (
+                        <code className="model-provider-protocol">{model.protocol}</code>
+                      ) : null}
                     </td>
-                    <td className="mono">{model.base_url || "-"}</td>
                     <td className={model.supports_tool_calls ? "flag-on" : "flag-off"}>
                       {model.supports_tool_calls ? translate("yes") : translate("no")}
                     </td>
@@ -195,6 +210,15 @@ export default function ModelManager({ models, onCreate, onUpdate, onDelete, onR
             </table>
           )}
         </div>
+
+        {!hasProviders && (
+          <div className="hint model-provider-hint">
+            {translate("modelProviderRequired")}
+            <button type="button" className="btn btn-compact" onClick={onManageProviders}>
+              {translate("modelManageProviders")}
+            </button>
+          </div>
+        )}
       </div>
 
       {form && (
@@ -215,31 +239,18 @@ export default function ModelManager({ models, onCreate, onUpdate, onDelete, onR
             </label>
             <label>
               <span>{translate("modelFormProvider")}</span>
-              <select value={form.provider} onChange={(event) => setField("provider", event.target.value)}>
-                {PROVIDER_OPTIONS.map((item) => (
-                  <option value={item} key={item}>
-                    {item}
+              <select
+                value={form.provider_id}
+                onChange={(event) => setField("provider_id", event.target.value)}
+              >
+                {providers.map((provider) => (
+                  <option value={provider.provider_id} key={provider.provider_id}>
+                    {provider.name} ({provider.protocol})
                   </option>
                 ))}
               </select>
             </label>
-            <label>
-              <span>{translate("modelFormBaseUrl")}</span>
-              <input
-                value={form.base_url}
-                onChange={(event) => setField("base_url", event.target.value)}
-                placeholder={translate("modelFormBaseUrlPlaceholder")}
-              />
-            </label>
-            <label>
-              <span>{translate("modelFormApiKey")}</span>
-              <input
-                type="password"
-                value={form.api_key}
-                onChange={(event) => setField("api_key", event.target.value)}
-                placeholder={translate("modelFormApiKeyPlaceholder")}
-              />
-            </label>
+            <div className="hint">{translate("modelFormProviderHint")}</div>
             <div className="model-form-checks">
               <label className="checkbox-label">
                 <input

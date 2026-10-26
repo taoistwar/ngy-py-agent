@@ -150,22 +150,55 @@ class MaxStepsConfigResponse(BaseModel):
     source: str
 
 
-class RpmLimitsConfigRequest(BaseModel):
-    """Per-provider requests-per-minute limits (replaces the whole table)."""
+class ProviderCreateRequest(BaseModel):
+    """Create a provider endpoint: where requests go and how often they may go."""
 
-    limits: dict[str, int] = Field(
-        default_factory=dict,
-        description="Provider name -> requests per minute. 0 (or a missing provider) means no limit.",
+    name: str = Field(min_length=1, max_length=120, description="Display name of the endpoint.")
+    protocol: str = Field(
+        default="openai-compatible",
+        description="Wire protocol: openai / anthropic / anthropic-compatible / gemini.",
+    )
+    base_url: str = Field(
+        default="",
+        max_length=1024,
+        description="Endpoint base URL; empty falls back to the protocol's default endpoint.",
+    )
+    api_key: str = Field(default="", description="API key sent to this endpoint.")
+    rpm_limit: int = Field(
+        default=0,
+        ge=0,
+        description="Requests per minute for this endpoint; 0 means unlimited.",
     )
 
 
-class RpmLimitsConfigResponse(BaseModel):
-    """Current RPM limits, plus what the admin form needs to render them."""
+class ProviderUpdateRequest(BaseModel):
+    """Partial update of a provider endpoint."""
 
-    limits: dict[str, int]
-    source: str
-    providers: list[str] = Field(default_factory=list)
-    max_limit: int = 0
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    protocol: str | None = None
+    base_url: str | None = Field(default=None, max_length=1024)
+    api_key: str | None = None
+    rpm_limit: int | None = Field(default=None, ge=0)
+
+
+class ProviderItemResponse(BaseModel):
+    """One provider endpoint, as the management page shows it."""
+
+    provider_id: str
+    name: str
+    protocol: str
+    base_url: str = ""
+    api_key: str = ""
+    rpm_limit: int = 0
+    model_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProviderListResponse(BaseModel):
+    """Configured provider endpoints."""
+
+    providers: list[ProviderItemResponse]
 
 
 class PermissionModeConfigRequest(BaseModel):
@@ -476,18 +509,17 @@ class SkillImportRequest(BaseModel):
 
 
 class ModelUpsertRequest(BaseModel):
-    """Create or update a model configuration."""
+    """Create a model configuration on an existing provider endpoint."""
 
-    name: str = Field(min_length=1, max_length=200, description="Model name.")
-    provider: str = Field(
-        default="openai-compatible",
-        description=(
-            "Provider protocol: openai-compatible / openai / anthropic / "
-            "anthropic-compatible / gemini."
-        ),
+    name: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Model name sent to the provider, e.g. qwen3:0.6b.",
     )
-    base_url: str = Field(default="", description="Provider base url.")
-    api_key: str = Field(default="", description="Provider api key.")
+    provider_id: str = Field(
+        min_length=1,
+        description="Provider endpoint this model runs on; its URL, key and RPM apply.",
+    )
     supports_tool_calls: bool = Field(default=True, description="Whether tools are enabled.")
     supports_image_input: bool = Field(
         default=False, description="Whether image input is supported."
@@ -503,9 +535,7 @@ class ModelUpdateRequest(BaseModel):
     """Partial update of a model configuration."""
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
-    provider: str | None = None
-    base_url: str | None = None
-    api_key: str | None = None
+    provider_id: str | None = Field(default=None, min_length=1)
     supports_tool_calls: bool | None = None
     supports_image_input: bool | None = None
     thinking_mode: bool | None = None
@@ -514,13 +544,15 @@ class ModelUpdateRequest(BaseModel):
 
 
 class ModelItemResponse(BaseModel):
-    """Model configuration item."""
+    """Model configuration item, with the endpoint it resolves to."""
 
     model_id: str
     name: str
-    provider: str
+    provider_id: str
+    # Resolved from the provider so a client can render one row without a second call.
+    provider_name: str = ""
+    protocol: str = ""
     base_url: str = ""
-    api_key: str = ""
     supports_tool_calls: bool = True
     supports_image_input: bool = False
     thinking_mode: bool = False

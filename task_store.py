@@ -1,4 +1,8 @@
-"""SQLite persistence for tasks, sessions, models, events and global settings."""
+"""SQLite persistence for tasks, sessions, events and global settings.
+
+Provider endpoints and their models live in :mod:`llm_store`, which shares this module's
+connection (and lock) through ``self.llm``: same file, one schema owner per concern.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +15,7 @@ from typing import Any
 from uuid import uuid4
 
 from agent.models import TaskEvent, TaskStatus
+from llm_store import LlmStore
 
 ROOT_DIR = Path(__file__).resolve().parent
 TASK_DB_PATH = ROOT_DIR / "monitor_tasks.db"
@@ -26,6 +31,7 @@ class _SqliteTaskStore:
         self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
+        self.llm = LlmStore(self._conn, self._lock)
         self._init_schema()
 
     @staticmethod
@@ -106,24 +112,6 @@ class _SqliteTaskStore:
             )
             self._conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS models (
-                    model_id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    provider TEXT NOT NULL,
-                    base_url TEXT NOT NULL DEFAULT '',
-                    api_key TEXT NOT NULL DEFAULT '',
-                    supports_tool_calls INTEGER NOT NULL DEFAULT 1,
-                    supports_image_input INTEGER NOT NULL DEFAULT 0,
-                    thinking_mode INTEGER NOT NULL DEFAULT 0,
-                    max_input_tokens INTEGER NOT NULL DEFAULT 0,
-                    max_output_tokens INTEGER NOT NULL DEFAULT 0,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-                """
-            )
-            self._conn.execute(
-                """
                 CREATE TABLE IF NOT EXISTS events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     event_id TEXT UNIQUE NOT NULL,
@@ -154,6 +142,10 @@ class _SqliteTaskStore:
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id)")
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_workspace_id ON sessions(workspace_id)")
             self._conn.commit()
+
+        # Outside the block above: the LLM store takes the same lock itself, and the
+        # migration it may run is not something to hold a second lock across.
+        self.llm.ensure_schema()
 
         default_session_id = self.ensure_default_session()
         moved = self._assign_orphan_tasks(default_session_id)
@@ -245,23 +237,6 @@ class _SqliteTaskStore:
             "created_at": _SqliteTaskStore._parse_datetime(row["created_at"]),
             "updated_at": _SqliteTaskStore._parse_datetime(row["updated_at"]),
             "task_count": int(row["task_count"]) if "task_count" in row.keys() else 0,
-        }
-
-    @staticmethod
-    def _model_to_dict(row: sqlite3.Row) -> dict[str, Any]:
-        return {
-            "model_id": row["model_id"],
-            "name": row["name"],
-            "provider": row["provider"],
-            "base_url": row["base_url"] or "",
-            "api_key": row["api_key"] or "",
-            "supports_tool_calls": bool(row["supports_tool_calls"]),
-            "supports_image_input": bool(row["supports_image_input"]),
-            "thinking_mode": bool(row["thinking_mode"]),
-            "max_input_tokens": int(row["max_input_tokens"] or 0),
-            "max_output_tokens": int(row["max_output_tokens"] or 0),
-            "created_at": _SqliteTaskStore._parse_datetime(row["created_at"]),
-            "updated_at": _SqliteTaskStore._parse_datetime(row["updated_at"]),
         }
 
     def ensure_default_session(self) -> str:
@@ -557,88 +532,6 @@ class _SqliteTaskStore:
             self._conn.commit()
             return (cursor.rowcount or 0) > 0
 
-    def create_model(self, payload: dict[str, Any]) -> dict[str, Any]:
-        model_id = str(uuid4())
-        now = datetime.now(UTC).isoformat()
-        with self._lock:
-            self._conn.execute(
-                """
-                INSERT INTO models (
-                    model_id, name, provider, base_url, api_key,
-                    supports_tool_calls, supports_image_input, thinking_mode,
-                    max_input_tokens, max_output_tokens, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    model_id,
-                    payload["name"],
-                    payload.get("provider") or "openai-compatible",
-                    payload.get("base_url") or "",
-                    payload.get("api_key") or "",
-                    int(bool(payload.get("supports_tool_calls", True))),
-                    int(bool(payload.get("supports_image_input", False))),
-                    int(bool(payload.get("thinking_mode", False))),
-                    int(payload.get("max_input_tokens") or 0),
-                    int(payload.get("max_output_tokens") or 0),
-                    now,
-                    now,
-                ),
-            )
-            self._conn.commit()
-        created = self.get_model(model_id)
-        assert created is not None
-        return created
-
-    def list_models(self) -> list[dict[str, Any]]:
-        with self._lock:
-            rows = self._conn.execute("SELECT * FROM models ORDER BY created_at ASC").fetchall()
-        return [_SqliteTaskStore._model_to_dict(row) for row in rows]
-
-    def get_model(self, model_id: str) -> dict[str, Any] | None:
-        with self._lock:
-            row = self._conn.execute("SELECT * FROM models WHERE model_id = ?", (model_id,)).fetchone()
-        if row is None:
-            return None
-        return _SqliteTaskStore._model_to_dict(row)
-
-    def update_model(self, model_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
-        current = self.get_model(model_id)
-        if current is None:
-            return None
-
-        merged = {**current, **{k: v for k, v in payload.items() if v is not None}}
-        with self._lock:
-            self._conn.execute(
-                """
-                UPDATE models
-                SET name = ?, provider = ?, base_url = ?, api_key = ?,
-                    supports_tool_calls = ?, supports_image_input = ?, thinking_mode = ?,
-                    max_input_tokens = ?, max_output_tokens = ?, updated_at = ?
-                WHERE model_id = ?
-                """,
-                (
-                    merged["name"],
-                    merged.get("provider") or "openai-compatible",
-                    merged.get("base_url") or "",
-                    merged.get("api_key") or "",
-                    int(bool(merged.get("supports_tool_calls", True))),
-                    int(bool(merged.get("supports_image_input", False))),
-                    int(bool(merged.get("thinking_mode", False))),
-                    int(merged.get("max_input_tokens") or 0),
-                    int(merged.get("max_output_tokens") or 0),
-                    datetime.now(UTC).isoformat(),
-                    model_id,
-                ),
-            )
-            self._conn.commit()
-        return self.get_model(model_id)
-
-    def delete_model(self, model_id: str) -> bool:
-        with self._lock:
-            cursor = self._conn.execute("DELETE FROM models WHERE model_id = ?", (model_id,))
-            self._conn.commit()
-            return (cursor.rowcount or 0) > 0
-
     def create_task(
         self,
         query: str,
@@ -765,45 +658,6 @@ class _SqliteTaskStore:
                 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
                 """,
                 ("permission_mode", str(mode), now),
-            )
-        self._conn.commit()
-
-    def get_llm_rpm_limits(self) -> dict[str, int] | None:
-        """Per-provider requests-per-minute limits, as saved by the admin API."""
-        row = self._conn.execute(
-            "SELECT value FROM settings WHERE key = ?",
-            ("llm_rpm_limits",),
-        ).fetchone()
-        if row is None:
-            return None
-        try:
-            payload = json.loads(row["value"])
-        except (TypeError, ValueError):
-            return None
-        if not isinstance(payload, dict):
-            return None
-        limits: dict[str, int] = {}
-        for provider, value in payload.items():
-            try:
-                limits[str(provider)] = int(value)
-            except (TypeError, ValueError):
-                continue
-        return limits
-
-    def set_llm_rpm_limits(self, limits: dict[str, Any]) -> None:
-        now = datetime.now(UTC).isoformat()
-        payload = json.dumps(
-            {str(provider): int(value) for provider, value in (limits or {}).items()},
-            sort_keys=True,
-        )
-        with self._lock:
-            self._conn.execute(
-                """
-                INSERT INTO settings (key, value, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-                """,
-                ("llm_rpm_limits", payload, now),
             )
         self._conn.commit()
 

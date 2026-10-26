@@ -1748,6 +1748,20 @@
   font-weight: 600;
 }
 
+/* The protocol is a secondary label next to the provider name, not its own column. */
+.model-provider-protocol {
+  margin-left: 6px;
+  color: var(--muted);
+}
+
+/* Shown under the model list when no provider exists yet: one row, with the button
+   that goes and creates one instead of leaving the operator to find the menu. */
+.model-provider-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;

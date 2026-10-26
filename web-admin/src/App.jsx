@@ -5,12 +5,14 @@ import {
   createAgent,
   createMcpServer,
   createModel,
+  createProvider,
   createSession,
   createTask,
   createWorkspace,
   deleteAgent,
   deleteMcpServer,
   deleteModel,
+  deleteProvider,
   deleteSession,
   deleteSkill,
   deleteTask,
@@ -21,11 +23,10 @@ import {
   fetchHealth,
   fetchMcpServers,
   fetchModels,
+  fetchProviders,
   fetchRetentionConfig,
   fetchMaxStepsConfig,
   updateMaxStepsConfig,
-  fetchRpmLimitsConfig,
-  updateRpmLimitsConfig,
   fetchPermissionModeConfig,
   updatePermissionModeConfig,
   fetchPermissionRules,
@@ -42,6 +43,7 @@ import {
   updateAgent,
   updateMcpServer,
   updateModel,
+  updateProvider,
   updateRetentionConfig,
   updateSkillsRoot,
   updateWorkspace,
@@ -64,12 +66,12 @@ import { SkillIcon } from "./components/icons"
 import AgentManager from "./components/admin/AgentManager"
 import McpServerManager from "./components/admin/McpServerManager"
 import ModelManager from "./components/admin/ModelManager"
+import ProviderManager from "./components/admin/ProviderManager"
 import {
   MaxStepsManager,
   PermissionModeManager,
   PermissionRulesManager,
   RetentionManager,
-  RpmLimitsManager,
 } from "./components/admin/SettingsPanels"
 import SkillManager from "./components/admin/SkillManager"
 import ToolManager from "./components/admin/ToolManager"
@@ -90,6 +92,7 @@ const MENU_ITEMS = [
   { key: "skills", labelKey: "menuSkills" },
   { key: "mcp", labelKey: "menuMcp" },
   { key: "workspaces", labelKey: "menuWorkspaces" },
+  { key: "providers", labelKey: "menuProviders" },
   { key: "models", labelKey: "menuModels" },
   { key: "config", labelKey: "menuConfig" },
 ]
@@ -1232,10 +1235,10 @@ export default function App() {
   const [error, setError] = useState("")
   const [retentionConfig, setRetentionConfig] = useState(null)
   const [maxStepsConfig, setMaxStepsConfig] = useState(null)
-  const [rpmConfig, setRpmConfig] = useState(null)
   const [permissionModeConfig, setPermissionModeConfig] = useState(null)
   const [permissionRules, setPermissionRules] = useState(null)
   const [health, setHealth] = useState("unknown")
+  const [providers, setProviders] = useState([])
   const [models, setModels] = useState([])
   const [activeMenu, setActiveMenu] = useState("tasks")
   const [taskTab, setTaskTab] = useState("detail")
@@ -1336,6 +1339,12 @@ export default function App() {
     const task = await fetchTask(target)
     setSelectedTask(task)
     return task
+  }, [])
+
+  const refreshProviders = useCallback(async () => {
+    const list = await fetchProviders()
+    setProviders(list)
+    return list
   }, [])
 
   const refreshModels = useCallback(async () => {
@@ -1903,6 +1912,44 @@ export default function App() {
     }
   }, [loadEvents, refreshTasks, selectedTaskIds, tasks, translate])
 
+  const createProviderHandler = useCallback(
+    async (payload) => {
+      try {
+        await createProvider(payload)
+        await refreshProviders()
+      } catch (providerError) {
+        setError(providerError?.message || translate("errorUnknown"))
+        throw providerError
+      }
+    },
+    [refreshProviders, translate]
+  )
+
+  const updateProviderHandler = useCallback(
+    async (providerId, payload) => {
+      try {
+        await updateProvider(providerId, payload)
+        await refreshProviders()
+      } catch (providerError) {
+        setError(providerError?.message || translate("errorUnknown"))
+        throw providerError
+      }
+    },
+    [refreshProviders, translate]
+  )
+
+  const deleteProviderHandler = useCallback(
+    async (providerId) => {
+      try {
+        await deleteProvider(providerId)
+        await refreshProviders()
+      } catch (providerError) {
+        setError(providerError?.message || translate("errorUnknown"))
+      }
+    },
+    [refreshProviders, translate]
+  )
+
   const createModelHandler = useCallback(
     async (payload) => {
       try {
@@ -2009,24 +2056,6 @@ export default function App() {
     [translate]
   )
 
-  const refreshRpmLimits = useCallback(async () => {
-    const config = await fetchRpmLimitsConfig()
-    setRpmConfig(config)
-    return config
-  }, [])
-
-  const updateRpmLimits = useCallback(
-    async (limits) => {
-      try {
-        const config = await updateRpmLimitsConfig(limits)
-        setRpmConfig(config)
-      } catch (rpmError) {
-        setError(rpmError?.message || translate("errorUnknown"))
-      }
-    },
-    [translate]
-  )
-
   const refreshPermissionMode = useCallback(async () => {
     const config = await fetchPermissionModeConfig()
     setPermissionModeConfig(config)
@@ -2106,6 +2135,9 @@ export default function App() {
         if (cancelled) return
         setSkills(skillData.skills ?? [])
         setSkillsRoot(skillData.skills_root ?? "")
+        const providerList = await fetchProviders()
+        if (cancelled) return
+        setProviders(providerList)
         const modelList = await fetchModels()
         if (cancelled) return
         setModels(modelList)
@@ -2145,9 +2177,6 @@ export default function App() {
     refreshMaxSteps().catch((maxStepsError) =>
       setError(maxStepsError?.message || translate("errorLoadFailed"))
     )
-    refreshRpmLimits().catch((rpmError) =>
-      setError(rpmError?.message || translate("errorLoadFailed"))
-    )
     refreshPermissionMode().catch((permissionError) =>
       setError(permissionError?.message || translate("errorLoadFailed"))
     )
@@ -2184,12 +2213,15 @@ export default function App() {
       if (activeMenu === "workspaces") {
         refreshWorkspaces().catch(() => {})
       }
+      if (activeMenu === "providers") {
+        refreshProviders().catch(() => {})
+      }
       if (activeMenu === "models") {
         refreshModels().catch(() => {})
+        refreshProviders().catch(() => {})
       }
       if (activeMenu === "config") {
         refreshMaxSteps().catch(() => {})
-        refreshRpmLimits().catch(() => {})
         refreshPermissionMode().catch(() => {})
         refreshPermissionRules().catch(() => {})
       }
@@ -2199,7 +2231,7 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [activeMenu, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshRpmLimits, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWorkspaces, translate])
+  }, [activeMenu, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWorkspaces, translate])
 
   useEffect(() => {
     if (!selectedId || activeMenu !== "tasks") return
@@ -2438,13 +2470,24 @@ export default function App() {
             onRefresh={refreshWorkspaces}
             translate={translate}
           />
+        ) : activeMenu === "providers" ? (
+          <ProviderManager
+            providers={providers}
+            onCreate={createProviderHandler}
+            onUpdate={updateProviderHandler}
+            onDelete={deleteProviderHandler}
+            onRefresh={refreshProviders}
+            translate={translate}
+          />
         ) : activeMenu === "models" ? (
           <ModelManager
             models={models}
+            providers={providers}
             onCreate={createModelHandler}
             onUpdate={updateModelHandler}
             onDelete={deleteModelHandler}
             onRefresh={refreshModels}
+            onManageProviders={() => setActiveMenu("providers")}
             translate={translate}
           />
         ) : activeMenu === "config" ? (
@@ -2453,16 +2496,6 @@ export default function App() {
               maxStepsConfig={maxStepsConfig}
               onSave={updateMaxSteps}
               onRefresh={refreshMaxSteps}
-              translate={translate}
-            />
-            <RpmLimitsManager
-              rpmConfig={rpmConfig}
-              onSave={updateRpmLimits}
-              onRefresh={() =>
-                refreshRpmLimits().catch((refreshError) =>
-                  setError(refreshError?.message || translate("errorLoadFailed"))
-                )
-              }
               translate={translate}
             />
             <PermissionModeManager

@@ -57,16 +57,29 @@ async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
     if agent is None:
         agent_id = payload.mode if payload.mode in VALID_MODES else DEFAULT_MODE
         agent = app_state.monitor_store.get_agent(agent_id)
-    model = app_state.monitor_store.get_model(payload.model_id) if payload.model_id else None
+    # A model names what to ask for; the provider record it points at says where and
+    # how often (ADR 0014). Both are read before the task exists, so a broken endpoint
+    # reference fails the request instead of a task that has already started.
+    model = app_state.monitor_store.llm.get_model(payload.model_id) if payload.model_id else None
     if payload.model_id and model is None:
         raise HTTPException(status_code=404, detail="Model not found.")
+    provider_record = (
+        app_state.monitor_store.llm.get_provider(model["provider_id"])
+        if model and model.get("provider_id")
+        else None
+    )
     session_id = payload.session_id
     if session_id and app_state.monitor_store.get_session(session_id) is None:
         raise HTTPException(status_code=404, detail="Session not found.")
     if not session_id:
         session_id = app_state.monitor_store.ensure_default_session()
 
-    provider = str((model or {}).get("provider") or payload.provider or "openai-compatible")
+    provider = str(
+        (provider_record or {}).get("protocol")
+        or (model or {}).get("protocol")
+        or payload.provider
+        or "openai-compatible"
+    )
     # Read the transcript before the task exists, so the task itself can never be
     # part of its own context. A task in the same session continues that conversation.
     history_messages = build_session_history(session_id)
@@ -94,7 +107,7 @@ async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
     )
     worker = threading.Thread(
         target=run_task,
-        args=(task_id, request, model, base_dir, agent_config, stop_event),
+        args=(task_id, request, model, provider_record, base_dir, agent_config, stop_event),
         kwargs={"otel_handle": otel_handle, "history_messages": history_messages},
         daemon=True,
     )

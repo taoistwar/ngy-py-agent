@@ -17,9 +17,8 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Query
 
 import app_state
+import llm_api
 from agent.agent_loop import DEFAULT_MAX_STEPS
-from agent.provider import SUPPORTED_PROVIDERS, canonicalize_provider
-from agent.rate_limit import parse_rpm_limits, provider_throttle
 from agent.tools.permissions import PermissionMode, normalize_mode
 from api_schemas import (
     MaxStepsConfigRequest,
@@ -31,15 +30,9 @@ from api_schemas import (
     PermissionRuleRequest,
     RetentionConfigRequest,
     RetentionConfigResponse,
-    RpmLimitsConfigRequest,
-    RpmLimitsConfigResponse,
 )
 from task_runtime import purge_expired_tasks_with_log
 from task_store import TASK_RETENTION_DEFAULT_DAYS
-
-# Ceiling for one provider's limit: 6000 RPM is 100 requests per second, already past
-# anything a real endpoint answers without throttling us itself.
-RPM_LIMIT_MAX = 6000
 
 router = APIRouter()
 
@@ -95,43 +88,14 @@ def _load_task_retention_config() -> tuple[int, str]:
     return db_days, "database"
 
 
-def _normalize_rpm_limits(raw: Any) -> dict[str, int]:
-    """Canonical provider names only, clamped into ``[0, RPM_LIMIT_MAX]``.
-
-    Unknown names are dropped rather than kept: a bucket no provider can ever ask
-    for is a typo, and an admin page that shows it would be reporting configuration
-    that does nothing.
-    """
-    limits: dict[str, int] = {}
-    for provider, value in (raw or {}).items():
-        name = canonicalize_provider(provider) if str(provider or "").strip() else ""
-        if name not in SUPPORTED_PROVIDERS:
-            continue
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError):
-            continue
-        limits[name] = max(0, min(parsed, RPM_LIMIT_MAX))
-    return limits
-
-
-def _load_llm_rpm_config() -> tuple[dict[str, int], str]:
-    env_limits = _normalize_rpm_limits(parse_rpm_limits(os.getenv("LLM_RPM", "")))
-    db_limits = app_state.monitor_store.get_llm_rpm_limits()
-    if db_limits is None:
-        return env_limits, "env"
-    return _normalize_rpm_limits(db_limits), "database"
-
-
 def load_startup_config() -> None:
     """Resolve env + database into the live state; called once before serving."""
     app_state.task_retention_days, app_state.task_retention_source = _load_task_retention_config()
     app_state.agent_max_steps, app_state.agent_max_steps_source = _load_agent_max_steps_config()
     app_state.permission_mode, app_state.permission_mode_source = _load_permission_mode_config()
-    app_state.llm_rpm_limits, app_state.llm_rpm_limits_source = _load_llm_rpm_config()
     # The limiter holds the policy itself: a task builds its provider per run, so
-    # nothing else survives long enough to carry the budget (ADR 0013).
-    provider_throttle.configure(app_state.llm_rpm_limits)
+    # nothing else survives long enough to carry the budgets (ADR 0014).
+    llm_api.sync_provider_throttle()
 
 
 # -------------------------------------------------------------------- retention
@@ -184,48 +148,6 @@ async def set_max_steps_config(
         max_steps=app_state.agent_max_steps,
         source=app_state.agent_max_steps_source,
     )
-
-
-# ------------------------------------------------------------------ llm rate limit
-
-
-def _rpm_response(limits: dict[str, int], source: str) -> RpmLimitsConfigResponse:
-    return RpmLimitsConfigResponse(
-        limits=dict(limits),
-        source=source,
-        providers=list(SUPPORTED_PROVIDERS),
-        max_limit=RPM_LIMIT_MAX,
-    )
-
-
-@router.get("/api/admin/llm-rpm", response_model=RpmLimitsConfigResponse)
-async def get_llm_rpm_config() -> RpmLimitsConfigResponse:
-    return _rpm_response(app_state.llm_rpm_limits, app_state.llm_rpm_limits_source)
-
-
-@router.put("/api/admin/llm-rpm", response_model=RpmLimitsConfigResponse)
-async def set_llm_rpm_config(
-    payload: RpmLimitsConfigRequest,
-) -> RpmLimitsConfigResponse:
-    """Replace the whole table: a provider left out becomes unlimited again."""
-    limits: dict[str, int] = {}
-    for provider, value in payload.limits.items():
-        name = canonicalize_provider(provider) if str(provider or "").strip() else ""
-        if name not in SUPPORTED_PROVIDERS:
-            # Rejected, not dropped: silently ignoring a limit the operator just
-            # asked for is how a deployment ends up believing it is protected.
-            raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'.")
-        if value < 0 or value > RPM_LIMIT_MAX:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Limit for '{provider}' must be between 0 and {RPM_LIMIT_MAX}.",
-            )
-        limits[name] = value
-    app_state.monitor_store.set_llm_rpm_limits(limits)
-    app_state.llm_rpm_limits = limits
-    app_state.llm_rpm_limits_source = "database"
-    provider_throttle.configure(limits)
-    return _rpm_response(limits, "database")
 
 
 # --------------------------------------------------------------- permission mode

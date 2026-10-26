@@ -23,7 +23,6 @@ cd ..
 - `NGY_PY_AGENT_MODE=dev`
 - `NGY_PY_AGNET_QUERY=...`
 - `REACT_MAX_STEPS=8`（ReAct 全局最大步数的环境变量默认值；Web Admin「全局配置」页可在前端修改并落库到 `settings` 表，`agent_max_steps` 优先于环境变量）
-- `LLM_RPM=openai=60,anthropic=20`（按 provider 的每分钟请求上限；未列出的 provider 不限速，`0` 亦表示不限。Web Admin「全局配置」页可覆盖并落库到 `settings` 表 `llm_rpm_limits`，见 [ADR 0013](decisions/0013-llm-rpm-limit.md)）
 - `WEB_MONITOR_HOST=127.0.0.1`
 - `WEB_MONITOR_PORT=8001`
 - `TASK_RETENTION_DAYS=36600`（默认 36600 天，约 100 年）
@@ -259,14 +258,22 @@ npm run i18n:check
 - 全局策略依然作用于它：`allow_dirs` 非空时输出目录会不可达，这是有意的。
 - 进入事件 `details` 的 stdout/stderr 截到 64 KiB（命令输出无上限），完整文本只在磁盘上。
 
+### Provider 与模型（两张表，一个端点一份配额）
+
+- **provider** 存协议、`base_url`、`api_key` 与 `rpm_limit`；**model** 只存模型名与能力开关，加一个 `provider_id`（[ADR 0014](decisions/0014-provider-model-split.md)）。表结构在 `llm_store.py`，它复用 `task_store` 的连接与锁。
+- 一个（协议, 规范化地址）只能有一条 provider 记录：桶键由这两项组成，两条记录会互相覆盖，看不出哪条生效。同一个协议配两个地址是合法的——那是两个端点、两份配额。
+- 删 provider 前必须先删/迁走它的模型（409，不级联）。
+- `PUT /api/models/{id}` 只改模型自己；换 provider 就是换端点，等价于换配额。
+
 ### 模型请求频率（RPM）
 
-- 桶按 **provider 名**分（`agent/rate_limit.py`），进程级单例：provider 实例每个任务重建，挂在实例上的计数器等于每任务清零（[ADR 0013](decisions/0013-llm-rpm-limit.md)）。
+- 桶按 **provider + base_url** 分（`agent/rate_limit.py` 的 `bucket_key()`），进程级单例：provider 实例每个任务重建，挂在实例上的计数器等于每任务清零（[ADR 0013](decisions/0013-llm-rpm-limit.md)、[ADR 0014](decisions/0014-provider-model-split.md)）。
+- 键要经 `agent.provider.normalize_base_url()` 规范化：适配器会给 OpenAI 兼容地址补 `/v1`，两端不一致的话限流会静默失效（`test/rate_limit_test.py` 有对应用例）。
 - 滑动窗口而不是固定窗口：第 N+1 个请求等"最老的那个请求满 60 秒"，因此任意 60 秒跨度内都不超限，也没有窗口边界突刺。
 - **钩子在 wire 层**（四个 `chat_completion` 的第一行 `self._throttle()`），不在 `steps.py`：任务命名线程也打同一个端点，能绕过的限流不是限流。新增 provider 适配器时必须记得加这一行。
 - 等待有上限（60 秒），超过就抛 `RpmLimitError`。循环会把它转成 `LLMCallError` 并给出"调高限制或稍后重试"的文案；**不要**改成无限等待，那会让"配错成 1 RPM"表现为任务假死。
-- 等待时长经 `provider_throttle.take_last_wait()` 回读（线程局部，取一次即清零），落成 `debug` 事件 + span 属性 `llm.rpm.wait_ms`：模型慢和自己在配额里打转是两件事，排障时要分得开。
-- 配置三层：`LLM_RPM` 环境变量 → `settings.llm_rpm_limits`（数据库优先）→ `PUT /api/admin/llm-rpm` 热更新。PUT 是**整表替换**：漏掉某个 provider 等于解除它的限制。
+- 等待时长经 `provider_throttle.take_last_wait()` 回读（线程局部，取一次即清零），落成 `debug` 事件（含 `base_url`）+ span 属性 `llm.rpm.wait_ms`：模型慢和自己在配额里打转是两件事，排障时要分得开。
+- 配置只有数据库一层：`rpm_limit` 是 provider 字段，启动时与每次 provider 写入后由 `llm_api.sync_provider_throttle()` 重建限流表。**没有** `LLM_RPM` 环境变量，也没有 `settings.llm_rpm_limits`（0013 的旧方案，见 0014 D6）。
 
 ### 工具结果预算（一步的结果太多）
 
@@ -325,7 +332,10 @@ npm run i18n:check
 | `session_history.py` | 会话上下文：把同一会话中**已完成**任务的 `query` / `result` 重建成 `user` / `assistant` messages，并按消息数 / 字符预算裁剪（只留最近的轮次） | 不注入、不运行任务 |
 | `task_runtime.py` | "一个任务是什么"：provider / 工作目录 / 步数 / 确认模式的解析、会话标题、保留期清理、`run_task`（跑 ReAct 循环并把两个 broker 注册进 `app_state`） | HTTP 细节 |
 | `task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
-| `workspace_api.py` | 会话、工作空间、模型配置路由 | |
+| `task_store.py` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁 | provider 与模型（在 `llm_store.py`） |
+| `llm_store.py` | provider 端点与模型两张表的 SQL、旧 `models` 表的一次性迁移；共用 `task_store` 的连接与锁 | 限流策略 |
+| `workspace_api.py` | 会话、工作空间路由 | 模型 / provider 配置 |
+| `llm_api.py` | provider 与模型路由、写入时把 RPM 推给 `provider_throttle`（`sync_provider_throttle`） | 限流的窗口算法 |
 | `agent_api.py` | 模式、智能体、技能库路由 | |
 | `admin_api.py` | 管理配置路由（保留期 / 步数 / 确认模式 / 权限规则）、启动时把 env + 数据库读进 `app_state` 的 loader、`.env` 加载 | 业务路由 |
 
@@ -353,7 +363,8 @@ npm run i18n:check
   - [ADR 0010 `ask_user_question` 工具与"提问通道"](decisions/0010-ask-user-question.md)
   - [ADR 0011 桌面操作（`computer_observe` / `computer_control`）](decisions/0011-computer-use.md)
   - [ADR 0012 工具结果预算（tool result budget）](decisions/0012-tool-result-budget.md)
-  - [ADR 0013 按 provider 的模型请求限流（RPM）](decisions/0013-llm-rpm-limit.md)
+  - [ADR 0013 按 provider 的模型请求限流（RPM）](decisions/0013-llm-rpm-limit.md)（D1 / D6 已被 0014 取代）
+  - [ADR 0014 Provider 与模型分离，RPM 按 provider + base_url 计](decisions/0014-provider-model-split.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 

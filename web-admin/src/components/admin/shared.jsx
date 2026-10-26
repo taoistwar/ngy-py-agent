@@ -23,6 +23,15 @@ export const PROVIDER_OPTIONS = [
   "gemini",
 ]
 
+// Canonical protocols `build_provider` can construct. The backend canonicalises what it
+// is given, so a saved provider reads back as one of these names.
+export const PROVIDER_PROTOCOL_OPTIONS = [
+  "openai",
+  "anthropic",
+  "anthropic_compatible",
+  "gemini",
+]
+
 // Mirrors MCP_TRANSPORTS in mcp_store.py; the backend rejects anything else.
 export const MCP_TRANSPORT_OPTIONS = ["stdio", "sse"]
 

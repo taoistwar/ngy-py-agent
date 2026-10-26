@@ -65,7 +65,9 @@ def _report_throttle_wait(
         return
     waited_ms = int(round(waited * 1000))
     record_throttle_wait(span, waited_ms)
-    provider_name = getattr(provider.config, "provider", "")
+    config = getattr(provider, "config", None)
+    provider_name = getattr(config, "provider", "")
+    base_url = getattr(config, "base_url", "") or ""
     _emit(
         event_sink,
         task_id,
@@ -76,8 +78,10 @@ def _report_throttle_wait(
             data={
                 "step": step,
                 "provider": provider_name,
-                "model": getattr(provider.config, "model", ""),
-                "rpm_limit": provider_throttle.limit_for(provider_name),
+                # The budget belongs to the endpoint, so the URL is part of the record.
+                "base_url": base_url,
+                "model": getattr(config, "model", ""),
+                "rpm_limit": provider_throttle.limit_for(provider_name, base_url),
                 "waited_ms": waited_ms,
                 **current_trace_ids(),
             },

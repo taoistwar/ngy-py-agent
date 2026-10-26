@@ -85,14 +85,26 @@ def extract_task_result(events: list[dict[str, Any]] | None) -> str | None:
 # ------------------------------------------------------------------ resolution
 
 
-def build_provider_config(model: dict[str, Any] | None) -> Optional[ProviderConfig]:
+def build_provider_config(
+    model: dict[str, Any] | None,
+    provider: dict[str, Any] | None = None,
+) -> Optional[ProviderConfig]:
+    """Combine a model with the endpoint it runs on into one wire config.
+
+    The model carries the name and the flags that describe it; the provider carries the
+    protocol, the URL and the key (ADR 0014). Without a provider record the model is not
+    buildable, but a caller that passes only a model keeps working through the adapter's
+    own defaults.
+    """
     if not model:
         return None
+    protocol = str((provider or {}).get("protocol") or model.get("protocol") or "openai-compatible")
+    base_url = str((provider or {}).get("base_url") or "").strip()
     return ProviderConfig(
-        provider=canonicalize_provider(str(model.get("provider") or "openai-compatible")),
+        provider=canonicalize_provider(protocol),
         model=str(model.get("name") or ""),
-        api_key=str(model.get("api_key") or ""),
-        base_url=(str(model.get("base_url")).strip() or None) if model.get("base_url") else None,
+        api_key=str((provider or {}).get("api_key") or ""),
+        base_url=base_url or None,
         max_input_tokens=int(model.get("max_input_tokens") or 0),
         supports_image_input=bool(model.get("supports_image_input")),
     )
@@ -327,6 +339,7 @@ def run_task(
     task_id: str,
     request: RunTaskRequest,
     model: dict[str, Any] | None = None,
+    provider: dict[str, Any] | None = None,
     base_dir: str | None = None,
     agent_config: dict[str, Any] | None = None,
     stop_event: threading.Event | None = None,
@@ -334,6 +347,9 @@ def run_task(
     history_messages: list[dict[str, Any]] | None = None,
 ) -> None:
     """Run one task to completion under its brokers; called on the task's own thread.
+
+    ``model`` and ``provider`` are the two stored records the request resolved to: the
+    model names what to ask for, the provider says where and how (ADR 0014).
 
     ``otel_handle`` is started by the caller on the request thread, which is what
     makes the task a child of its HTTP span; ``contextvars`` do not cross
@@ -349,6 +365,7 @@ def run_task(
             task_id,
             request,
             model,
+            provider,
             base_dir,
             agent_config,
             stop_event,
@@ -363,13 +380,19 @@ def _execute_task(
     task_id: str,
     request: RunTaskRequest,
     model: dict[str, Any] | None,
+    provider_record: dict[str, Any] | None,
     base_dir: str | None,
     agent_config: dict[str, Any] | None,
     stop_event: threading.Event | None,
     history_messages: list[dict[str, Any]] | None = None,
 ) -> None:
-    provider = str((model or {}).get("provider") or request.provider or "openai-compatible")
-    provider_config = build_provider_config(model)
+    provider = str(
+        (provider_record or {}).get("protocol")
+        or (model or {}).get("protocol")
+        or request.provider
+        or "openai-compatible"
+    )
+    provider_config = build_provider_config(model, provider_record)
     max_steps = resolve_max_steps(request)
 
     def _sink(_: str, event: TaskEvent) -> None:
@@ -393,6 +416,10 @@ def _execute_task(
         "Start task execution",
         {
             "provider": provider,
+            "provider_id": (provider_record or {}).get("provider_id"),
+            # Which endpoint the requests go to: provider plus base URL is the unit of
+            # both identification and the RPM budget (ADR 0014).
+            "base_url": (provider_record or {}).get("base_url") or "",
             "model": (model or {}).get("name"),
             "model_id": (model or {}).get("model_id"),
             "session_id": request.session_id,

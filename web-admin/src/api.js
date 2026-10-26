@@ -186,6 +186,37 @@ export async function deleteSession(sessionId) {
   })
 }
 
+export async function fetchProviders() {
+  const data = await requestJson(`${API_BASE}/api/providers`)
+  return data.providers ?? []
+}
+
+export async function createProvider(payload) {
+  return requestJson(`${API_BASE}/api/providers`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateProvider(providerId, payload) {
+  return requestJson(`${API_BASE}/api/providers/${providerId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteProvider(providerId) {
+  return requestJson(`${API_BASE}/api/providers/${providerId}`, {
+    method: "DELETE",
+  })
+}
+
 export async function fetchModels() {
   const data = await requestJson(`${API_BASE}/api/models`)
   return data.models ?? []
@@ -381,16 +412,4 @@ export async function updateMaxStepsConfig(maxSteps) {
   })
 }
 
-export async function fetchRpmLimitsConfig() {
-  return requestJson(`${API_BASE}/api/admin/llm-rpm`)
-}
 
-export async function updateRpmLimitsConfig(limits) {
-  return requestJson(`${API_BASE}/api/admin/llm-rpm`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ limits }),
-  })
-}

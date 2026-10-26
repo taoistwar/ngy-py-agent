@@ -83,7 +83,12 @@ def _read_env(name: str, default: str) -> str:
     return os.getenv(name, default).strip() or default
 
 
-def _normalize_openai_base_url(base_url: str, default: str = "http://127.0.0.1:11434/v1") -> str:
+# Where an OpenAI-compatible provider goes when nothing was configured: the local
+# Ollama every other default in this module names.
+DEFAULT_OPENAI_BASE_URL = "http://127.0.0.1:12434/v1"
+
+
+def _normalize_openai_base_url(base_url: str, default: str = DEFAULT_OPENAI_BASE_URL) -> str:
     normalized = (base_url or "").strip()
     if not normalized:
         normalized = default
@@ -91,6 +96,21 @@ def _normalize_openai_base_url(base_url: str, default: str = "http://127.0.0.1:1
     if not normalized.endswith("/v1"):
         normalized = f"{normalized}/v1"
     return normalized
+
+
+def normalize_base_url(provider: Any, base_url: Any) -> str:
+    """The URL a request will actually use for this provider.
+
+    Adapters rewrite what they are handed (an OpenAI-compatible URL always ends in
+    ``/v1``), so a rate limit stored against the URL an operator typed has to resolve
+    to the same string as the URL the adapter posts to. This is that single
+    resolution; ``agent.rate_limit`` builds its buckets on it (ADR 0014).
+    """
+    name = canonicalize_provider(provider)
+    text = str(base_url or "").strip().rstrip("/")
+    if name in ("openai", "anthropic_compatible"):
+        return _normalize_openai_base_url(text)
+    return text
 
 
 def _to_json_string(payload: Any) -> str:
@@ -206,13 +226,14 @@ class BaseProvider(ChatCompletionProtocol):
         self.config = config
 
     def _throttle(self) -> None:
-        """Spend this provider's per-minute request budget before the call goes out.
+        """Spend this endpoint's per-minute request budget before the call goes out.
 
         Called by every wire adapter rather than by the callers: the ReAct loop is not
         the only thing asking the endpoint (task naming does too), and a limit that
-        some path can skip is not a limit.
+        some path can skip is not a limit. The bucket is the endpoint - provider plus
+        base URL - so two models on one server share one budget (ADR 0014).
         """
-        provider_throttle.acquire(self.config.provider)
+        provider_throttle.acquire(self.config.provider, self.config.base_url)
 
     def chat_completion(
         self,
@@ -770,7 +791,7 @@ def build_provider(provider: str, config: Optional[ProviderConfig] = None) -> Ba
         if config is None:
             model = _read_env("OLLAMA_MODEL", "qwen3:0.6b")
             base_url = _normalize_openai_base_url(
-                _read_env("OLLAMA_BASE_URL", "http://127.0.0.1:12434/v1")
+                _read_env("OLLAMA_BASE_URL", DEFAULT_OPENAI_BASE_URL)
             )
             config = ProviderConfig(
                 provider=provider,
@@ -784,7 +805,7 @@ def build_provider(provider: str, config: Optional[ProviderConfig] = None) -> Ba
                 model=config.model,
                 api_key=config.api_key,
                 base_url=_normalize_openai_base_url(
-                    config.base_url or "http://127.0.0.1:12434/v1"
+                    config.base_url or DEFAULT_OPENAI_BASE_URL
                 ),
                 supports_image_input=config.supports_image_input,
             )
@@ -807,14 +828,18 @@ def build_provider(provider: str, config: Optional[ProviderConfig] = None) -> Ba
                 provider=provider,
                 model=model,
                 api_key=_read_env("ANTHROPIC_API_KEY", _read_env("OLLAMA_API_KEY", "ollama")),
-                base_url=_normalize_openai_base_url(_read_env("OLLAMA_BASE_URL", "http://127.0.0.1:12434/v1")),
+                base_url=_normalize_openai_base_url(
+                    _read_env("OLLAMA_BASE_URL", DEFAULT_OPENAI_BASE_URL)
+                ),
             )
         else:
             config = ProviderConfig(
                 provider=config.provider,
                 model=config.model,
                 api_key=config.api_key,
-                base_url=_normalize_openai_base_url(config.base_url or "http://127.0.0.1:12434/v1"),
+                base_url=_normalize_openai_base_url(
+                    config.base_url or DEFAULT_OPENAI_BASE_URL
+                ),
                 supports_image_input=config.supports_image_input,
             )
         return AnthropicOllamaProvider(config)

@@ -1,6 +1,6 @@
 # ADR 0013: 按 provider 的模型请求限流（RPM）
 
-- 状态：已接受（Accepted）
+- 状态：部分被取代（D1 的桶键与 D6 的配置层见 [ADR 0014](0014-provider-model-split.md)；滑动窗口、wire 层钩子、等待上限仍然有效）
 - 日期：2026-10-25
 - 相关：`agent/rate_limit.py`、`agent/provider.py`、`agent/agent_loop/steps.py`、`admin_api.py`、`task_store.py`、`app_state.py`、`api_schemas.py`、`web-admin/src/components/admin/SettingsPanels.jsx`、`test/rate_limit_test.py`、`test/rpm_config_api_test.py`
 - 前置：[ADR 0006](0006-tool-permission-confirmation.md)（全局配置的读写惯例）
@@ -25,6 +25,8 @@
 限流器是模块级单例（`agent/rate_limit.py` 的 `provider_throttle`），因为它必须活得比任何一次运行都久。管理配置在启动时与每次 PUT 时把它配置一遍。
 
 **已知代价**：同一个 provider 名下挂两个不同 `base_url`（例如本地 12434 与真实 OpenAI 网关）会共用一个额度。选它是为了少一层"地址一改配额就重置"的隐式行为；如果将来真出现多地址并存，再按 `provider + base_url` 拆桶。
+
+> **已被 ADR 0014 取代**：桶键现在是 `provider + base_url`（`bucket_key()`），`rpm_limit` 也从「provider 名的全局表」搬到了 provider 记录上。
 
 ### D2. 滑动窗口，不是固定窗口
 
