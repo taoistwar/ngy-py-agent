@@ -14,7 +14,11 @@ from agent.tools.get_current_temperature import (
     get_current_temperature as _get_current_temperature,
 )
 from agent.tools.get_current_time import get_current_time as _get_current_time
-from agent.tools.output_store import output_root_path, workspace_result_directory
+from agent.tools.output_store import (
+    output_root_path,
+    workspace_result_directory,
+    workspace_transcript_directory,
+)
 from agent.tools.permissions import (
     PERMISSION_NONE,
     SCOPES,
@@ -108,9 +112,14 @@ class ToolRegistry:
         # workspace, but read-only for the same reason as the scratch tree: the
         # model must read the result back, never rewrite what it "saw".
         self.result_directory = workspace_result_directory(self.base_dir)
+        # Archived conversations (ADR 0015): same treatment and for the same reason -
+        # the archive is the only record of what the model no longer sees, so it must
+        # be readable and not editable.
+        self.transcript_directory = workspace_transcript_directory(self.base_dir)
         self.read_only_roots = (
             self.output_directory.as_posix(),
             self.result_directory.as_posix(),
+            self.transcript_directory.as_posix(),
         )
         self.tools = {}
         self._register_default_tools(enabled_tools)

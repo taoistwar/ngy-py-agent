@@ -26,6 +26,7 @@ cd ..
 - `WEB_MONITOR_HOST=127.0.0.1`
 - `WEB_MONITOR_PORT=8001`
 - `TASK_RETENTION_DAYS=36600`（默认 36600 天，约 100 年）
+- `TRANSCRIPT_MAX_MESSAGES=50`（对话窗口条数上限，超出后旧消息归档到 `<workspace>/.transcripts/`，`<= 0` 关闭，见 [ADR 0015](decisions/0015-snip-compact.md)）
 - 供应商相关：
   - `TOOL_SCHEMA_PROVIDER=openai`
   - `OLLAMA_BASE_URL`
@@ -284,6 +285,14 @@ npm run i18n:check
 - 占位文本必须**比原文短**才替换，且每个下标只访问一次——否则 2,000 字符左右的小结果会被"落盘"成更长的路径，第二遍还会把全文覆盖成占位文本。
 - 占位文本不是装饰：它要给**路径、行数、`offset/limit` 提示**。`read_file` 整读上限 256 KB，单次又受 token 预算约束，只给路径等于让模型先撞一次错；`read_file` 还永远加 `N<TAB>` 行号，不说清就会被当成文件内容（见 ADR 0012「回读契约」）。
 - 含 NUL 的结果在落盘前把 `\x00` 换成 `\ufffd`：`read_file` 见 NUL 判二进制拒绝，留着 NUL 就是留一个打不开的路径。
+
+### 对话窗口裁剪（snip_compact）
+
+- 触发点在**每步循环顶部**、`batch_start` 之前（`loop.py`）：上一个工具组已完整，下标语义不会被压缩打乱。放在工具循环之后会和 `result_budget` 的"只处理最新一批"打架。
+- 原地 `messages[:] = [...]`，不返回新列表：`loop.py` 里 `messages = initial_messages` 是别名，REPL 跨轮持有同一个列表，rebind 会让它停在压缩前。
+- 切点**绝不落在一次工具调用内部**，两侧都是 `while` 而不是"动一步"——一次回复可能带 N 条 tool 消息。head 扩展从尾部扣，tail 回退会让窗口略微超限（上限不是等号，见 ADR 0015 D3）。
+- transcript 是 JSONL 而不是一个大 JSON：`read_file` 按行切片，单行 JSON 读不回来。截图写入前 redact，对话本身不动。
+- 写盘失败**不压缩**：删了消息却写不出档案，是这一步唯一不能接受的降级。
 - 不移除任何 provider 适配：这一层在消息层，不碰 Anthropic 的 `tool_result` block。
 
 ### 工具结果分流（模型 vs UI）
@@ -365,8 +374,9 @@ npm run i18n:check
   - [ADR 0010 `ask_user_question` 工具与"提问通道"](decisions/0010-ask-user-question.md)
   - [ADR 0011 桌面操作（`computer_observe` / `computer_control`）](decisions/0011-computer-use.md)
   - [ADR 0012 工具结果预算（tool result budget）](decisions/0012-tool-result-budget.md)
-  - [ADR 0013 按 provider 的模型请求限流（RPM）](decisions/0013-llm-rpm-limit.md)（D1 / D6 已被 0014 取代）
+  - [ADR 0013 按 provider 的模型请求限流（RPM）](decisions/0013-llm-rpm-limit.md)
   - [ADR 0014 Provider 与模型分离，RPM 按 provider + base_url 计](decisions/0014-provider-model-split.md)
+  - [ADR 0015 snip_compact（对话窗口裁剪）](decisions/0015-snip-compact.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 

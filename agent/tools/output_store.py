@@ -46,6 +46,9 @@ RESULT_DIR_NAME = ".task_outputs"
 RESULT_SUBDIR_NAME = "tool-results"
 RESULT_GITIGNORE = "*\n"
 
+# Archived conversations (ADR 0015): same workspace, same read-only treatment.
+TRANSCRIPT_DIR_NAME = ".transcripts"
+
 # Preview kept in the model's context when the full output is persisted.
 DEFAULT_PREVIEW_CHARS = 2000
 
@@ -107,17 +110,33 @@ def workspace_result_directory(base_dir: Optional[str] = None) -> Path:
     Not created here - deciding where output would go must not leave a folder
     behind. Writers call :func:`ensure_dir` (or :func:`persist_text`).
     """
+    return _workspace_directory(base_dir, RESULT_DIR_NAME, RESULT_SUBDIR_NAME)
+
+
+def workspace_transcript_directory(base_dir: Optional[str] = None) -> Path:
+    """Where archived conversations go: ``<workspace>/.transcripts``.
+
+    The same reasoning as :func:`workspace_result_directory` (ADR 0015): the archive
+    marker keeps an absolute path, and the message it replaced is gone from the
+    conversation, so the file has to outlive the run that wrote it.
+
+    Not created here; writers call :func:`ensure_result_directory`.
+    """
+    return _workspace_directory(base_dir, TRANSCRIPT_DIR_NAME)
+
+
+def _workspace_directory(base_dir: Optional[str], *parts: str) -> Path:
     text = (base_dir or "").strip()
     root = Path(text).expanduser() if text else default_workspace_root()
     try:
         root = root.resolve()
     except OSError:  # pragma: no cover - platform specific
         root = root.absolute()
-    return root / RESULT_DIR_NAME / RESULT_SUBDIR_NAME
+    return root.joinpath(*parts)
 
 
 def ensure_result_directory(directory: Path) -> Path:
-    """Create the result directory and keep it out of git.
+    """Create a persisted-output directory (results or transcripts) and ignore it in git.
 
     A nested ``.gitignore`` holding ``*`` instead of an entry in the workspace's own
     ignore file: the workspace belongs to the user, and appending to their rules on

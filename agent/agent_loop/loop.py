@@ -11,6 +11,7 @@ from agent.agent_loop.runtime import (
     _reaps_task_sessions,
     _traced_run,
 )
+from agent.agent_loop.snip_compact import apply_snip_compact
 from agent.agent_loop.steps import run_model_turn, run_tool
 from agent.models import (
     EventCategory,
@@ -142,6 +143,15 @@ def run_react_loop(
         if should_stop is not None and should_stop():
             stopped = True
             break
+        # Between steps, never inside one: the previous step's tool turn is complete
+        # here, and ``batch_start`` below has to index the compacted list.
+        apply_snip_compact(
+            messages,
+            base_dir=getattr(registry, "base_dir", None),
+            event_sink=event_sink,
+            task_id=task_id,
+            step=step,
+        )
         if verbose:
             print(f"\n=== ReAct Step {step}/{max_steps} ===")
 
