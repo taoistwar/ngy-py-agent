@@ -47,6 +47,8 @@ Anthropic 适配器会把每条 `tool` 转成一条 `user(tool_result)`（`provi
 
 参考实现的"恰好 50"在只有一个 head 例外时不成立；这里承认它，条件写在 `test_the_tail_never_starts_with_an_orphan_tool_result`（60 → 53）。
 
+**另一条允许上浮的理由是成本**：稳态下窗口刚压到 50，下一步只涨 2-4 条，若照越线就压，每步都要写一份全量快照去换那几条消息。所以设 `MIN_ARCHIVED_MESSAGES = 5`：归档不足 5 条就等到下一步，窗口在 50→55 之间徘徊。小窗口下阈值退化（`min(5, limit // 10)`），否则 `limit=6` 时永远等不满 5 条，等于关掉压缩。
+
 ### D4. 阈值：常量 50 + 环境变量
 
 `TRANSCRIPT_MAX_MESSAGES`，`<= 0` 关闭。不进管理页：它是压缩链路的形状参数，不是运维每天要调的旋钮；`result_budget` 的两个阈值同理。
@@ -78,11 +80,19 @@ Read it with read_file (offset/limit): it is line-numbered and capped by the out
 
 `result_budget` 在**步末**（工具执行完，动的是最新一批的字节），`snip_compact` 在**步首**（上一个工具组已完整，动的是条数）。压缩后的历史结果不再重新扫描——那正是 ADR 0012 否决过的"每步全量扫描"。
 
+### D9. 压缩后自检配对，只报警不阻断
+
+改写完成后跑一次 O(n) 的配对检查（`_find_orphans`）：`assistant.tool_calls` 的 id 进入待回应集合，`tool.tool_call_id` 消耗一个，消耗不到、或到下一个 assistant 还没被消耗，就记一条问题。有问题发 `error` 事件，**压缩结果照旧生效**。
+
+这条检查不是切割逻辑的一部分（切割只看 `role`，因为工具结果紧跟调用是本仓库唯一生产者保证的顺序），而是给"将来出现新的消息形状"准备的：配对一旦被破坏，症状是**下一次请求被拒**，而那个 400 完全看不出与压缩有关。自检把因果关系的发现点从"下一次请求"挪到"这一步"。
+
+不校验 id 归属、不识别 `tool` 以外角色（`function` 等）—— 当前没有生产者会输出它们，加了也测不到。
+
 ## 后果
 
 - 会话前 3 条可能是**历史消息**而不是本任务的开头（`session_history` 注入在 system 之后）。这是有意的：保留"这个会话在聊什么"比保留"本任务第一句话"更有用；但如果哪天要改，改动点是 `HEAD_MESSAGES` 与注入顺序，不是压缩算法。
 - 窗口可能略超上限（D3）。上限用于防止无界增长，不用于精确计费。
-- 磁盘占用随压缩次数呈 O(n²)（每次全量快照）。一次 run 通常只压缩几次；文件不自动清理，理由同 ADR 0012 D4。
+- 磁盘占用随压缩次数呈 O(n²)（每次全量快照）。`MIN_ARCHIVED_MESSAGES` 把快照频率降到大约每两步一次；文件不自动清理，理由同 ADR 0012 D4。
 - **Anthropic 未实测**：标记紧邻另一条 user 消息时会形成连续同角色。OpenAI / Gemini 明确允许；Anthropic 按公开的"合并连续同角色"行为应允许，但本仓库没有可用的 Anthropic key，只能在本地测"配对完整"（`test_anthropic_gets_no_orphan_tool_use_or_result`），测不了这一点。若将来在 Anthropic 上复现 400，改法是 D7 的标记并入相邻 user 文本，而不是回退整个 ADR。
 - 归档之后模型看不到中段对话；需要时按标记里的路径用 `read_file` 读回（受 ADR 0012 的回读契约约束）。
 

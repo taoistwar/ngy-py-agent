@@ -42,6 +42,10 @@ DEFAULT_MAX_MESSAGES = 50
 # the beginning preserves *why* the task exists after the middle has been archived.
 HEAD_MESSAGES = 3
 
+# Below this many archived messages the snapshot costs more than the cut saves; the
+# window is allowed to drift instead (ADR 0015 D3).
+MIN_ARCHIVED_MESSAGES = 5
+
 TRANSCRIPT_EXTENSION = ".jsonl"
 TRANSCRIPT_PREFIX = "transcript-"
 
@@ -110,6 +114,15 @@ def apply_snip_compact(
         _report_skip(summary, event_sink, task_id)
         return summary
 
+    archived = tail_start - head_end
+    min_archived = _min_archived(limit)
+    if archived < min_archived:
+        # A full snapshot to drop two messages costs more than it saves. Let the
+        # window drift a little and archive a batch worth reading next time.
+        summary["reason"] = f"only {archived} messages past the limit"
+        _report_skip(summary, event_sink, task_id)
+        return summary
+
     try:
         path = _write_transcript(messages, base_dir)
     except OSError as exc:
@@ -132,7 +145,6 @@ def apply_snip_compact(
         )
         return summary
 
-    archived = tail_start - head_end
     messages[:] = [
         *messages[:head_end],
         {"role": "user", "content": _marker(archived, path)},
@@ -162,7 +174,17 @@ def apply_snip_compact(
             collapsed=True,
         ),
     )
+    _report_orphans(messages, event_sink, task_id, step)
     return summary
+
+
+def _min_archived(limit: int) -> int:
+    """How many messages are worth a full snapshot.
+
+    Scaled down for tiny windows: with a six-message budget, waiting for five
+    messages' worth of slack means never compacting at all.
+    """
+    return min(MIN_ARCHIVED_MESSAGES, limit // 10)
 
 
 def _is_tool_result(message: Dict[str, Any]) -> bool:
@@ -171,6 +193,67 @@ def _is_tool_result(message: Dict[str, Any]) -> bool:
 
 def _has_tool_use(message: Dict[str, Any]) -> bool:
     return message.get("role") == "assistant" and bool(message.get("tool_calls"))
+
+
+def _find_orphans(messages: List[Dict[str, Any]]) -> List[str]:
+    """Pair tool calls with their results, by role and id.
+
+    Only a guard, not the slicer: the cuts are made on ``role`` alone because this
+    repository has exactly one producer of tool messages (the loop), and it always
+    emits the results right after the call. This check exists for the day a new shape
+    appears: a broken pair fails the *next request*, and a 400 there says nothing
+    about compaction.
+    """
+    problems: List[str] = []
+    pending: Dict[str, int] = {}
+    for index, message in enumerate(messages):
+        role = message.get("role")
+        if role == "assistant":
+            for call_id in pending:
+                problems.append(f"tool_use {call_id!r} (message {pending[call_id]}) has no result")
+            pending = {}
+            for entry in message.get("tool_calls") or []:
+                call_id = entry.get("id") if isinstance(entry, dict) else None
+                if call_id:
+                    pending[str(call_id)] = index
+            continue
+        if role == "tool":
+            call_id = str(message.get("tool_call_id") or "")
+            if call_id and call_id in pending:
+                pending.pop(call_id)
+            else:
+                problems.append(f"tool_result {call_id!r} (message {index}) has no call")
+    for call_id, index in pending.items():
+        problems.append(f"tool_use {call_id!r} (message {index}) has no result")
+    return problems
+
+
+def _report_orphans(
+    messages: List[Dict[str, Any]],
+    event_sink: EventSink | None,
+    task_id: str | None,
+    step: int,
+) -> None:
+    problems = _find_orphans(messages)
+    if not problems:
+        return
+    _emit(
+        event_sink,
+        task_id,
+        TaskEvent(
+            task_id=task_id or "",
+            category=EventCategory.ERROR,
+            title=f"snip_compact left an unpaired tool call Step {step}",
+            data={
+                "step": step,
+                "problems": problems[:10],
+                "count": len(problems),
+                "action": "compaction already applied; the next request may be rejected",
+                **current_trace_ids(),
+            },
+            collapsed=True,
+        ),
+    )
 
 
 def _write_transcript(messages: List[Dict[str, Any]], base_dir: Optional[str]) -> Path:

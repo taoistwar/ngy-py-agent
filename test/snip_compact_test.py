@@ -140,6 +140,54 @@ class SnipCompactTest(unittest.TestCase):
         self.assertIn("read_file", marker)
         self.assertIn("token budget", marker)
 
+    def test_a_snapshot_waits_for_a_batch_worth_archiving(self):
+        # 53 messages: only 4 would be archived. A full snapshot for four messages
+        # costs more than it saves, so the window is allowed to drift instead.
+        short = [_system(), _user()] + _alternating(51)
+
+        summary = self.compact(short)
+
+        self.assertEqual(summary["archived"], 0)
+        self.assertIn("4 messages", summary["reason"])
+        self.assertFalse(self.transcript_dir().exists())
+
+        batch = [_system(), _user()] + _alternating(52)
+
+        summary = self.compact(batch)
+
+        self.assertEqual(summary["archived"], 5)
+        self.assertEqual(len(batch), MAX)
+
+    def test_an_orphan_result_is_reported_after_compaction(self):
+        messages = [_system(), _user()] + _alternating(48)
+        messages += [_tool("ghost")]
+        messages += _alternating(9)
+        self.assertEqual(len(messages), 60)
+
+        summary = self.compact(messages)
+
+        # The compaction still happens - the check only says the result is suspect.
+        self.assertEqual(len(messages), MAX)
+        self.assertEqual(summary["archived"], 11)
+        errors = [event for event in self.sink.events if event.category == EventCategory.ERROR]
+        self.assertEqual(len(errors), 1)
+        self.assertIn("ghost", errors[0].data["problems"][0])
+        self.assertIn("no call", errors[0].data["problems"][0])
+
+    def test_a_paired_window_reports_nothing(self):
+        messages = [
+            _system(),
+            _user("go"),
+            _assistant("", call_ids=("c1", "c2")),
+            _tool("c1"),
+            _tool("c2"),
+        ] + _alternating(54)
+
+        self.compact(messages)
+
+        errors = [event for event in self.sink.events if event.category == EventCategory.ERROR]
+        self.assertEqual(errors, [])
+
     def test_the_transcript_holds_the_whole_conversation(self):
         messages = [_system(), _user()] + _alternating(58)
         before = [dict(message) for message in messages]

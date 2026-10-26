@@ -293,6 +293,8 @@ npm run i18n:check
 - 切点**绝不落在一次工具调用内部**，两侧都是 `while` 而不是"动一步"——一次回复可能带 N 条 tool 消息。head 扩展从尾部扣，tail 回退会让窗口略微超限（上限不是等号，见 ADR 0015 D3）。
 - transcript 是 JSONL 而不是一个大 JSON：`read_file` 按行切片，单行 JSON 读不回来。截图写入前 redact，对话本身不动。
 - 写盘失败**不压缩**：删了消息却写不出档案，是这一步唯一不能接受的降级。
+- 归档不足 `MIN_ARCHIVED_MESSAGES = 5` 条就等下一步（小窗口下阈值退化为 `min(5, limit // 10)`）：一份全量快照换 2 条消息不划算，窗口允许在 50→55 之间徘徊。
+- 压缩后跑一次 O(n) 配对自检（`_find_orphans`），发现孤儿只发 `error` 事件、不阻断——否则症状会漂到**下一次请求的 400** 上，而那和压缩看不出关系。
 - 不移除任何 provider 适配：这一层在消息层，不碰 Anthropic 的 `tool_result` block。
 
 ### 工具结果分流（模型 vs UI）
