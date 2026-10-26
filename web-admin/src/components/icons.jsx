@@ -127,3 +127,118 @@ export function MoonIcon() {
     </Icon>
   )
 }
+
+// Navigation icons. Keep them geometric and stroke-only so the sidebar reads as
+// one family regardless of the active skin.
+
+export function OverviewIcon() {
+  return (
+    <Icon>
+      <rect x="3" y="3" width="7" height="7" rx="1.6" />
+      <rect x="14" y="3" width="7" height="7" rx="1.6" />
+      <rect x="3" y="14" width="7" height="7" rx="1.6" />
+      <rect x="14" y="14" width="7" height="7" rx="1.6" />
+    </Icon>
+  )
+}
+
+export function TasksIcon() {
+  return (
+    <Icon>
+      <path d="M9 6h12M9 12h12M9 18h12" />
+      <path d="M4 6h.01M4 12h.01M4 18h.01" />
+    </Icon>
+  )
+}
+
+export function FolderIcon() {
+  return (
+    <Icon>
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v7.5A1.5 1.5 0 0 1 17.5 19h-13A1.5 1.5 0 0 1 3 17.5z" />
+    </Icon>
+  )
+}
+
+export function BotIcon() {
+  return (
+    <Icon>
+      <rect x="4" y="7" width="16" height="12" rx="3" />
+      <path d="M12 3v4M9 13h.01M15 13h.01M9.5 16.5h5" />
+    </Icon>
+  )
+}
+
+export function WrenchIcon() {
+  return (
+    <Icon>
+      <path d="M14.5 6.5a4 4 0 0 1 5 5L9 22l-4-4 10.5-11.5z" />
+      <path d="M3 3l4 4" />
+    </Icon>
+  )
+}
+
+export function PlugIcon() {
+  return (
+    <Icon>
+      <path d="M9 3v6M15 3v6" />
+      <path d="M6 9h12v3a6 6 0 0 1-12 0z" />
+      <path d="M12 18v3" />
+    </Icon>
+  )
+}
+
+export function CpuIcon() {
+  return (
+    <Icon>
+      <rect x="6" y="6" width="12" height="12" rx="2.5" />
+      <path d="M10 10h4v4h-4zM9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" />
+    </Icon>
+  )
+}
+
+export function ServerIcon() {
+  return (
+    <Icon>
+      <rect x="3" y="4" width="18" height="6" rx="2" />
+      <rect x="3" y="14" width="18" height="6" rx="2" />
+      <path d="M7 7h.01M7 17h.01" />
+    </Icon>
+  )
+}
+
+export function SettingsIcon() {
+  return (
+    <Icon>
+      <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="10" cy="17" r="2" />
+    </Icon>
+  )
+}
+
+export function ChevronIcon() {
+  return (
+    <Icon>
+      <polyline points="6 9 12 15 18 9" />
+    </Icon>
+  )
+}
+
+export function SearchIcon() {
+  return (
+    <Icon>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </Icon>
+  )
+}
+
+export function SidebarIcon({ collapsed = false }) {
+  return (
+    <Icon>
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M9 4v16" />
+      {collapsed ? <path d="M13 9l3 3-3 3" /> : <path d="M16 9l-3 3 3 3" />}
+    </Icon>
+  )
+}

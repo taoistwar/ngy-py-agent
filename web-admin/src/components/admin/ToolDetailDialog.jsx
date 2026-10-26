@@ -106,7 +106,7 @@ export default function ToolDetailDialog({ tool, agents, locale, onClose, transl
       closeLabel={translate("dialogClose")}
       onClose={onClose}
       actions={
-        <button type="button" className="btn btn-compact" onClick={runTest} disabled={testing}>
+        <button type="button" className="btn btn-compact btn-primary" onClick={runTest} disabled={testing}>
           {testing ? translate("toolTestRunning") : translate("toolTest")}
         </button>
       }

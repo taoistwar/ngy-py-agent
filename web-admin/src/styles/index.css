@@ -1,11 +1,11 @@
 @import "./tokens.css";
 @import "./base.css";
 @import "./shell.css";
+@import "./overview.css";
 @import "./sessions.css";
 @import "./composer.css";
 @import "./panels.css";
 @import "./admin-forms.css";
-@import "./admin-shell.css";
 @import "./tasks.css";
 @import "./events.css";
 @import "./forms.css";

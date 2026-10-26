@@ -103,22 +103,46 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.manager-search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.manager-search-field > svg {
+  position: absolute;
+  left: 10px;
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  pointer-events: none;
 }
 
 .manager-search-input {
-  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
   border: 1px solid var(--input-border);
-  border-radius: 8px;
+  border-radius: 9px;
   background: var(--input-bg);
   color: var(--text);
-  padding: 7px 9px;
-  font-size: 13px;
+  padding: 8px 10px 8px 31px;
+  font-family: inherit;
+  font-size: 12.5px;
+}
+
+.manager-search-input::placeholder {
+  color: var(--muted-dim);
 }
 
 .manager-search-meta {
   color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
+  margin-left: auto;
 }
 

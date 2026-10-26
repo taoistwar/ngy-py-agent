@@ -115,7 +115,7 @@ export default function ProviderManager({ providers, onCreate, onUpdate, onDelet
           <button type="button" className="btn btn-compact" onClick={onRefresh}>
             {translate("providerListRefresh")}
           </button>
-          <button type="button" className="btn btn-compact" onClick={openCreate}>
+          <button type="button" className="btn btn-compact btn-primary" onClick={openCreate}>
             {translate("providerFormCreate")}
           </button>
         </div>
@@ -244,7 +244,7 @@ export default function ProviderManager({ providers, onCreate, onUpdate, onDelet
             <div className="hint">{translate("providerRpmHint")}</div>
             {error && <div className="form-error">{error}</div>}
             <div className="model-form-actions">
-              <button type="submit" className="btn" disabled={busy}>
+              <button type="submit" className="btn btn-primary" disabled={busy}>
                 {busy
                   ? translate("modelFormSaving")
                   : editingId

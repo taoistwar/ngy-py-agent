@@ -62,7 +62,7 @@ import PermissionPrompt from "./components/PermissionPrompt"
 import QuestionPrompt from "./components/QuestionPrompt"
 import TaskRowActions from "./components/TaskRowActions"
 import TaskToolbarActions from "./components/TaskToolbarActions"
-import { SkillIcon } from "./components/icons"
+import { SearchIcon, SkillIcon } from "./components/icons"
 import AgentManager from "./components/admin/AgentManager"
 import McpServerManager from "./components/admin/McpServerManager"
 import ModelManager from "./components/admin/ModelManager"
@@ -74,7 +74,10 @@ import {
   RetentionManager,
 } from "./components/admin/SettingsPanels"
 import SkillManager from "./components/admin/SkillManager"
-import TopBar from "./components/admin/TopBar"
+import AppSidebar from "./components/shell/AppSidebar"
+import AppTopbar from "./components/shell/AppTopbar"
+import { DEFAULT_MENU } from "./components/shell/navigation"
+import OverviewPage from "./pages/OverviewPage"
 import ToolManager from "./components/admin/ToolManager"
 import WorkspaceManager from "./components/admin/WorkspaceManager"
 import AgentPicker from "./components/AgentPicker"
@@ -486,7 +489,7 @@ function SessionTabs({
                   if (event.key === "Escape") setRenaming(false)
                 }}
               />
-              <button type="button" className="btn btn-compact" onClick={submitRename}>
+              <button type="button" className="btn btn-compact btn-primary" onClick={submitRename}>
                 {translate("sessionAddConfirm")}
               </button>
               <button type="button" className="btn btn-compact" onClick={() => setRenaming(false)}>
@@ -589,13 +592,16 @@ function TaskList({
       </div>
       <div className="panel-body session-task-body">
         <div className="task-search-bar">
-          <input
-            type="text"
-            className="task-search-input"
-            value={taskSearchQuery}
-            placeholder={translate("taskSearchPlaceholder")}
-            onChange={(event) => onTaskSearch(event.target.value)}
-          />
+          <span className="task-search-field">
+            <SearchIcon />
+            <input
+              type="text"
+              className="task-search-input"
+              value={taskSearchQuery}
+              placeholder={translate("taskSearchPlaceholder")}
+              onChange={(event) => onTaskSearch(event.target.value)}
+            />
+          </span>
         </div>
         {tasks.length === 0 ? (
           <div className="empty">{translate("taskNoTasks")}</div>
@@ -769,6 +775,7 @@ function TaskComposer({
   onStop,
   onRequestCreateAgent,
   onImportSkill,
+  focusSignal,
   translate,
 }) {
   const [query, setQuery] = useState(() => loadComposerDraft(sessionId))
@@ -781,6 +788,7 @@ function TaskComposer({
   const [pickedSkills, setPickedSkills] = useState([])
   const skillsButtonRef = useRef(null)
   const pickerRef = useRef(null)
+  const textareaRef = useRef(null)
 
   const effectiveModelId = modelId || (models && models.length ? models[0].model_id : "")
   const effectiveAgentId = agentId || (agents && agents.length ? agents[0].agent_id : "")
@@ -797,6 +805,13 @@ function TaskComposer({
   useEffect(() => {
     setQuery(loadComposerDraft(sessionId))
   }, [sessionId])
+
+  // The overview "new task" shortcut jumps here; focusing the textarea makes the
+  // shortcut complete one visible action instead of only switching pages.
+  useEffect(() => {
+    if (!focusSignal) return
+    textareaRef.current?.focus()
+  }, [focusSignal])
 
   useEffect(() => {
     if (!skillsOpen) return undefined
@@ -859,6 +874,7 @@ function TaskComposer({
       <div className="panel-body">
         <form className="task-composer" onSubmit={submit}>
           <textarea
+            ref={textareaRef}
             className="composer-textarea"
             value={query}
             onChange={(event) => updateQuery(event.target.value)}
@@ -1158,8 +1174,25 @@ export default function App() {
   const [health, setHealth] = useState("unknown")
   const [providers, setProviders] = useState([])
   const [models, setModels] = useState([])
-  const [activeMenu, setActiveMenu] = useState("tasks")
+  const [activeMenu, setActiveMenu] = useState(DEFAULT_MENU)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem("web-admin.sidebarCollapsed") === "1"
+    } catch {
+      return false
+    }
+  })
   const [taskTab, setTaskTab] = useState("detail")
+  const [composerFocusSignal, setComposerFocusSignal] = useState(0)
+  const handleNavigate = useCallback((menu) => {
+    setActiveMenu(menu)
+    setTaskTab("detail")
+  }, [])
+  const startNewTask = useCallback(() => {
+    setActiveMenu("tasks")
+    setTaskTab("detail")
+    setComposerFocusSignal((prev) => prev + 1)
+  }, [])
   const [locale, setLocale] = useState(getDefaultLocale())
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set())
   const [taskPage, setTaskPage] = useState(1)
@@ -1177,6 +1210,14 @@ export default function App() {
   const isRunningRef = useRef(false)
 
   const taskResult = useMemo(() => getTaskResult(selectedTask, events), [selectedTask, events])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("web-admin.sidebarCollapsed", sidebarCollapsed ? "1" : "0")
+    } catch {
+      // ignore persistence errors
+    }
+  }, [sidebarCollapsed])
 
   const taskSearchValue = taskSearchQuery.trim().toLowerCase()
   const filteredTasks = useMemo(() => {
@@ -2107,6 +2148,16 @@ export default function App() {
       refreshRetention().catch((retentionError) =>
         setError(retentionError?.message || translate("errorLoadFailed"))
       )
+      if (activeMenu === "overview") {
+        refreshTasks().catch((tasksError) => setError(tasksError?.message || translate("errorLoadFailed")))
+        refreshSessions().catch(() => {})
+        refreshAgents().catch(() => {})
+        refreshTools().catch(() => {})
+        refreshModels().catch(() => {})
+        refreshProviders().catch(() => {})
+        refreshMcpServers().catch(() => {})
+        refreshWorkspaces().catch(() => {})
+      }
       if (activeMenu === "tasks") {
         refreshTasks().catch((tasksError) => setError(tasksError?.message || translate("errorLoadFailed")))
         refreshSessions().catch(() => {})
@@ -2203,23 +2254,47 @@ export default function App() {
   }, [composerTaskId])
 
   return (
-    <div className="admin-root">
-      <TopBar
+    <div className="app-shell">
+      <AppSidebar
         activeMenu={activeMenu}
-        onChangeMenu={(menu) => {
-          setActiveMenu(menu)
-          setTaskTab("detail")
-        }}
+        collapsed={sidebarCollapsed}
         health={health}
-        locale={locale}
-        localeOptions={localeOptions}
-        setLocale={setLocale}
+        onNavigate={handleNavigate}
+        onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         systemTime={systemTime}
         translate={translate}
       />
-      {error && <div className="global-error">{error}</div>}
-      <main className={`admin-content ${activeMenu === "tasks" ? "admin-content-fill" : ""}`}>
-        {activeMenu === "tasks" ? (
+      <div className="app-main">
+        <AppTopbar
+          activeMenu={activeMenu}
+          locale={locale}
+          localeOptions={localeOptions}
+          onLocaleChange={setLocale}
+          translate={translate}
+        />
+        {error && <div className="global-error">{error}</div>}
+        <main className={`app-content ${activeMenu === "tasks" ? "is-fill" : ""}`}>
+          {activeMenu === "overview" ? (
+            <OverviewPage
+              activeSession={sessions.find((session) => session.session_id === activeSessionId) || null}
+              agents={agents}
+              health={health}
+              mcpServers={mcpServers}
+              models={models}
+              onNavigate={handleNavigate}
+              onNewTask={startNewTask}
+              onOpenTask={(taskId) => {
+                selectTask(taskId)
+                handleNavigate("tasks")
+              }}
+              providers={providers}
+              sessions={sessions}
+              tasks={tasks}
+              tools={tools}
+              translate={translate}
+              workspaces={workspaces}
+            />
+          ) : activeMenu === "tasks" ? (
           <div
             className="task-workspace"
             ref={taskWorkspaceRef}
@@ -2312,6 +2387,7 @@ export default function App() {
                 onStop={stopComposerTask}
                 onRequestCreateAgent={requestCreateAgent}
                 onImportSkill={importSkillHandler}
+                focusSignal={composerFocusSignal}
                 translate={translate}
               />
             </section>
@@ -2458,17 +2534,18 @@ export default function App() {
             translate={translate}
           />
         )}
-      </main>
-      <PermissionPrompt
-        request={selectedTask?.pending_permission}
-        onDecided={handlePermissionDecided}
-        translate={translate}
-      />
-      <QuestionPrompt
-        request={selectedTask?.pending_question}
-        onAnswered={handleQuestionAnswered}
-        translate={translate}
-      />
+        </main>
+        <PermissionPrompt
+          request={selectedTask?.pending_permission}
+          onDecided={handlePermissionDecided}
+          translate={translate}
+        />
+        <QuestionPrompt
+          request={selectedTask?.pending_question}
+          onAnswered={handleQuestionAnswered}
+          translate={translate}
+        />
+      </div>
     </div>
   )
 }

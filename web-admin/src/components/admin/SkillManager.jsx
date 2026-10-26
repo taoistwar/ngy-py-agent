@@ -66,7 +66,7 @@ export default function SkillManager({ skills, skillsRoot, onSaveRoot, onImport,
           <button type="button" className="btn btn-compact" onClick={onRefresh}>
             {translate("skillListRefresh")}
           </button>
-          <button type="button" className="btn btn-compact" onClick={handleImport}>
+          <button type="button" className="btn btn-compact btn-primary" onClick={handleImport}>
             {translate("skillImport")}
           </button>
         </div>
@@ -84,7 +84,7 @@ export default function SkillManager({ skills, skillsRoot, onSaveRoot, onImport,
           </label>
           {error && <div className="form-error">{error}</div>}
           <div className="model-form-actions">
-            <button type="submit" className="btn" disabled={busy}>
+            <button type="submit" className="btn btn-primary" disabled={busy}>
               {busy ? translate("modelFormSaving") : translate("skillRootSave")}
             </button>
           </div>

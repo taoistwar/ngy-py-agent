@@ -89,7 +89,7 @@ export default function WorkspaceManager({ workspaces, onCreate, onUpdate, onDel
           <button type="button" className="btn btn-compact" onClick={onRefresh}>
             {translate("workspaceListRefresh")}
           </button>
-          <button type="button" className="btn btn-compact" onClick={openCreate}>
+          <button type="button" className="btn btn-compact btn-primary" onClick={openCreate}>
             {translate("workspaceFormCreate")}
           </button>
         </div>
@@ -172,7 +172,7 @@ export default function WorkspaceManager({ workspaces, onCreate, onUpdate, onDel
             </label>
             {error && <div className="form-error">{error}</div>}
             <div className="model-form-actions">
-              <button type="submit" className="btn" disabled={busy}>
+              <button type="submit" className="btn btn-primary" disabled={busy}>
                 {busy
                   ? translate("modelFormSaving")
                   : editingId

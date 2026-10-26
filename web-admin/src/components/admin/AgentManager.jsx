@@ -253,7 +253,7 @@ export default function AgentManager({
           <button type="button" className="btn btn-compact" onClick={onRefresh}>
             {translate("agentListRefresh")}
           </button>
-          <button type="button" className="btn btn-compact" onClick={openCreate}>
+          <button type="button" className="btn btn-compact btn-primary" onClick={openCreate}>
             {translate("agentFormCreate")}
           </button>
         </div>
@@ -460,7 +460,7 @@ export default function AgentManager({
 
             {error && <div className="form-error">{error}</div>}
             <div className="model-form-actions">
-              <button type="submit" className="btn" disabled={busy}>
+              <button type="submit" className="btn btn-primary" disabled={busy}>
                 {busy
                   ? translate("modelFormSaving")
                   : editingId

@@ -45,9 +45,9 @@
 }
 
 /* One focus treatment for every text field, instead of a per-selector list. */
-.admin-root input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
-.admin-root select:focus,
-.admin-root textarea:focus,
+.app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+.app-shell select:focus,
+.app-shell textarea:focus,
 .event-standalone input:focus,
 .event-standalone select:focus,
 .event-standalone textarea:focus {
@@ -56,8 +56,8 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.admin-root input::placeholder,
-.admin-root textarea::placeholder {
+.app-shell input::placeholder,
+.app-shell textarea::placeholder {
   color: var(--muted-dim);
 }
 
@@ -90,10 +90,6 @@
   box-shadow: 0 4px 12px var(--accent-glow);
 }
 
-.nav-item {
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
-}
-
 /* Writing a task should feel like the focused part of the screen. */
 .task-composer-panel {
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
@@ -113,10 +109,6 @@
    bar in the task detail pane. Pills keep their own width. */
 .detail-item .status {
   justify-self: start;
-}
-
-.metric-item {
-  font-variant-numeric: tabular-nums;
 }
 
 .model-table tbody tr {

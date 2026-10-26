@@ -1,4 +1,5 @@
 // Shared constants, helpers and form atoms used by the admin management panels.
+import { SearchIcon } from "../icons"
 
 const BUILTIN_AGENT_LABEL_KEYS = {
   build: "modeBuild",
@@ -56,13 +57,16 @@ export function matchesKeyword(keyword, ...values) {
 export function ManagerSearch({ value, onChange, placeholder, clearLabel, countLabel, matched, total }) {
   return (
     <div className="manager-search">
-      <input
-        type="text"
-        className="manager-search-input"
-        value={value}
-        placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      <span className="manager-search-field">
+        <SearchIcon />
+        <input
+          type="text"
+          className="manager-search-input"
+          value={value}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </span>
       {value ? (
         <button type="button" className="btn btn-compact" onClick={() => onChange("")}>
           {clearLabel}

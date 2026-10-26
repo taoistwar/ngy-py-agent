@@ -103,7 +103,7 @@ export default function McpServerManager({ servers, onCreate, onUpdate, onDelete
           <button type="button" className="btn btn-compact" onClick={onRefresh}>
             {translate("mcpListRefresh")}
           </button>
-          <button type="button" className="btn btn-compact" onClick={openCreate}>
+          <button type="button" className="btn btn-compact btn-primary" onClick={openCreate}>
             {translate("mcpFormCreate")}
           </button>
         </div>
@@ -211,7 +211,7 @@ export default function McpServerManager({ servers, onCreate, onUpdate, onDelete
             </label>
             {error && <div className="form-error">{error}</div>}
             <div className="model-form-actions">
-              <button type="submit" className="btn" disabled={busy}>
+              <button type="submit" className="btn btn-primary" disabled={busy}>
                 {busy
                   ? translate("modelFormSaving")
                   : editingId

@@ -47,7 +47,7 @@ export function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }
             <span>{translate("maxStepsSet")}</span>
             <input type="number" min="1" max="1000" value={value} onChange={(event) => setValue(event.target.value)} />
           </label>
-          <button type="submit" className="btn" disabled={busy || !value}>
+          <button type="submit" className="btn btn-primary" disabled={busy || !value}>
             {busy ? translate("maxStepsSaving") : translate("maxStepsSave")}
           </button>
         </form>
@@ -111,7 +111,7 @@ export function PermissionModeManager({ permissionModeConfig, onSave, onRefresh,
               <option value="deny_all">{translate("permissionModeDenyAll")}</option>
             </select>
           </label>
-          <button type="submit" className="btn" disabled={busy || !mode}>
+          <button type="submit" className="btn btn-primary" disabled={busy || !mode}>
             {busy ? translate("permissionModeSaving") : translate("permissionModeSave")}
           </button>
         </form>
@@ -222,7 +222,7 @@ export function RetentionManager({ retentionConfig, onSave, onRefresh, translate
             <span>{translate("retentionSetDays")}</span>
             <input type="number" min="0" value={days} onChange={(event) => setDays(event.target.value)} />
           </label>
-          <button type="submit" className="btn" disabled={busy || !days}>
+          <button type="submit" className="btn btn-primary" disabled={busy || !days}>
             {busy ? translate("retentionSaving") : translate("retentionSave")}
           </button>
         </form>
