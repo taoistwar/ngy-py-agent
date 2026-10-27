@@ -154,6 +154,38 @@ def enforce_policy(path: Path, config: FileAccessConfig, action: str = "read") -
         )
 
 
+def is_permitted(
+    path: Path, config: Optional[FileAccessConfig], action: str = "read"
+) -> bool:
+    """Whether the global policy allows ``path``; the boolean form of the check.
+
+    Tools that **enumerate** rather than resolve one path (``glob``, ``grep``) use
+    this to skip entries they must not read. Pruning is not an optimisation: a
+    name or a line the model could never get through ``read_file`` must not leak
+    out through a listing or a search.
+    """
+    try:
+        enforce_policy(path, config or FileAccessConfig(), action=action)
+    except AccessDenied:
+        return False
+    return True
+
+
+def display_path(path: Path, root: Optional[Path]) -> str:
+    """Path as the model should see it: relative to ``root`` when it is inside.
+
+    ``root`` is the workspace root (``None`` for an unbound session, which gets
+    absolute paths). Keeping one display rule for every file tool is what lets a
+    path returned by ``glob`` or ``grep`` be passed to ``read_file`` unchanged.
+    """
+    if root is None:
+        return path.as_posix()
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def _workspace_root(base_dir: Optional[str]) -> Optional[Path]:
     text = (base_dir or "").strip()
     return _normalize(Path(text)) if text else None

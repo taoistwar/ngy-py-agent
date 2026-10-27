@@ -19,16 +19,18 @@ are listed. The rationale, and why the order is newest-first, is in
 :mod:`agent.tools.glob.search`.
 
 One tool, one package, named after the tool the model sees (see ``AGENTS.md``).
-The implementation is in :mod:`~agent.tools.glob.tool`, the pattern semantics in
-:mod:`~agent.tools.glob.pattern`, the walk in :mod:`~agent.tools.glob.search`;
-this module re-exports the public surface.
+The implementation is in :mod:`~agent.tools.glob.tool`, the walk in
+:mod:`~agent.tools.glob.search`; the pattern matcher
+(:mod:`~agent.tools.glob_pattern`) and the walk itself
+(:mod:`~agent.tools.file_walk`) are shared with ``grep`` and therefore live at the
+package root. This module re-exports the public surface.
 """
 
+from agent.tools.file_walk import MAX_SCANNED_ENTRIES
 from agent.tools.glob.description import (
     GLOB_DESCRIPTION,
     GLOB_PARAMETERS,
     MAX_RESULTS,
-    MAX_SCANNED_ENTRIES,
 )
 from agent.tools.glob.errors import GlobError
 from agent.tools.glob.tool import make_glob_tool

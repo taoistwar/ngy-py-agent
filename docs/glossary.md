@@ -71,6 +71,18 @@
 | **`MAX_RESULTS` / `truncated`** | 一次调用最多返回 100 条，按修改时间从新到旧；`truncated` 为真表示还有更多，正确的反应是缩小 `path` 或把 `pattern` 写具体，而不是翻页。 | `agent/tools/glob/description.py` |
 | **`scan_truncated`** | 遍历条目数超过 `MAX_SCANNED_ENTRIES`（50000）而提前停止的标记。它与 `truncated` 分开：一个是“命中的没全返回”，一个是“根本没走完”。 | `agent/tools/glob/search.py` |
 
+## 文件搜索（`grep`）
+
+| 术语 | 定义 | 位置 |
+| --- | --- | --- |
+| **`grep`** | 按正则搜索文件内容的工具：`pattern` + 可选 `path`/`glob`/`type`，用 `output_mode` 选看路径、看命中行还是看次数。实现是 Python `re`（不是 ripgrep），逐行匹配。 | `agent/tools/grep/` |
+| **`output_mode`** | 三种输出形状：`files_with_matches`（默认，最新优先的路径列表）、`content`（命中行）、`count`（每文件命中行数 + 总数，按次数降序）。 | `agent/tools/grep/description.py` |
+| **命中行 / 上下文行** | `content` 模式下，命中行是 `path:line:text`，上下文行是 `path-line-text`（分隔符本身就说明是否命中），不相邻的组之间用 `--` 分隔。 | `agent/tools/grep/content.py` |
+| **`head_limit` / `offset`** | 输出条数与翻页。默认 250，`0` 才不限。分页在**渲染时**生效（够数就停），不是先全量渲染再切片。触发时结果里带 `applied_limit`/`applied_offset`。 | `agent/tools/grep/content.py` |
+| **`skipped_sensitive`** | 因看起来像凭证而被跳过的文件（判据同 `read_file` 的确认规则）。`grep` 返回内容，所以必须跳过并**报出名字**；需要时用 `read_file`（会询问）读取。 | `agent/tools/grep/scan.py` |
+| **`SEARCH_SKIP_DIRS`** | 内容搜索跳过遍历的目录名：版本库元数据（`.git` 等）+ 已安装依赖与构建产物（`node_modules`、`.venv`、`dist`、`build`、`target`…）。显式把 `path` 指向这些目录仍会搜。`glob` 不跳过任何目录。 | `agent/tools/file_walk.py` |
+| **`timed_out` / `scan_truncated`** | 墙钟预算（20 秒）用尽 / 遍历条目上限被触发。两者都表示“这个答案不完整”，与 `truncated`（输出条数已截断）分开报告。 | `agent/tools/grep/tool.py` |
+
 ## 文件编辑（`edit_file`）
 
 | 术语 | 定义 | 位置 |

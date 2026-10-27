@@ -1,5 +1,10 @@
 """Glob pattern matching: a shell-style pattern compiled to one regex.
 
+Shared by the two discovery tools: ``glob`` matches file *names* with it, and
+``grep`` uses it for its ``glob`` file *filter*. It lives at the package root
+rather than inside either tool because a second tool needs it, and a tool
+package must not import another one (see ``AGENTS.md``).
+
 ``fnmatch`` and ``pathlib.Path.glob`` both look like the obvious choice and both
 are wrong here:
 

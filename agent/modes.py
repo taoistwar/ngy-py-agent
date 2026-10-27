@@ -61,9 +61,10 @@ MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
         "tool_names": [
             "get_current_time",
             "code_interpreter",
-            # Finding a file is read-only and is what ``read_file`` often needs
-            # first, so both discovery and reading belong to this mode.
+            # Finding a file, or the code inside it, is read-only and is what
+            # ``read_file`` often needs first, so discovery belongs to this mode.
             "glob",
+            "grep",
             "read_file",
             "ask_user_question",
         ],

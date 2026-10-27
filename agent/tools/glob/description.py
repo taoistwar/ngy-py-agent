@@ -7,12 +7,9 @@ from typing import Any, Dict
 
 # Hard ceiling on returned paths. A listing is discovery, not a dump: past this
 # the model is better served by a narrower pattern or a deeper ``path`` than by
-# more names to read through.
+# more names to read through. The walk's own ceiling is
+# ``agent.tools.file_walk.MAX_SCANNED_ENTRIES``, shared with ``grep``.
 MAX_RESULTS = 100
-
-# Ceiling on walked entries, so an accidental ``**`` over a huge tree returns
-# quickly instead of scanning for minutes.
-MAX_SCANNED_ENTRIES = 50_000
 
 # Why the results stop: one text for "more matched than we return", one for "we
 # stopped looking". They are different problems and need different fixes.

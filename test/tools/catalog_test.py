@@ -28,6 +28,7 @@ EXPECTED_ORDER = (
     "convert_currency",
     "code_interpreter",
     "glob",
+    "grep",
     "read_file",
     "edit_file",
     "write_file",

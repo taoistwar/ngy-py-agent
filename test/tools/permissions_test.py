@@ -432,6 +432,7 @@ class RegistryGateTest(unittest.TestCase):
 
         expected = {
             "glob": PERMISSION_READ,
+            "grep": PERMISSION_READ,
             "read_file": PERMISSION_READ,
             "edit_file": PERMISSION_WRITE,
             "write_file": PERMISSION_WRITE,

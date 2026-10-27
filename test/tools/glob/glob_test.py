@@ -19,8 +19,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 from agent.tools.file_access import FileAccessConfig  # noqa: E402
 from agent.tools.glob import MAX_RESULTS, make_glob_tool  # noqa: E402
-from agent.tools.glob.pattern import GlobPattern  # noqa: E402
 from agent.tools.glob.search import search_files  # noqa: E402
+from agent.tools.glob_pattern import GlobPattern  # noqa: E402
 from agent.tools.read_file import make_read_file_tool  # noqa: E402
 
 

@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from agent.tools.file_access import (
     AccessDenied,
     FileAccessConfig,
+    display_path,
     load_access_config,
     resolve_read_path,
 )
@@ -34,17 +35,8 @@ from agent.tools.glob.description import (
     TRUNCATED_HINT,
 )
 from agent.tools.glob.errors import GlobError
-from agent.tools.glob.pattern import GlobPattern, split_absolute_pattern
 from agent.tools.glob.search import search_files
-
-
-def _display_path(path: Path, root: Optional[Path]) -> str:
-    if root is None:
-        return path.as_posix()
-    try:
-        return path.relative_to(root).as_posix()
-    except ValueError:
-        return path.as_posix()
+from agent.tools.glob_pattern import GlobPattern, split_absolute_pattern
 
 
 def _clean_pattern(pattern: Any) -> str:
@@ -95,14 +87,14 @@ def _search_root(
         raise GlobError(
             "Search path not found.",
             reason="path_not_found",
-            path=_display_path(root, workspace),
+            path=display_path(root, workspace),
         )
     if not root.is_dir():
         raise GlobError(
             "Search path is not a directory; pass a directory in 'path' (or drop it) and "
             "describe the files with 'pattern'.",
             reason="not_a_directory",
-            path=_display_path(root, workspace),
+            path=display_path(root, workspace),
         )
     return root, pattern, workspace
 
@@ -119,7 +111,7 @@ def _build_payload(
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "pattern": effective_pattern,
-        "path": _display_path(root, workspace),
+        "path": display_path(root, workspace),
         "filenames": files,
         "num_files": len(files),
         "duration_ms": duration_ms,
@@ -148,7 +140,7 @@ def _glob_impl(
         cleaned, requested, base_dir, config, extra_read_roots
     )
     result = search_files(root, GlobPattern(effective), policy=config)
-    files = [_display_path(item, workspace) for item in result.files]
+    files = [display_path(item, workspace) for item in result.files]
 
     return _build_payload(
         effective,
