@@ -14,9 +14,9 @@ from agent.tools.computer_control import (
     build_preview,
     make_control_tool,
 )
-from agent.tools.computer_control.i18n import ZH_CN
+from agent.tools.computer_control.i18n import DE, FR, RU, ZH_CN, ZH_TW
 from agent.tools.permissions import PERMISSION_COMPUTER, SCOPE_ONCE, SCOPE_SESSION
-from agent.tools.spec import CATEGORY_COMPUTER, LOCALE_ZH_CN, ToolSpec
+from agent.tools.spec import CATEGORY_COMPUTER, ToolSpec, localized_texts
 
 NAME = CONTROL_TOOL_NAME
 
@@ -32,5 +32,5 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         scopes=(SCOPE_ONCE, SCOPE_SESSION),
         preview=build_preview,
         category=CATEGORY_COMPUTER,
-        description_i18n={LOCALE_ZH_CN: ZH_CN},
+        description_i18n=localized_texts(zh_cn=ZH_CN, zh_tw=ZH_TW, fr=FR, de=DE, ru=RU),
     )

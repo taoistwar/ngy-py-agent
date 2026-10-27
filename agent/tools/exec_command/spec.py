@@ -13,9 +13,9 @@ from agent.tools.exec_command import (
     build_exec_description,
     make_exec_tool,
 )
-from agent.tools.exec_command.i18n import zh_cn
+from agent.tools.exec_command.i18n import de, fr, ru, zh_cn, zh_tw
 from agent.tools.permissions import PERMISSION_EXEC
-from agent.tools.spec import CATEGORY_SHELL, LOCALE_ZH_CN, ToolSpec
+from agent.tools.spec import CATEGORY_SHELL, ToolSpec, localized_texts
 
 NAME = EXEC_TOOL_NAME
 
@@ -36,5 +36,5 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         permission=PERMISSION_EXEC,
         category=CATEGORY_SHELL,
         # Built per registry, like the English one: the text names this shell.
-        description_i18n={LOCALE_ZH_CN: zh_cn()},
+        description_i18n=localized_texts(zh_cn=zh_cn(), zh_tw=zh_tw(), fr=fr(), de=de(), ru=ru()),
     )

@@ -1,10 +1,10 @@
 """The ``code_interpreter`` spec: name, schema and permission kind."""
 
 from agent.tools.bindings import ToolBindings
-from agent.tools.code_interpreter.i18n import ZH_CN
+from agent.tools.code_interpreter.i18n import DE, FR, RU, ZH_CN, ZH_TW
 from agent.tools.code_interpreter.tool import code_interpreter
 from agent.tools.permissions import PERMISSION_EXEC
-from agent.tools.spec import CATEGORY_COMPUTE, LOCALE_ZH_CN, ToolSpec
+from agent.tools.spec import CATEGORY_COMPUTE, ToolSpec, localized_texts
 
 NAME = "code_interpreter"
 
@@ -35,5 +35,5 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         # machine, which is why it is confirmed (ADR 0006 D2).
         permission=PERMISSION_EXEC,
         category=CATEGORY_COMPUTE,
-        description_i18n={LOCALE_ZH_CN: ZH_CN},
+        description_i18n=localized_texts(zh_cn=ZH_CN, zh_tw=ZH_TW, fr=FR, de=DE, ru=RU),
     )

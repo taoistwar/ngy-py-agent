@@ -7,9 +7,9 @@ from agent.tools.edit_file import (
     make_edit_file_tool,
     make_edit_preview,
 )
-from agent.tools.edit_file.i18n import ZH_CN
+from agent.tools.edit_file.i18n import DE, FR, RU, ZH_CN, ZH_TW
 from agent.tools.permissions import PERMISSION_WRITE
-from agent.tools.spec import CATEGORY_FILE, LOCALE_ZH_CN, ToolSpec
+from agent.tools.spec import CATEGORY_FILE, ToolSpec, localized_texts
 
 NAME = "edit_file"
 
@@ -31,5 +31,5 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
             base_dir=bindings.base_dir, extra_read_roots=bindings.extra_read_roots
         ),
         category=CATEGORY_FILE,
-        description_i18n={LOCALE_ZH_CN: ZH_CN},
+        description_i18n=localized_texts(zh_cn=ZH_CN, zh_tw=ZH_TW, fr=FR, de=DE, ru=RU),
     )

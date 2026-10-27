@@ -1,9 +1,9 @@
 """The ``convert_currency`` spec: name, schema and permission kind."""
 
 from agent.tools.bindings import ToolBindings
-from agent.tools.convert_currency.i18n import ZH_CN
+from agent.tools.convert_currency.i18n import DE, FR, RU, ZH_CN, ZH_TW
 from agent.tools.convert_currency.tool import convert_currency
-from agent.tools.spec import CATEGORY_LOOKUP, LOCALE_ZH_CN, ToolSpec
+from agent.tools.spec import CATEGORY_LOOKUP, ToolSpec, localized_texts
 
 NAME = "convert_currency"
 
@@ -33,5 +33,5 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
             "required": ["amount", "from_currency", "to_currency"],
         },
         category=CATEGORY_LOOKUP,
-        description_i18n={LOCALE_ZH_CN: ZH_CN},
+        description_i18n=localized_texts(zh_cn=ZH_CN, zh_tw=ZH_TW, fr=FR, de=DE, ru=RU),
     )

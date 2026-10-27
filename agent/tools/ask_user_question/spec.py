@@ -12,10 +12,10 @@ from agent.tools.ask_user_question import (
     ASK_USER_QUESTION_TOOL_NAME,
     make_ask_user_question_tool,
 )
-from agent.tools.ask_user_question.i18n import ZH_CN
+from agent.tools.ask_user_question.i18n import DE, FR, RU, ZH_CN, ZH_TW
 from agent.tools.bindings import ToolBindings
 from agent.tools.permissions import PERMISSION_NONE
-from agent.tools.spec import CATEGORY_INTERACTION, LOCALE_ZH_CN, ToolSpec
+from agent.tools.spec import CATEGORY_INTERACTION, ToolSpec, localized_texts
 
 NAME = ASK_USER_QUESTION_TOOL_NAME
 
@@ -29,5 +29,5 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         parameters=ASK_USER_QUESTION_PARAMETERS,
         permission=PERMISSION_NONE,
         category=CATEGORY_INTERACTION,
-        description_i18n={LOCALE_ZH_CN: ZH_CN},
+        description_i18n=localized_texts(zh_cn=ZH_CN, zh_tw=ZH_TW, fr=FR, de=DE, ru=RU),
     )

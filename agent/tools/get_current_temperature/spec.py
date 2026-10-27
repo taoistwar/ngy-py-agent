@@ -1,9 +1,9 @@
 """The ``get_current_temperature`` spec: name, schema and permission kind."""
 
 from agent.tools.bindings import ToolBindings
-from agent.tools.get_current_temperature.i18n import ZH_CN
+from agent.tools.get_current_temperature.i18n import DE, FR, RU, ZH_CN, ZH_TW
 from agent.tools.get_current_temperature.tool import get_current_temperature
-from agent.tools.spec import CATEGORY_LOOKUP, LOCALE_ZH_CN, ToolSpec
+from agent.tools.spec import CATEGORY_LOOKUP, ToolSpec, localized_texts
 
 NAME = "get_current_temperature"
 
@@ -30,5 +30,5 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
             "required": ["location", "unit"],
         },
         category=CATEGORY_LOOKUP,
-        description_i18n={LOCALE_ZH_CN: ZH_CN},
+        description_i18n=localized_texts(zh_cn=ZH_CN, zh_tw=ZH_TW, fr=FR, de=DE, ru=RU),
     )

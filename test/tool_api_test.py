@@ -26,7 +26,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.tools.permissions import PERMISSION_KINDS, SCOPES  # noqa: E402
-from agent.tools.spec import CATEGORY_KINDS  # noqa: E402
+from agent.tools.spec import CATEGORY_KINDS, TRANSLATED_LOCALES  # noqa: E402
 from task_store import _SqliteTaskStore  # noqa: E402
 
 
@@ -125,24 +125,39 @@ class ToolApiTest(unittest.TestCase):
         self.assertNotEqual(chinese["description"], read_file["description"])
         self.assertTrue(chinese["parameters"]["file_path"])
 
-    def test_every_parameter_has_chinese_text(self):
-        # A missing translation shows up as an English-only row on a Chinese page,
-        # which is exactly the drift this asserts against.
+    def test_every_tool_ships_every_supported_locale(self):
+        # The admin page picks a bundle by tag, so a tool that forgot one locale is
+        # an English-only row on that language's page. Asserted per tool rather than
+        # per locale so the failure names the tool that drifted.
         for name, item in self.fetch_tools().items():
-            chinese = item["description_i18n"].get("zh-CN")
-            self.assertIsNotNone(chinese, name)
-            self.assertTrue(chinese["description"], name)
-            for param in item["parameters"].get("properties") or {}:
-                self.assertTrue(
-                    chinese["parameters"].get(param), f"{name}.{param} has no zh-CN text"
+            self.assertEqual(sorted(item["description_i18n"]), sorted(TRANSLATED_LOCALES), name)
+
+    def test_every_parameter_has_text_in_every_locale(self):
+        # A missing translation shows up as an English-only row, which is exactly the
+        # drift this asserts against.
+        for name, item in self.fetch_tools().items():
+            for locale in TRANSLATED_LOCALES:
+                text = item["description_i18n"].get(locale) or {}
+                self.assertTrue(text.get("description"), f"{name} has no {locale} description")
+                self.assertNotEqual(
+                    text["description"], item["description"], f"{name} {locale} is still English"
                 )
+                for param in item["parameters"].get("properties") or {}:
+                    self.assertTrue(
+                        text.get("parameters", {}).get(param),
+                        f"{name}.{param} has no {locale} text",
+                    )
 
     def test_translations_stay_out_of_the_model_schema(self):
         # The model gets English only: a translation inside the schema would be
         # sent to the provider on every request.
         for name, item in self.fetch_tools().items():
-            self.assertNotIn("zh-CN", json.dumps(item["parameters"]), name)
-            self.assertNotIn("zh-CN", json.dumps(item["description"]), name)
+            model_text = json.dumps(item["parameters"]) + item["description"]
+            for locale in TRANSLATED_LOCALES:
+                text = item["description_i18n"][locale]
+                self.assertNotIn(text["description"], model_text, f"{name} leaks {locale}")
+                for param_text in text["parameters"].values():
+                    self.assertNotIn(param_text, model_text, f"{name} leaks {locale} parameters")
 
     # ------------------------------------------------------------------ running
 

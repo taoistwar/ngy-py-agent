@@ -6,9 +6,9 @@ from agent.tools.grep import (
     GREP_PARAMETERS,
     make_grep_tool,
 )
-from agent.tools.grep.i18n import ZH_CN
+from agent.tools.grep.i18n import DE, FR, RU, ZH_CN, ZH_TW
 from agent.tools.permissions import PERMISSION_READ
-from agent.tools.spec import CATEGORY_FILE, LOCALE_ZH_CN, ToolSpec
+from agent.tools.spec import CATEGORY_FILE, ToolSpec, localized_texts
 
 NAME = "grep"
 
@@ -28,5 +28,5 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         # ``deny_all`` covers it (ADR 0006).
         permission=PERMISSION_READ,
         category=CATEGORY_FILE,
-        description_i18n={LOCALE_ZH_CN: ZH_CN},
+        description_i18n=localized_texts(zh_cn=ZH_CN, zh_tw=ZH_TW, fr=FR, de=DE, ru=RU),
     )

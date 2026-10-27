@@ -34,9 +34,21 @@ CATEGORY_KINDS = (
     CATEGORY_OTHER,
 )
 
-# Locales a tool may ship text for. One at a time, because each one is hand-written
-# prose that has to be kept in step with the English source.
+# Locales a tool ships display text for. Every one of them is hand-written prose
+# that has to be kept in step with the English source, so a tool ships all of them
+# rather than a random subset (``localized_texts`` enforces the shape). The list
+# mirrors ``LOCALES`` in ``web-admin/src/i18n.js``: the admin page picks a bundle by
+# these exact tags.
+LOCALE_EN = "en"
 LOCALE_ZH_CN = "zh-CN"
+LOCALE_ZH_TW = "zh-TW"
+LOCALE_FR = "fr"
+LOCALE_DE = "de"
+LOCALE_RU = "ru"
+
+LOCALES = (LOCALE_EN, LOCALE_ZH_CN, LOCALE_ZH_TW, LOCALE_FR, LOCALE_DE, LOCALE_RU)
+# Everything except English: English lives in ``description``/``parameters``.
+TRANSLATED_LOCALES = LOCALES[1:]
 
 
 @dataclass(frozen=True)
@@ -51,6 +63,29 @@ class ToolText:
     description: str
     # Parameter name -> text. Names must match ``ToolSpec.parameters``.
     parameters: Mapping[str, str] = field(default_factory=dict)
+
+
+def localized_texts(
+    *,
+    zh_cn: ToolText,
+    zh_tw: ToolText,
+    fr: ToolText,
+    de: ToolText,
+    ru: ToolText,
+) -> Dict[str, ToolText]:
+    """Every translated locale, keyed the way the admin page looks them up.
+
+    The arguments are keyword-only and all required: a tool either ships the whole
+    set or fails at import, which is cheaper than discovering on a French page that
+    one tool fell back to English because a locale was forgotten here.
+    """
+    return {
+        LOCALE_ZH_CN: zh_cn,
+        LOCALE_ZH_TW: zh_tw,
+        LOCALE_FR: fr,
+        LOCALE_DE: de,
+        LOCALE_RU: ru,
+    }
 
 
 @dataclass(frozen=True)

@@ -7,8 +7,8 @@ from agent.tools.read_file import (
     READ_FILE_PARAMETERS,
     make_read_file_tool,
 )
-from agent.tools.read_file.i18n import ZH_CN
-from agent.tools.spec import CATEGORY_FILE, LOCALE_ZH_CN, ToolSpec
+from agent.tools.read_file.i18n import DE, FR, RU, ZH_CN, ZH_TW
+from agent.tools.spec import CATEGORY_FILE, ToolSpec, localized_texts
 
 NAME = "read_file"
 
@@ -30,5 +30,5 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         # Reads are only confirmed for sensitive paths (ADR 0006 D3).
         permission=PERMISSION_READ,
         category=CATEGORY_FILE,
-        description_i18n={LOCALE_ZH_CN: ZH_CN},
+        description_i18n=localized_texts(zh_cn=ZH_CN, zh_tw=ZH_TW, fr=FR, de=DE, ru=RU),
     )
