@@ -23,7 +23,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from agent.agent_loop import snip_compact  # noqa: E402
+from agent.agent_loop import snip_compact, transcript  # noqa: E402
 from agent.agent_loop.snip_compact import apply_snip_compact  # noqa: E402
 from agent.models import EventCategory  # noqa: E402
 from agent.provider import AnthropicProvider  # noqa: E402
@@ -284,7 +284,8 @@ class SnipCompactTest(unittest.TestCase):
         messages = [_system(), _user()] + _alternating(58)
         before = len(messages)
 
-        with patch.object(snip_compact, "persist_text", side_effect=OSError("disk full")):
+        # The write seam now lives in the shared transcript writer (ADR 0017 D10).
+        with patch.object(transcript, "persist_text", side_effect=OSError("disk full")):
             summary = self.compact(messages)
 
         self.assertEqual(len(messages), before)

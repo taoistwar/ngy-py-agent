@@ -2,6 +2,7 @@
 
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from agent.agent_loop.compact_history import compact_history
 from agent.agent_loop.config import DEFAULT_MAX_STEPS
 from agent.agent_loop.messages import _with_base_dir, _with_history
 from agent.agent_loop.micro_compact import mark_seen, prepare_context
@@ -159,7 +160,7 @@ def run_react_loop(
         )
         # The conditional third step: only when the estimate is over the limit, and
         # before ``mark_seen`` below claims the results that just arrived unread.
-        prepare_context(
+        context = prepare_context(
             messages,
             seen_results,
             base_dir=getattr(registry, "base_dir", None),
@@ -168,6 +169,24 @@ def run_react_loop(
             step=step,
             model_max_input_tokens=int(getattr(provider.config, "max_input_tokens", 0) or 0),
         )
+        if context.get("still_over"):
+            # The fourth and last resort: text surgery could not free enough, so spend
+            # one model call on replacing the old history with a summary (ADR 0017).
+            compacted = compact_history(
+                messages,
+                user_query,
+                provider,
+                base_dir=getattr(registry, "base_dir", None),
+                event_sink=event_sink,
+                task_id=task_id,
+                step=step,
+                context_limit=int(context.get("context_limit") or 0),
+            )
+            if verbose and compacted.get("reason") == "compacted":
+                print(
+                    f"[compacted] {compacted['compacted_messages']} messages summarized, "
+                    f"{compacted['after_chars']} chars left"
+                )
         if verbose:
             print(f"\n=== ReAct Step {step}/{max_steps} ===")
 

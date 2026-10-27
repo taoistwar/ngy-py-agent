@@ -18,21 +18,14 @@ Only the count is bounded here. A retained result can still be enormous; that is
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from agent.agent_loop.runtime import _emit
+from agent.agent_loop.transcript import write_transcript
 from agent.models import EventCategory, EventSink, TaskEvent
 from agent.telemetry import current_trace_ids
-from agent.tools.output_store import (
-    ensure_result_directory,
-    new_stem,
-    persist_text,
-    workspace_transcript_directory,
-)
-from agent.vision import redact_image_payload
 
 # Message-count budget for the conversation handed to the model.
 MAX_MESSAGES_ENV = "TRANSCRIPT_MAX_MESSAGES"
@@ -45,9 +38,6 @@ HEAD_MESSAGES = 3
 # Below this many archived messages the snapshot costs more than the cut saves; the
 # window is allowed to drift instead (ADR 0015 D3).
 MIN_ARCHIVED_MESSAGES = 5
-
-TRANSCRIPT_EXTENSION = ".jsonl"
-TRANSCRIPT_PREFIX = "transcript-"
 
 
 def resolve_max_messages(configured: Optional[int] = None) -> int:
@@ -124,7 +114,7 @@ def apply_snip_compact(
         return summary
 
     try:
-        path = _write_transcript(messages, base_dir)
+        path = write_transcript(messages, base_dir)
     except OSError as exc:
         summary["reason"] = f"transcript write failed: {exc}"
         _emit(
@@ -254,22 +244,6 @@ def _report_orphans(
             collapsed=True,
         ),
     )
-
-
-def _write_transcript(messages: List[Dict[str, Any]], base_dir: Optional[str]) -> Path:
-    """One JSON object per line.
-
-    Not one big JSON array: ``read_file`` slices by line, and a payload that answers
-    "the whole history" but arrives as a single line cannot be read back in parts.
-    Inline screenshots are replaced - a transcript is for the text that was dropped,
-    and a single base64 image is a few megabytes.
-    """
-    directory = workspace_transcript_directory(base_dir)
-    ensure_result_directory(directory)
-    lines = [
-        json.dumps(redact_image_payload(message), ensure_ascii=False) for message in messages
-    ]
-    return persist_text(directory, new_stem(TRANSCRIPT_PREFIX) + TRANSCRIPT_EXTENSION, "\n".join(lines) + "\n")
 
 
 def _marker(archived: int, path: Path) -> str:

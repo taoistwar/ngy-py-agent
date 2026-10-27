@@ -30,6 +30,8 @@ tool_result_budget（步末）→ snip_compact（步首）→ 超限？micro_com
 
 前三步不动结构、不改顺序，只改写 `content`。第四步（LLM 摘要）需要一次模型调用、要处理"摘要失败"，而且摘要本身是不可核对的二次创作——本 ADR 明确不走这条路：`still_over` 只记一条事件，交给运维调阈值或调模型窗口。
 
+> 更新（[ADR 0017](0017-compact-history.md)）：上面最后那句已被取代——`still_over` 为真时由 `loop.py` 调用 `compact_history`（归档 transcript → 摘要 → 一条 `[Compacted]` 标记）。本 ADR 其余结论（估算口径、阈值优先级、按 `tool_call_id` 判已读、复用确定性文件名、失败保留原文）不变。
+
 ### D2. 估算走结构化遍历，不用 `len(json.dumps(messages))`
 
 参考实现的估算是一整表序列化。落到本仓库有两处不能接受：

@@ -28,6 +28,7 @@ cd ..
 - `TASK_RETENTION_DAYS=36600`（默认 36600 天，约 100 年）
 - `TRANSCRIPT_MAX_MESSAGES=50`（对话窗口条数上限，超出后旧消息归档到 `<workspace>/.transcripts/`，`<= 0` 关闭，见 [ADR 0015](decisions/0015-snip-compact.md)）
 - `CONTEXT_CHAR_LIMIT`（整段上下文的字符上限，超出后缩短模型已读过的旧工具结果；未配置时取模型 `max_input_tokens × 4`，再退回 200,000，`<= 0` 关闭，见 [ADR 0016](decisions/0016-micro-compact.md)）
+- `CONTEXT_SUMMARY_ENABLED=0`（关闭压缩管线的第四步——历史摘要。该步是唯一会额外发起模型调用的压缩步骤，见 [ADR 0017](decisions/0017-compact-history.md)）
 - 供应商相关：
   - `TOOL_SCHEMA_PROVIDER=openai`
   - `OLLAMA_BASE_URL`
@@ -320,6 +321,19 @@ npm run i18n:check
 - 单条写盘失败：保留原文、记入 `failed`、继续下一条，最后发一条 `error`。宁可超限（看得见），不可丢内容（看不见）。
 - 两步之后仍超限（`still_over`）**只记事件**，不进入需要模型调用的摘要压缩：那会是另一步的设计，不是这一步的隐藏分支。
 
+### 历史摘要压缩（compact_history）
+
+- 前三步都是确定性文本手术；这一步是**唯一会调用模型**的压缩步骤，所以放在最后，进入条件只有一个：`prepare_context` 返回 `still_over`（见 [ADR 0017](decisions/0017-compact-history.md)）。
+- 它处理的是前三步结构上碰不到的东西：一长串 assistant/用户消息、注入的历史、没有工具结果的对话。这些内容没有"已读/未读"可区分，也没有可裁剪的边界。
+- 顺序固定为 **写 transcript → 请求摘要 → 替换消息**。写不出就不调模型；模型异常或**摘要为空**就不替换，历史原样保留并发 `error`（`action: "kept the full history"`）。归档先行意味着失败时证据也已落盘。
+- 摘要输入有独立预算：单条 4,000 字符、总量 `min(60,000, 阈值/2)`、头 1/4 尾 3/4，中间省略。**只送将被删掉的那段**，尾部不送：它要原样留在对话里，送进去等于两份内容 + 双份预算。
+- 替换形状是 `system + 一条 [Compacted]（role=user）+ 最近 5 条`；切点落在 `tool` 上要**循环**回退到 `assistant(tool_calls)`，孤儿工具结果会被 provider 拒绝。并行工具多时尾部会超过 5 条——上限不是等号。
+- 标记里**总是**写 `Current user request`（来自 `run_react_loop(user_query=...)`）：长工具循环里那条 user 消息可能已经落在被删区间。摘要标 `reference only`，transcript 才是权威；末尾给 `read_file (offset/limit)` 的回读提示。
+- **投影守卫**：调用前先算"删掉旧历史 + 摘要 + 标记"之后的大小，若仍高于阈值 80% 就直接跳过并记 `debug`。没有这道判断，一个尾部自己就超限的会话会每步花一次模型调用。不做"每 K 步一次"的时间窗——那需要跨步状态，重启即失效。
+- 输出上限按 wire 格式选 kwarg：OpenAI/Anthropic 用 `max_tokens`，**Gemini 用 `max_output_tokens`**（它会把未知 kwarg 直接塞进 payload，传错就是 400）。
+- 可观测：span `compact.summary`（`llm_span(name=...)`）+ 一对 `llm_request`/`llm_response` 事件（`purpose: "compaction_summary"`，只带字符数，不带原始 payload）+ 一条 `debug` 汇总。
+- transcript 写入器与 `snip_compact` 共用 `agent/agent_loop/transcript.py`（JSONL、图片 redact、每次一个新文件）——两套实现迟早会在行格式或目录上分叉。
+
 ### 工具结果分流（模型 vs UI）
 
 - 工具若需要把结构化记录交给 UI/外部消费者，**不要**把它塞进返回给模型的字符串：返回 `ToolOutcome`（`model_text` + 事件类别/标题 + `details`），由 `agent_loop` 拆分。
@@ -403,6 +417,7 @@ npm run i18n:check
   - [ADR 0014 Provider 与模型分离，RPM 按 provider + base_url 计](decisions/0014-provider-model-split.md)
   - [ADR 0015 snip_compact（对话窗口裁剪）](decisions/0015-snip-compact.md)
   - [ADR 0016 micro_compact（只缩短模型已读过的结果）](decisions/0016-micro-compact.md)
+  - [ADR 0017 compact_history（用一次模型调用换掉旧历史）](decisions/0017-compact-history.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 

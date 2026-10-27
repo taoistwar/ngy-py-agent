@@ -91,10 +91,16 @@ def react_step_span(step: int, max_steps: int) -> Iterator[Any]:
 
 @contextmanager
 def llm_span(
-    provider: str, model: str, step: int, message_count: int
+    provider: str,
+    model: str,
+    step: int,
+    message_count: int,
+    name: str | None = None,
 ) -> Iterator[Any]:
+    """One model request. ``name`` overrides the default ``chat <model>`` for calls that
+    are not a ReAct turn (the compaction summary is a request, not a step)."""
     with _start_span(
-        f"chat {model}",
+        name or f"chat {model}",
         {
             "gen_ai.system": provider,
             "gen_ai.request.model": model,
