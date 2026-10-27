@@ -27,6 +27,7 @@ EXPECTED_ORDER = (
     "get_current_time",
     "convert_currency",
     "code_interpreter",
+    "glob",
     "read_file",
     "edit_file",
     "write_file",

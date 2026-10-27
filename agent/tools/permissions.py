@@ -478,6 +478,13 @@ class PermissionBroker:
         """The thing being acted on, or ``None`` when it must not be asked about."""
         if kind in (PERMISSION_READ, PERMISSION_WRITE):
             raw = arguments.get("file_path")
+            if kind == PERMISSION_READ and (not isinstance(raw, str) or not raw.strip()):
+                # ``glob`` searches a *directory*, so its argument is ``path``, and
+                # leaving it out means "the workspace root". The gate has to see the
+                # same default, or a listing would slip past ``deny_all``.
+                raw = arguments.get("path")
+                if not isinstance(raw, str) or not raw.strip():
+                    raw = "."
             if not isinstance(raw, str) or not raw.strip():
                 return None
             resolver = (

@@ -20,6 +20,7 @@ from agent.tools.edit_file import spec as edit_file
 from agent.tools.exec_command import spec as exec_command
 from agent.tools.get_current_temperature import spec as get_current_temperature
 from agent.tools.get_current_time import spec as get_current_time
+from agent.tools.glob import spec as glob
 from agent.tools.read_file import spec as read_file
 from agent.tools.spec import ToolSpec
 from agent.tools.write_file import spec as write_file
@@ -31,6 +32,8 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     get_current_time.build_spec,
     convert_currency.build_spec,
     code_interpreter.build_spec,
+    # Find before read: the model locates a file with ``glob`` and then reads it.
+    glob.build_spec,
     read_file.build_spec,
     edit_file.build_spec,
     write_file.build_spec,

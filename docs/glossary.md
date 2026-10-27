@@ -59,6 +59,15 @@
 | **`resolve_read_path` / `resolve_write_path`** | 读/写各自的路径解析入口。两者**复用同一套策略与工作空间约束**（读得到的文件就能改），仅入口名区分意图。 | `agent/tools/file_access.py` |
 | **AccessDenied** | 越权时抛出的异常，带 `path` 与 `reason`（`deny_dir` / `deny_file` / `outside_allow_dirs` / `outside_workspace`）。 | `agent/tools/file_access.py` |
 
+## 文件查找（`glob`）
+
+| 术语 | 定义 | 位置 |
+| --- | --- | --- |
+| **`glob`** | 按文件名模式查找文件的工具：参数是 `pattern`（+ 可选 `path`），返回**相对工作空间根**的文件路径，可直接交给 `read_file`。不隐式过滤：隐藏文件与 `.gitignore` 排除的文件同样会被列出。 | `agent/tools/glob/` |
+| **glob 模式** | 照 ripgrep `--glob` 的语义：`*` 不跨 `/`，`**` 跨段且 `**/` 可匹配零层目录，`?` 匹配一个字符，`[abc]` 是字符集，`{a,b}` 是候选列表；**不含 `/` 的模式只匹配文件名**（任意深度）。 | `agent/tools/glob/pattern.py` |
+| **`MAX_RESULTS` / `truncated`** | 一次调用最多返回 100 条，按修改时间从新到旧；`truncated` 为真表示还有更多，正确的反应是缩小 `path` 或把 `pattern` 写具体，而不是翻页。 | `agent/tools/glob/description.py` |
+| **`scan_truncated`** | 遍历条目数超过 `MAX_SCANNED_ENTRIES`（50000）而提前停止的标记。它与 `truncated` 分开：一个是“命中的没全返回”，一个是“根本没走完”。 | `agent/tools/glob/search.py` |
+
 ## 文件编辑（`edit_file`）
 
 | 术语 | 定义 | 位置 |

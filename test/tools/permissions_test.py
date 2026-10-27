@@ -124,6 +124,25 @@ class PermissionBrokerTest(unittest.TestCase):
         self.assertIsNone(decision)
         self.assertEqual(self.requests(), [])
 
+    def test_ordinary_search_is_not_worth_interrupting_the_user_for(self):
+        broker = self.make_broker()
+
+        decision = broker.check("glob", PERMISSION_READ, {"pattern": "**/*.py", "path": "src"})
+
+        self.assertIsNone(decision)
+        self.assertEqual(self.requests(), [])
+
+    def test_directory_search_is_still_covered_by_deny_all(self):
+        # ``glob`` keys on a directory (``path``) rather than a file, so the gate
+        # has to read that argument or a listing would slip past ``deny_all``.
+        broker = self.make_broker(mode=PermissionMode.DENY_ALL)
+
+        denial = broker.check("glob", PERMISSION_READ, {"pattern": "**/*.py"})
+
+        self.assertIsNotNone(denial)
+        self.assertEqual(denial.details["reason"], REASON_DENY_ALL)
+        self.assertEqual(denial.details["tool"], "glob")
+
     def test_policy_denied_path_is_not_asked_about(self):
         blocked = self.root / "blocked.txt"
         blocked.write_text("x", encoding="utf-8")
@@ -412,6 +431,7 @@ class RegistryGateTest(unittest.TestCase):
         full = ToolRegistry(base_dir=str(self.root))
 
         expected = {
+            "glob": PERMISSION_READ,
             "read_file": PERMISSION_READ,
             "edit_file": PERMISSION_WRITE,
             "write_file": PERMISSION_WRITE,
