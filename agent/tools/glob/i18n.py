@@ -36,7 +36,8 @@ ZH_CN = ToolText(
 ZH_TW = ToolText(
     description=(
         "依檔名樣式尋找檔案。當你知道檔案叫什麼、但不知道它在哪個目錄時用它；在 read_file "
-        "之前用它，勝過猜一個路徑。傳回相符的檔案路徑，依修改時間從新到舊，最多 100 個；"
+        "之前用它，勝過猜一個路徑。傳回相符的檔案路徑，最多 100 個：專案原始碼在前，已安裝"
+        "依賴與建置產物排在最後，兩組內部各自依修改時間從新到舊；"
         "'truncated' 為真表示清單不完整，此時應縮小 'path' 或把 'pattern' 寫得更具體，而不是"
         "翻頁。樣式語意與 ripgrep 的 --glob 一致：'*' 只相符單一路徑段內的字元，'**' 可跨路徑"
         "段（'a/**/b' 也相符 'a/b'），'?' 相符一個字元，'[abc]' 是字元集，'{a,b}' 是候選清單。"
@@ -62,7 +63,9 @@ FR = ToolText(
     description=(
         "Trouve des fichiers par motif de nom. À utiliser quand vous connaissez le nom du fichier "
         "mais pas son dossier ; avant read_file, c'est mieux que deviner un chemin. Renvoie les "
-        "chemins correspondants, du plus récemment modifié au plus ancien, 100 au maximum ; "
+        "chemins correspondants, 100 au maximum : le code du projet d'abord, les dépendances "
+        "installées et les artefacts de build en dernier, chaque groupe du plus récemment "
+        "modifié au plus ancien ; "
         "'truncated' vrai signifie que la liste est incomplète : réduisez alors 'path' ou rendez "
         "'pattern' plus précis plutôt que de paginer. La sémantique des motifs est celle de "
         "--glob de ripgrep : '*' ne correspond qu'à des caractères d'un seul segment de chemin, "
@@ -95,7 +98,9 @@ DE = ToolText(
     description=(
         "Findet Dateien über ein Namensmuster. Verwenden, wenn der Dateiname bekannt ist, der "
         "Ordner aber nicht; vor read_file ist das besser, als einen Pfad zu raten. Gibt passende "
-        "Dateipfade zurück, zuletzt geänderte zuerst, höchstens 100; 'truncated' wahr heißt, die "
+        "Dateipfade zurück, höchstens 100: Projektquellcode zuerst, installierte Abhängigkeiten "
+        "und Build-Artefakte zuletzt, innerhalb jeder Gruppe zuletzt geänderte zuerst; "
+        "'truncated' wahr heißt, die "
         "Liste ist unvollständig — dann 'path' verkleinern oder 'pattern' genauer fassen statt zu "
         "blättern. Die Mustersemantik entspricht --glob von ripgrep: '*' trifft nur Zeichen "
         "innerhalb eines Pfadsegments, '**' darf Segmente überschreiten ('a/**/b' trifft auch "
@@ -125,8 +130,9 @@ DE = ToolText(
 RU = ToolText(
     description=(
         "Ищет файлы по шаблону имени. Используйте, когда имя файла известно, а папка — нет; "
-        "перед read_file это лучше, чем угадывать путь. Возвращает подходящие пути, сначала "
-        "более свежие по времени изменения, не больше 100; 'truncated' = true означает, что "
+        "перед read_file это лучше, чем угадывать путь. Возвращает подходящие пути, не больше "
+        "100: сначала исходники проекта, установленные зависимости и артефакты сборки в конце, "
+        "внутри каждой группы — более свежие по времени изменения; 'truncated' = true означает, что "
         "список неполный: сузьте 'path' или сделайте 'pattern' конкретнее, а не листайте "
         "дальше. Семантика шаблонов совпадает с --glob в ripgrep: '*' соответствует символам в "
         "пределах одного сегмента пути, '**' может пересекать сегменты ('a/**/b' соответствует "
