@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { ChevronIcon, SidebarIcon } from "../icons"
 import { formatTime } from "../../utils/format"
 import { getHealthClass, getHealthText } from "../../utils/health"
+import BrandMark from "./BrandMark"
 import { NAV_GROUPS, NAV_ICONS, findNavLocation } from "./navigation"
 
 const GROUPS_STORAGE_KEY = "web-admin.navGroups"
@@ -82,19 +83,7 @@ export default function AppSidebar({
   return (
     <aside className={`app-sidebar${railMode ? " is-collapsed" : ""}`}>
       <div className="sidebar-head">
-        <span className="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path
-              d="M5 16.5V7.5a2 2 0 0 1 3.4-1.4L19 16.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path d="M19 7.5v9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-          </svg>
-        </span>
+        <BrandMark />
         {!railMode && (
           <span className="brand-text">
             <span className="brand-title">{translate("appTitle")}</span>
