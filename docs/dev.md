@@ -116,23 +116,31 @@ ws.onmessage = (event) => {
 
 ## 8. 前端国际化（i18n）文案维护
 
-- 目前支持语言：
-  - `en`
-  - `zh-CN`
+- 目前支持语言（`web-admin/src/i18n.js` 的 `LOCALES`）：
+  - `en`（英文，源文本）
+  - `zh-CN`（简体中文）
+  - `zh-TW`（繁体中文）
+  - `fr`（法语）
+  - `de`（德语）
+  - `ru`（俄语）
 - 规范：所有界面文案通过 `web-admin/src/i18n.js` 的 `t(locale, key)` 获取，不允许在 `web-admin/src/*.jsx/.js` 中写入直接中文文本。
-- 文案文件位置：
-  - `web-admin/src/locales/en.json`
-  - `web-admin/src/locales/zh-CN.json`
+- 文案文件位置（`web-admin/src/locales/`）：`en.json`、`zh-CN.json`、`zh-TW.json`、`fr.json`、`de.json`、`ru.json`。
+- 默认语言：先看 `localStorage`（`web-admin.locale`），再按 `navigator.language` 推断（`src/i18n.js` 的 `resolveLocale`）：
+  - `zh-Hant` / `zh-TW` / `zh-HK` / `zh-MO` → `zh-TW`，其余 `zh-*` → `zh-CN`；
+  - `fr-*` / `de-*` / `ru-*` 按主语言匹配；
+  - 其余回退 `en`。
 - 新增或修改文案时的检查清单：
   - 先在 `en.json` 新增/更新 key-value。
-  - 再在 `zh-CN.json` 增加同名 key（缺失会回退显示 `key` 本身）。
-  - 保持两份文件的 key 集合一致。
+  - 再在其他每份语言包里增加同名 key（缺失会回退英文，`languageName` 缺失会显示 key 本身）。
+  - 保持所有文件的 key 集合一致，新增语言时同时改 `LOCALES`、`MESSAGES` 与 `web-admin/scripts/check-i18n.mjs` 的 `LOCALE_FILES`。
   - 前端页面调用时统一使用 `translate("...")` 或对应 helper（如 `getTaskStatusText`）。
+- 任务日志「易读」视图有一套独立的词表（字段名、枚举值、句式模板），放在 `web-admin/src/events/dictionary/<locale>.js`，一个语言一个文件，`en.js` 是源文本。新增语言时要一并补这个目录下的文件，键与 `en.js` 完全一致。
 - 快速校验：
 ```bash
 cd web-admin
 npm run i18n:check
 ```
+`npm run i18n:check` 会同时比对界面文案（`src/locales/*.json`）与事件词表（`src/events/dictionary/*.js`）的键集合。
 
 ## 9. CI 检查
 
@@ -368,7 +376,7 @@ npm run i18n:check
 - **数字是描述、结构才强制**（`agent/tools/ask_user_question/questions.py`）：1–3 题 / 2–3 选项 / `header` ≤ 12 字符只写在工具描述与 schema 描述里（**不要**加 `maxItems`/`maxLength`）；机器只拒绝"渲染不出来"的输入——空问题数组、缺 `id` 或 `question`、**重复 `id`**（答复是以 id 为键的字典，重复会静默错位）、没有选项、选项没有 `label`。前端按原样渲染并滚动：只截断**展示**，不截断数据。
 - 答案契约 `{"answers": {"<id>": {"answers": [...]}}}`：**不加** `user_note:` 前缀（参考实现的客户端私有编码混进模型可见契约，用户真选了同名选项就会读错）；自由文本是数组里的独立元素，`details` 另给结构化副本。
 - 前端对话框是纯表单（`web-admin/src/components/QuestionPrompt.jsx`）：每题单选 + 一个自由输入行；"其他"行由**客户端**加（模型被要求不要自己加）；**跳过 = 空答案集**，且对话框不可静默关闭（静默结局只会是超时）。
-- 新增事件类别照例要补前端两份 i18n 与 `.tag.<category>` 样式（`npm run build` 里的 i18n 校验会拦），以及 `test/tools/catalog_test.py` 的 `EXPECTED_ORDER`。
+- 新增事件类别照例要补前端各语言的 i18n（`src/locales/*.json` 与 `src/events/dictionary/*.js`）与 `.tag.<category>` 样式（`npm run build` 里的 i18n 校验会拦），以及 `test/tools/catalog_test.py` 的 `EXPECTED_ORDER`。
 - 已知限制：CLI 与库调用只能拿到 `no_client`（在 REPL 里真去问用户是后续子项目）；单选，不支持一题多选。取舍与实测见 [ADR 0010](decisions/0010-ask-user-question.md)。
 
 ### 桌面操作：CLI 桥，不是 MCP 客户端

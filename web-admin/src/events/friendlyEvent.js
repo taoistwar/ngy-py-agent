@@ -574,7 +574,10 @@ function buildUserQuestion({ data, dict }) {
           : []
         return {
           title: `${index + 1}. ${question?.question || question?.header || ""}`,
-          meta: options.length > 0 ? `${fieldLabel(dict, "options")}：${options.join(" / ")}` : "",
+          meta:
+            options.length > 0
+              ? `${fieldLabel(dict, "options")}${dict.text.labelSeparator}${options.join(" / ")}`
+              : "",
           text: "",
         }
       }),
@@ -655,7 +658,7 @@ function defaultTone(category, data) {
  * Builds the readable representation of one event.
  *
  * @param {{category?: string, title?: string, data?: object}} event
- * @param {string} locale ``zh-CN`` or ``en``.
+ * @param {string} locale one of ``LOCALES`` (``src/i18n.js``).
  * @returns {{tone: string, headline: string, fields: Array, sections: Array}}
  */
 export function buildFriendlyEvent(event, locale) {
