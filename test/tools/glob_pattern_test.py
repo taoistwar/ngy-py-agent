@@ -88,6 +88,19 @@ class ClassAndBraceTest(unittest.TestCase):
         self.assertTrue(matches("a{b.py", "a{b.py"))
 
 
+class AnchoredTest(unittest.TestCase):
+    def test_anchored_makes_a_bare_name_match_only_its_own_level(self):
+        anchored = GlobPattern("build", anchored=True)
+
+        self.assertTrue(anchored.matches("build", "build"))
+        self.assertFalse(anchored.matches("deep/build", "build"))
+
+    def test_unanchored_keeps_the_file_name_rule(self):
+        pattern = GlobPattern("build")
+
+        self.assertTrue(pattern.matches("deep/build", "build"))
+
+
 class CaseTest(unittest.TestCase):
     def test_case_sensitivity_is_explicit(self):
         self.assertFalse(matches("SRC/*.py", "src/a.py", case_sensitive=True))

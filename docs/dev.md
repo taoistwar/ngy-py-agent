@@ -181,8 +181,8 @@ npm run i18n:check
 ### glob：找文件是发现，不是导出
 
 - `glob`（`agent/tools/glob/`）负责“知道文件名、不知道目录”这一步，返回的路径与 `read_file` 的解析基准相同（工作空间根），因此可以**原样**交给 `read_file`；不要把结果改成相对搜索根，否则模型还要自己拼前缀。
-- **不隐式过滤**：没有 `.gitignore` 处理、不跳过隐藏文件、不剪掉 VCS 目录。模型无法猜出工具替它藏了哪些名字，藏就是错。代价是大仓库里 `**/*` 很吵，靠“最多 100 条 + 提示缩小范围”解决。
-- **排序是最新优先，截断留下最新的那批**。列表会被截断，顺序就决定了留谁：刚改过的文件比一年前的更可能是目标。
+- **不隐式过滤**：没有 `.gitignore` 处理、不跳过隐藏文件、不剪掉 VCS 目录。模型无法猜出工具替它藏了哪些名字，藏就是错。理由是 `glob` 服务于“这个文件在哪”——目标可能是 `node_modules` 里的某份依赖实现，藏掉就搜不到。
+- **排序：源码优先，然后才是最新**。截断决定留谁，所以顺序是设计的一部分：`node_modules`、`dist`、`.git` 这些**内容搜索根本不会打开的目录**排在最后（`is_generated_path`，见 `agent/tools/file_walk.py`），两组内部再按修改时间从新到旧。这是**排序不是隐藏**——每个命中仍在列表里，只是不占头部。证据：修之前 `**/*.js` 的 100 条里有 82 条是 `node_modules/.vite` 与 `dist` 的产物，修之后是 0 条。
 - 三个上限都是有意的：`MAX_RESULTS = 100`（结果条数）、`MAX_SCANNED_ENTRIES = 50000`（遍历条目数）、以及单次调用不排序全库。遍历被提前终止时必须报 `scan_truncated`，不能假装结果完整。
 - 模式语义照 ripgrep 的 `--glob`（`agent/tools/glob_pattern.py`）：`*` 不跨 `/`，`**` 跨段，`**/` 还能匹配零层目录，无 `/` 的模式只匹配文件名。**不要换成 `fnmatch` 或 `Path.glob`**：前者让 `*` 跨 `/`，后者没有 `{a,b}`、也没法按文件系统决定大小写。
 - 目录遍历只走 `os.scandir`（`agent/tools/file_walk.py`）且**不跟随软链接目录**（防循环、防越界），软链接文件照常列出。
@@ -194,11 +194,15 @@ npm run i18n:check
 - `grep`（`agent/tools/grep/`）回答“这段代码写在哪里”。它和 `glob` 共用两处基础设施：模式匹配（`agent/tools/glob_pattern.py`，用于 `glob` 参数）与目录遍历（`agent/tools/file_walk.py`）。**两者必须共用**：一个能列出来、另一个却读不到的目录，就是一条没人会发现的缝。
 - **没有 ripgrep 依赖**：用 Python `re` 逐行匹配，并在描述里明说语法是 `re` 而不是 Rust regex。`multiline` 打开 `DOTALL`；`^`/`$` 在任何模式下都是**行锚**（整文件扫描时额外加 `MULTILINE`），否则打开 multiline 后 `^def` 只会命中文件第一行。
 - **三种输出形状**（`output_mode`）：`files_with_matches`（默认，最新优先）、`content`（`path:line:text`，上下文行用 `-` 分隔符，组间 `--`）、`count`（`path:count` + 总数，按次数降序）。`content` 的渲染与分页**同时进行**：`offset`/`head_limit` 数的是输出行，够数就停，不留一份十万行再截断。
-- **与 `glob` 相反的过滤取舍**：内容搜索跳过 `.git` 等版本库目录、已安装依赖与构建产物（`node_modules`、`.venv`、`dist`、`build`、`target`…）、二进制文件、超过 8MB 的文件。理由是可测的：在本仓库根目录直接扫，不跳过依赖时 20 秒预算会先耗尽，跳过之后 200 毫秒返回。**显式把 `path` 指向被跳过的目录仍会搜**——显式请求优先。
+- **与 `glob` 相反的过滤取舍**：内容搜索跳过 `.git` 等版本库目录、`.gitignore` 命中的文件、已安装依赖与构建产物（`node_modules`、`.venv`、`dist`、`build`、`target`…）、二进制文件、超过 8MB 的文件。理由是可测的：在本仓库根目录直接扫，不跳过依赖时 20 秒预算会先耗尽，跳过之后 200 毫秒返回。**显式把 `path` 指向被跳过的目录仍会搜**——显式请求优先。
+- **`glob` 与 `grep` 的可见范围不同，是有意的**：一个问“文件在哪”（必须能定位任何文件，含依赖），一个问“这段代码在哪”（只该看仓库自己的源码）。所以别为了“一致性”给 `glob` 加跳过，也别为了“一致性”让 `grep` 去读 `node_modules`。
 - **凭证类文件必须跳过，并把名字报出来**（`skipped_sensitive`）。`grep` 返回的是**内容**，如果它顺手把 `.env` 的行打出来，`read_file` 对这些文件的确认形同虚设。判据直接复用 `permissions.is_sensitive_path`，不另立一套。
-- 四个上限：`DEFAULT_HEAD_LIMIT = 250`（输出条数，0 才不限）、`MAX_COLUMNS = 500`（单行截断，防压缩产物刷屏）、`MAX_SCANNED_FILES = 20000`、`MAX_FILE_BYTES = 8MB`；再加上 `MAX_DURATION_SECONDS = 20` 的墙钟预算。任何一种被触发都要在结果里如实标记（`truncated` / `scan_truncated` / `timed_out`），**不要**把部分结果伪装成完整结果。
+- 四个上限：`DEFAULT_HEAD_LIMIT = 250`（输出条数，0 才不限）、`MAX_COLUMNS = 500`（单行截断，防压缩产物刷屏）、`MAX_SCANNED_ENTRIES = 20000`、`MAX_FILE_BYTES = 8MB`；再加上 `MAX_DURATION_SECONDS = 20` 的墙钟预算。任何一种被触发都要在结果里如实标记（`truncated` / `scan_truncated` / `timed_out`），**不要**把部分结果伪装成完整结果。
 - 计时预算**同时覆盖遍历与读取**（一个 deadline 传下去）：否则慢目录会把读取的时间吃光，症状看起来像"正则太慢"。
-- `.gitignore` **不解析**：读它的语义（层级、取反、被忽略目录里的再包含）远比看上去复杂，做一半比不做更误导。跳过名单用目录名，模型无法猜出被藏了什么，所以要在描述里写清楚。
+- **`.gitignore` 逐目录解析**（`agent/tools/grep/ignore.py`）：进入某目录时读它的 `.gitignore`，规则随继承链拼成“祖先在前”的元组，**最后一条匹配生效**（`!` 因此能撤销父目录的排除）。支持 `#` 注释、空行、`!`、`dir/`、`/anchored`、`*`/`**`/`?`/`[...]`/`{a,b}`；语义能这样省，是因为 `GlobPattern` 的“无 `/` 即匹配任意深度的文件名”正是 git 的规则，`anchored=` 参数专门用来表达 `/pattern`。
+- **忽略规则只从搜索根往下读，不读祖先**。搜索根就是模型的全世界，指哪搜哪：`path="node_modules/react"` 因此仍然能搜（否则唯一的逃生口会被工作空间根的那条 `node_modules/` 关死）。同理，被忽略的目录不会被下降，所以同目录里的 `!` 想重新包含它下面的文件也无效——与 git 一致。
+- **没有开关**。不给 `include_ignored` 之类的参数：`.gitignore` 是仓库自己对“什么算源码”的声明，模型想越过它就显式指 `path`。省一个开关，也省掉“两套行为都要测”。
+- **性能约束**：忽略层是每个条目都要过的热路径。`Rule.name_only` 让绝大多数规则只比文件名、需要相对路径的按 base 缓存一次——在本仓库 900 个文件上，不做这一步是 1.2 秒，做了是 0.13 秒。新增规则语法时先看这条。
 
 ### read_file 永远带行号
 
@@ -438,6 +442,7 @@ npm run i18n:check
   - [ADR 0015 snip_compact（对话窗口裁剪）](decisions/0015-snip-compact.md)
   - [ADR 0016 micro_compact（只缩短模型已读过的结果）](decisions/0016-micro-compact.md)
   - [ADR 0017 compact_history（用一次模型调用换掉旧历史）](decisions/0017-compact-history.md)
+  - [ADR 0018 搜索的可见范围（glob 排序、grep 忽略规则）](decisions/0018-search-visibility.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 

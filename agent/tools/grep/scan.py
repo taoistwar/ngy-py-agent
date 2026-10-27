@@ -3,11 +3,12 @@
 Two jobs, both about touching the disk, which is why they sit together:
 
 - **Choose candidates.** The search root resolves through ``file_access`` (so a
-  search is as confined as a read), the walk skips VCS metadata, the ``glob`` and
-  ``type`` filters narrow it further, and credential-like files are dropped with
-  the names kept aside. Candidates come back **newest first**: the output is
-  truncated, so the order decides what survives, and a file touched minutes ago
-  is the one most likely to be under discussion.
+  search is as confined as a read), the walk applies the per-directory
+  ``.gitignore`` rules (``ignore.py``) plus the fixed VCS/dependency skip list,
+  the ``glob`` and ``type`` filters narrow it further, and credential-like files
+  are dropped with the names kept aside. Candidates come back **newest first**:
+  the output is truncated, so the order decides what survives, and a file touched
+  minutes ago is the one most likely to be under discussion.
 - **Turn one file into text.** Binary, oversized and unreadable files are
   skipped rather than reported: a search that fails on one of ten thousand files
   is not an error, it is a search. Decoding follows the file's byte order mark
@@ -30,8 +31,9 @@ from typing import List, Optional, Sequence, Tuple
 from agent.tools.file_access import FileAccessConfig, display_path, resolve_read_path
 from agent.tools.file_walk import SEARCH_SKIP_DIRS, FileWalk, mtime_ns
 from agent.tools.glob_pattern import GlobPattern
-from agent.tools.grep.description import MAX_FILE_BYTES, MAX_SCANNED_FILES
+from agent.tools.grep.description import MAX_FILE_BYTES, MAX_SCANNED_ENTRIES
 from agent.tools.grep.errors import GrepError
+from agent.tools.grep.ignore import IgnoreRules
 from agent.tools.permissions import is_sensitive_path
 from agent.tools.text_encoding import (
     BINARY_SNIFF_BYTES,
@@ -97,11 +99,20 @@ def collect_candidates(
     """Every searchable file below ``root`` (or ``root`` itself), newest first."""
     skipped: List[str] = []
     if root.is_file():
+        # An explicitly named file is searched even if it is ignored: the model
+        # already said which one it wants.
         candidate = _keep(root, root.parent, matcher, extensions, workspace, skipped)
         files = (candidate,) if candidate is not None else ()
         return CandidateSet(files, 1, False, False, tuple(skipped))
 
-    walk = FileWalk(root, policy=policy, skip_dirs=SEARCH_SKIP_DIRS, max_scanned=MAX_SCANNED_FILES)
+    ignore = IgnoreRules(root)
+    walk = FileWalk(
+        root,
+        policy=policy,
+        skip_dirs=SEARCH_SKIP_DIRS,
+        accept=lambda path, is_dir: not ignore.ignored(path, is_dir),
+        max_scanned=MAX_SCANNED_ENTRIES,
+    )
     candidates: List[Candidate] = []
     timed_out = False
     for path in walk:

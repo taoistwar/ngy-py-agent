@@ -67,8 +67,9 @@
 | 术语 | 定义 | 位置 |
 | --- | --- | --- |
 | **`glob`** | 按文件名模式查找文件的工具：参数是 `pattern`（+ 可选 `path`），返回**相对工作空间根**的文件路径，可直接交给 `read_file`。不隐式过滤：隐藏文件与 `.gitignore` 排除的文件同样会被列出。 | `agent/tools/glob/` |
-| **glob 模式** | 照 ripgrep `--glob` 的语义：`*` 不跨 `/`，`**` 跨段且 `**/` 可匹配零层目录，`?` 匹配一个字符，`[abc]` 是字符集，`{a,b}` 是候选列表；**不含 `/` 的模式只匹配文件名**（任意深度）。 | `agent/tools/glob/pattern.py` |
-| **`MAX_RESULTS` / `truncated`** | 一次调用最多返回 100 条，按修改时间从新到旧；`truncated` 为真表示还有更多，正确的反应是缩小 `path` 或把 `pattern` 写具体，而不是翻页。 | `agent/tools/glob/description.py` |
+| **glob 模式** | 照 ripgrep `--glob` 的语义：`*` 不跨 `/`，`**` 跨段且 `**/` 可匹配零层目录，`?` 匹配一个字符，`[abc]` 是字符集，`{a,b}` 是候选列表；**不含 `/` 的模式只匹配文件名**（任意深度）。`anchored=True` 可强制按整条相对路径匹配（`.gitignore` 的 `/pattern` 用它）。 | `agent/tools/glob_pattern.py` |
+| **源码优先排序** | `glob` 的截断顺序：项目源码在前，`SEARCH_SKIP_DIRS` 里的路径（`node_modules`、`dist`、`.git`…）垫底，两组内部各按修改时间从新到旧。**排序不是隐藏**——每个命中都在列表里，只是不占头部。 | `agent/tools/file_walk.py` |
+| **`MAX_RESULTS` / `truncated`** | 一次调用最多返回 100 条（排序见上）；`truncated` 为真表示还有更多，正确的反应是缩小 `path` 或把 `pattern` 写具体，而不是翻页。 | `agent/tools/glob/description.py` |
 | **`scan_truncated`** | 遍历条目数超过 `MAX_SCANNED_ENTRIES`（50000）而提前停止的标记。它与 `truncated` 分开：一个是“命中的没全返回”，一个是“根本没走完”。 | `agent/tools/glob/search.py` |
 
 ## 文件搜索（`grep`）
@@ -78,9 +79,11 @@
 | **`grep`** | 按正则搜索文件内容的工具：`pattern` + 可选 `path`/`glob`/`type`，用 `output_mode` 选看路径、看命中行还是看次数。实现是 Python `re`（不是 ripgrep），逐行匹配。 | `agent/tools/grep/` |
 | **`output_mode`** | 三种输出形状：`files_with_matches`（默认，最新优先的路径列表）、`content`（命中行）、`count`（每文件命中行数 + 总数，按次数降序）。 | `agent/tools/grep/description.py` |
 | **命中行 / 上下文行** | `content` 模式下，命中行是 `path:line:text`，上下文行是 `path-line-text`（分隔符本身就说明是否命中），不相邻的组之间用 `--` 分隔。 | `agent/tools/grep/content.py` |
-| **`head_limit` / `offset`** | 输出条数与翻页。默认 250，`0` 才不限。分页在**渲染时**生效（够数就停），不是先全量渲染再切片。触发时结果里带 `applied_limit`/`applied_offset`。 | `agent/tools/grep/content.py` |
+| **`head_limit` / `offset`** | 输出条数与翻页。默认 250，`0` 才不限。分页在**渲染时**生效（够数就停），不是先全量渲染再切片。触发时结果里带 `applied_limit`/`applied_offset`；翻过页尾时 `hint` 会说明“是 offset 太靠后”，而不是“没找到”。 | `agent/tools/grep/content.py` |
 | **`skipped_sensitive`** | 因看起来像凭证而被跳过的文件（判据同 `read_file` 的确认规则）。`grep` 返回内容，所以必须跳过并**报出名字**；需要时用 `read_file`（会询问）读取。 | `agent/tools/grep/scan.py` |
-| **`SEARCH_SKIP_DIRS`** | 内容搜索跳过遍历的目录名：版本库元数据（`.git` 等）+ 已安装依赖与构建产物（`node_modules`、`.venv`、`dist`、`build`、`target`…）。显式把 `path` 指向这些目录仍会搜。`glob` 不跳过任何目录。 | `agent/tools/file_walk.py` |
+| **`SEARCH_SKIP_DIRS`** | 内容搜索跳过遍历的目录名：版本库元数据（`.git` 等）+ 已安装依赖与构建产物（`node_modules`、`.venv`、`dist`、`build`、`target`…）。显式把 `path` 指向这些目录仍会搜。`glob` 不跳过它们，只在排序里垫底（见「源码优先排序」）。 | `agent/tools/file_walk.py` |
+| **忽略规则（`.gitignore`）** | 内容搜索逐目录读取 `.gitignore`，从搜索根往下继承，**最后一条匹配生效**（`!` 可撤销父目录的排除）。不读搜索根之上的规则，因此 `path` 指进被忽略的目录仍能搜它。没有 `include_ignored` 之类的开关。 | `agent/tools/grep/ignore.py` |
+| **`num_matches`** | `count` 模式的合计数：逐行模式下是**命中行数**（与 `rg -c` 一致），`multiline` 下是**命中块数**。名字里的 “matches” 指的就是这两种计数单位，不是出现次数。 | `agent/tools/grep/listing.py` |
 | **`timed_out` / `scan_truncated`** | 墙钟预算（20 秒）用尽 / 遍历条目上限被触发。两者都表示“这个答案不完整”，与 `truncated`（输出条数已截断）分开报告。 | `agent/tools/grep/tool.py` |
 
 ## 文件编辑（`edit_file`）

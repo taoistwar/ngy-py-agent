@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Iterator, Optional, Sequence
+from typing import Callable, Iterator, Optional, Sequence
 
 from agent.tools.file_access import FileAccessConfig, is_permitted
 
@@ -53,11 +53,24 @@ GENERATED_DIRS = (
     "target",
 )
 
-# What a content search skips; a listing (``glob``) skips nothing.
+# What a content search skips; a listing (``glob``) hides none of it, it only
+# ranks those paths after project source.
 SEARCH_SKIP_DIRS = VCS_DIRS + GENERATED_DIRS
+
+_SKIP_DIR_NAMES = frozenset(SEARCH_SKIP_DIRS)
 
 # Default ceiling on entries examined by one walk.
 MAX_SCANNED_ENTRIES = 50_000
+
+
+def is_generated_path(relative_path: str) -> bool:
+    """Whether a path lies under a directory a content search would not open.
+
+    Only directory segments count - the last segment is the file itself, and a
+    file that happens to be named ``build`` is still a project file.
+    """
+    parts = relative_path.split("/")
+    return any(part in _SKIP_DIR_NAMES for part in parts[:-1])
 
 
 def mtime_ns(path: Path) -> int:
@@ -82,11 +95,20 @@ class FileWalk:
         policy: Optional[FileAccessConfig] = None,
         max_scanned: int = MAX_SCANNED_ENTRIES,
         skip_dirs: Sequence[str] = (),
+        accept: Optional[Callable[[Path, bool], bool]] = None,
     ) -> None:
+        """
+        ``skip_dirs`` drops directories by name (cheap, and the only rule a
+        listing needs); ``accept`` is the general form - ``accept(path, is_dir)
+        -> bool`` - for rules that depend on the whole path, such as the
+        ``.gitignore`` layer a content search applies. A directory ``accept``
+        rejects is pruned, so its subtree is never read or listed.
+        """
         self.root = root
         self.policy = policy
         self.max_scanned = max_scanned
         self.skip_dirs = frozenset(skip_dirs or ())
+        self.accept = accept
         self.scanned = 0
         self.stopped_early = False
 
@@ -112,9 +134,14 @@ class FileWalk:
                         except OSError:
                             # An entry that vanished mid-walk is skipped, not fatal.
                             continue
+                        # By name, directories only: a script called ``build`` is
+                        # still a project file, not a build directory.
+                        if is_dir and path.name in self.skip_dirs:
+                            continue
+                        if self.accept is not None and not self.accept(path, is_dir):
+                            continue
                         if is_dir:
-                            if path.name not in self.skip_dirs:
-                                stack.append(path)
+                            stack.append(path)
                             continue
                         yield path
             except OSError:

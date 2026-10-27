@@ -34,6 +34,7 @@ from agent.tools.grep.description import (
     MODE_COUNT,
     MODE_FILES,
     NO_MATCH_HINT,
+    OFFSET_PAST_END_HINT,
     OUTPUT_MODES,
     SKIPPED_ONLY_HINT,
     TRUNCATED_HINT,
@@ -183,18 +184,33 @@ def _apply_signals(
         payload["timed_out"] = True
     if candidates.scan_truncated:
         payload["scan_truncated"] = True
-        payload["scanned_files"] = candidates.scanned
+        payload["scanned_entries"] = candidates.scanned
     if skipped:
         payload["skipped_sensitive"] = list(skipped)
 
 
 def _apply_hint(
-    payload: Dict[str, Any], has_results: bool, truncated: bool, skipped: Sequence[str]
+    payload: Dict[str, Any],
+    *,
+    has_results: bool,
+    truncated: bool,
+    skipped: Sequence[str],
+    found: int,
+    offset: int,
 ) -> None:
+    """Explain an empty or partial answer; a full page needs no explanation."""
     if truncated:
         payload["hint"] = TRUNCATED_HINT
-    elif not has_results:
-        payload["hint"] = SKIPPED_ONLY_HINT if skipped else NO_MATCH_HINT
+    elif has_results:
+        return
+    elif offset and found:
+        # There were results, just not at this offset. Saying "no matches" here
+        # sends the model off to rewrite a pattern that was already right.
+        payload["hint"] = OFFSET_PAST_END_HINT
+    elif skipped:
+        payload["hint"] = SKIPPED_ONLY_HINT
+    else:
+        payload["hint"] = NO_MATCH_HINT
 
 
 def _apply_pagination(payload: Dict[str, Any], truncated: bool, limit: Optional[int], offset: int):
@@ -217,7 +233,14 @@ def _content_payload(
     }
     _apply_pagination(payload, outcome.truncated, limit, offset)
     _apply_signals(payload, candidates, outcome.timed_out, candidates.skipped_sensitive)
-    _apply_hint(payload, bool(outcome.lines), outcome.truncated, candidates.skipped_sensitive)
+    _apply_hint(
+        payload,
+        has_results=bool(outcome.lines),
+        truncated=outcome.truncated,
+        skipped=candidates.skipped_sensitive,
+        found=outcome.found,
+        offset=offset,
+    )
     return payload
 
 
@@ -233,7 +256,14 @@ def _files_payload(
     }
     _apply_pagination(payload, outcome.truncated, limit, offset)
     _apply_signals(payload, candidates, outcome.timed_out, candidates.skipped_sensitive)
-    _apply_hint(payload, bool(files), outcome.truncated, candidates.skipped_sensitive)
+    _apply_hint(
+        payload,
+        has_results=bool(files),
+        truncated=outcome.truncated,
+        skipped=candidates.skipped_sensitive,
+        found=outcome.found,
+        offset=offset,
+    )
     return payload
 
 
@@ -250,7 +280,14 @@ def _count_payload(
     }
     _apply_pagination(payload, outcome.truncated, limit, offset)
     _apply_signals(payload, candidates, outcome.timed_out, candidates.skipped_sensitive)
-    _apply_hint(payload, bool(lines), outcome.truncated, candidates.skipped_sensitive)
+    _apply_hint(
+        payload,
+        has_results=bool(lines),
+        truncated=outcome.truncated,
+        skipped=candidates.skipped_sensitive,
+        found=outcome.found,
+        offset=offset,
+    )
     return payload
 
 

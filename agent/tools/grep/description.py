@@ -9,7 +9,7 @@ imported everywhere else:
   which is the caller's explicit choice, not a default.
 - ``MAX_COLUMNS``: a single very long line (minified bundle, base64 blob) must
   not become the whole result.
-- ``MAX_FILE_BYTES`` / ``MAX_SCANNED_FILES`` / ``MAX_DURATION_SECONDS``: what the
+- ``MAX_FILE_BYTES`` / ``MAX_SCANNED_ENTRIES`` / ``MAX_DURATION_SECONDS``: what the
   scan refuses to do, so a search that cannot finish still returns.
 """
 
@@ -18,7 +18,7 @@ from typing import Any, Dict
 DEFAULT_HEAD_LIMIT = 250
 MAX_COLUMNS = 500
 MAX_FILE_BYTES = 8 * 1024 * 1024
-MAX_SCANNED_FILES = 20_000
+MAX_SCANNED_ENTRIES = 20_000
 MAX_DURATION_SECONDS = 20.0
 
 MODE_CONTENT = "content"
@@ -27,7 +27,12 @@ MODE_COUNT = "count"
 OUTPUT_MODES = (MODE_CONTENT, MODE_FILES, MODE_COUNT)
 
 NO_MATCH_HINT = (
-    "No matches found. Check the regular expression, or widen 'path', 'glob' or 'type'."
+    "No matches found. Files excluded by .gitignore or by the tool's own skip list are not "
+    "searched; widen 'path', 'glob' or 'type' (or point 'path' at a skipped directory)."
+)
+OFFSET_PAST_END_HINT = (
+    "There are no results at this 'offset' - the search found fewer than 'offset' results, "
+    "not none. Retry with a smaller 'offset'."
 )
 SKIPPED_ONLY_HINT = (
     "Only credential-like files were skipped (see 'skipped_sensitive'). Use read_file for "
@@ -45,13 +50,14 @@ GREP_DESCRIPTION = (
     "'content' returns matching lines as 'path:line:text' plus any context lines "
     "('path-line-text', groups separated by '--'); 'count' returns 'path:count' per file "
     "(matching lines) and the total. Matching is line based unless 'multiline' is set, in "
-    "which case the pattern may span lines. Hidden files are searched, but VCS metadata "
-    "(.git and friends), installed dependencies and build output (node_modules, .venv, "
-    "dist, build, target...), binary files, files over 8 MB, and credential-like files are "
-    "skipped - the last ones are listed in 'skipped_sensitive' because read_file can still "
-    "reach them, and pointing 'path' inside a skipped directory searches it. .gitignore is "
-    "not consulted, so anything ignored there is searched unless one of those rules hides it. "
-    "'glob' and 'type' narrow which files are "
+    "which case the pattern may span lines (and 'context'/'line_numbers' then have no effect). "
+    "What gets searched is what the repository calls source: hidden files are included, but "
+    "files excluded by a .gitignore (read per directory, from the search root down), VCS "
+    "metadata (.git and friends), installed dependencies and build output (node_modules, "
+    ".venv, dist, build, target...), binary files, files over 8 MB, and credential-like files "
+    "are skipped - the last ones are listed in 'skipped_sensitive' because read_file can still "
+    "reach them. There is no switch to search ignored files; point 'path' at the directory "
+    "instead. 'glob' and 'type' narrow which files are "
     "searched. At most 250 output lines/paths are returned; page with 'offset'/'head_limit' "
     "('head_limit': 0 means no limit) instead of widening the pattern, and note that long "
     "lines are cut at 500 characters. Paths are relative to the workspace root, so they can "
@@ -115,7 +121,8 @@ GREP_PARAMETERS: Dict[str, Any] = {
             "type": "boolean",
             "description": (
                 "Prefix each 'content' line with its 1-based line number. Defaults to true; "
-                "the other modes always report file level results."
+                "the other modes always report file level results, and 'multiline' matches "
+                "always carry the line they start on."
             ),
         },
         "context": {
@@ -123,7 +130,7 @@ GREP_PARAMETERS: Dict[str, Any] = {
             "minimum": 0,
             "description": (
                 "Lines of context before and after each match in 'content' mode. Overrides "
-                "'before_context'/'after_context'."
+                "'before_context'/'after_context'; ignored when 'multiline' is set."
             ),
         },
         "before_context": {

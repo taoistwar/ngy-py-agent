@@ -30,6 +30,10 @@ from agent.tools.grep.description import DEFAULT_HEAD_LIMIT, MAX_COLUMNS
 from agent.tools.grep.scan import Candidate, read_text
 from agent.tools.text_lines import line_index, line_offsets
 
+# Marks a gap between two context groups, so an unrelated match is never read as
+# contiguous with the one before it.
+SEPARATOR = "--"
+
 
 @dataclass(frozen=True)
 class ContentOptions:
@@ -47,6 +51,10 @@ class ContentOptions:
 @dataclass(frozen=True)
 class ContentOutcome:
     lines: Tuple[str, ...]
+    # Results the search produced, before ``offset``/``head_limit`` cut them down.
+    # When the page is empty this is what tells "nothing matched" apart from
+    # "the offset is past the end".
+    found: int
     truncated: bool
     timed_out: bool
 
@@ -87,11 +95,15 @@ def collect_content(
                 # is incomplete, which is what ``truncated`` promises.
                 truncated = True
                 break
+            if not rendered and line == SEPARATOR:
+                # A page must not open with a group separator: it would describe
+                # a gap above the first line the caller is being shown.
+                continue
             rendered.append(line)
         if truncated:
             break
 
-    return ContentOutcome(tuple(rendered), truncated, timed_out)
+    return ContentOutcome(tuple(rendered), skipped + len(rendered), truncated, timed_out)
 
 
 def _render_lines(
@@ -110,7 +122,7 @@ def _render_lines(
         end = min(len(lines) - 1, index + options.after)
         if options.before or options.after:
             if last_printed >= 0 and start > last_printed + 1:
-                out.append("--")
+                out.append(SEPARATOR)
         for cursor in range(max(start, last_printed + 1), end + 1):
             out.append(
                 _format_line(

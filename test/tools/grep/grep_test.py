@@ -232,6 +232,26 @@ class GrepToolTest(unittest.TestCase):
         self.assertEqual(result["reason"], "invalid_pattern")
         self.assertIn("error", result)
 
+    def test_offset_past_the_end_says_so_instead_of_no_matches(self):
+        self.write("app.py", "value\n")
+
+        result = self.tool("value", output_mode="content", offset=5)
+
+        self.assertEqual(result["content"], "")
+        # "No matches" would send the model off to rewrite a correct pattern.
+        self.assertNotIn("No matches found", result["hint"])
+        self.assertIn("offset", result["hint"])
+
+    def test_a_paged_answer_does_not_open_with_a_group_separator(self):
+        # Two matches, far apart, one context line each: the page starts after the
+        # first group, exactly where the separator would fall.
+        self.write("app.py", "one\ntwo\nvalue\nfour\nfive\nsix\nseven\neight\nvalue\nten\n")
+
+        result = self.tool("value", output_mode="content", context=1, offset=3)
+
+        self.assertTrue(result["content"].startswith("app.py-"))
+        self.assertNotIn("--", result["content"].splitlines()[0])
+
     def test_no_match_comes_with_a_hint(self):
         self.write("a.py", "value\n")
 
@@ -262,6 +282,29 @@ class GrepToolTest(unittest.TestCase):
         result = self.tool("value", path="node_modules/pkg")
 
         self.assertEqual(result["filenames"], ["node_modules/pkg/index.js"])
+
+    def test_gitignored_files_are_not_searched(self):
+        self.write(".gitignore", "*.log\n")
+        self.write("debug.log", "value\n")
+        self.write("a.py", "value\n")
+
+        self.assertEqual(self.tool("value")["filenames"], ["a.py"])
+
+    def test_gitignore_negation_still_searches_the_file(self):
+        self.write(".gitignore", "*.log\n!keep.log\n")
+        self.write("drop.log", "value\n")
+        self.write("keep.log", "value\n")
+
+        self.assertEqual(self.tool("value")["filenames"], ["keep.log"])
+
+    def test_pointing_path_at_an_ignored_directory_searches_it(self):
+        self.write(".gitignore", "data/\n")
+        self.write("data/notes.txt", "value\n")
+
+        self.assertEqual(self.tool("value")["filenames"], [])
+        self.assertEqual(
+            self.tool("value", path="data")["filenames"], ["data/notes.txt"]
+        )
 
     def test_binary_files_are_skipped(self):
         (self.root / "blob.bin").write_bytes(b"value\x00\x01\x02")

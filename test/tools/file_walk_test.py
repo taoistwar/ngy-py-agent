@@ -21,7 +21,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from agent.tools.file_access import FileAccessConfig  # noqa: E402
-from agent.tools.file_walk import FileWalk  # noqa: E402
+from agent.tools.file_walk import FileWalk, is_generated_path  # noqa: E402
 
 
 class FileWalkTest(unittest.TestCase):
@@ -69,6 +69,16 @@ class FileWalkTest(unittest.TestCase):
 
         self.assertEqual(self.names(policy=policy), {"a.py"})
 
+    def test_accept_can_prune_by_whole_path(self):
+        self.write("keep/a.py")
+        self.write("drop/a.py")
+        accept = lambda path, is_dir: path.name != "drop"  # noqa: E731
+
+        self.assertEqual(self.names(accept=accept), {"a.py"})
+        self.assertEqual(
+            {path.parent.name for path in FileWalk(self.root, accept=accept)}, {"keep"}
+        )
+
     def test_the_cap_stops_the_walk_and_says_so(self):
         for index in range(5):
             self.write(f"f{index}.py")
@@ -91,6 +101,20 @@ class FileWalkTest(unittest.TestCase):
 
     def test_an_empty_root_yields_nothing(self):
         self.assertEqual(self.names(), set())
+
+
+class GeneratedPathTest(unittest.TestCase):
+    def test_generated_directories_are_detected_at_any_depth(self):
+        for path in ("node_modules/a.py", "web/node_modules/b.js", "dist/x.js", ".git/HEAD"):
+            with self.subTest(path=path):
+                self.assertTrue(is_generated_path(path))
+
+    def test_a_file_named_like_a_generated_directory_is_still_source(self):
+        self.assertFalse(is_generated_path("scripts/build"))
+        self.assertFalse(is_generated_path("target"))
+
+    def test_ordinary_paths_are_source(self):
+        self.assertFalse(is_generated_path("agent/tools/grep/tool.py"))
 
 
 if __name__ == "__main__":

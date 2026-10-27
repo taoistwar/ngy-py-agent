@@ -25,7 +25,8 @@ SCAN_TRUNCATED_HINT = (
 GLOB_DESCRIPTION = (
     "Find files by name pattern. Use it when you know what a file is called but not where it "
     "lives, and before read_file when you would otherwise guess at a path. Returns the "
-    "matching file paths, most recently modified first, at most 100 of them; 'truncated' "
+    "matching file paths, at most 100 of them, project source first and installed "
+    "dependencies or build output last (each newest first); 'truncated' "
     "means the list is incomplete, so narrow 'path' or make the 'pattern' more specific "
     "instead of trying to page. Patterns follow ripgrep's --glob: '*' matches within one "
     "path segment, '**' spans segments ('a/**/b' also matches 'a/b'), '?' matches one "

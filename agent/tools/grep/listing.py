@@ -24,6 +24,8 @@ from agent.tools.grep.scan import Candidate, read_text
 @dataclass(frozen=True)
 class FilesOutcome:
     files: Tuple[Path, ...]
+    # Files found before ``offset``/``head_limit`` narrowed the list.
+    found: int
     truncated: bool
     timed_out: bool
 
@@ -33,6 +35,7 @@ class CountOutcome:
     counts: Tuple[Tuple[Path, int], ...]
     # Matching lines across every file that matched, not just the returned page.
     total: int
+    found: int
     truncated: bool
     timed_out: bool
 
@@ -67,7 +70,7 @@ def collect_files(
             break
 
     end = len(selected) if limit is None else offset + limit
-    return FilesOutcome(tuple(selected[offset:end]), truncated, timed_out)
+    return FilesOutcome(tuple(selected[offset:end]), len(selected), truncated, timed_out)
 
 
 def collect_counts(
@@ -97,7 +100,13 @@ def collect_counts(
     counts.sort(key=lambda item: (-item[1], item[0].as_posix()))
     total = sum(count for _path, count in counts)
     end = len(counts) if limit is None else offset + limit
-    return CountOutcome(tuple(counts[offset:end]), total, end < len(counts), timed_out)
+    return CountOutcome(
+        tuple(counts[offset:end]),
+        total,
+        len(counts),
+        end < len(counts),
+        timed_out,
+    )
 
 
 def _has_match(text: str, lines: Sequence[str], regex: Pattern[str], multiline: bool) -> bool:

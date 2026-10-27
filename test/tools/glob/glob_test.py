@@ -126,6 +126,23 @@ class GlobToolTest(unittest.TestCase):
 
         self.assertEqual(result["filenames"], ["new.py", "old.py"])
 
+    def test_project_source_ranks_ahead_of_dependencies(self):
+        # Nothing is hidden, but a truncated page must not be all bundles: the
+        # dependency is newer, so only the ranking keeps it behind.
+        source = self.write("src/app.js")
+        dependency = self.write("node_modules/pkg/index.js")
+        os.utime(source, (1_000_000, 1_000_000))
+        os.utime(dependency, (1_000_100, 1_000_100))
+
+        result = self.tool("**/*.js")
+
+        self.assertEqual(result["filenames"], ["src/app.js", "node_modules/pkg/index.js"])
+
+    def test_ranking_never_hides_a_file(self):
+        self.write("dist/app.js")
+
+        self.assertEqual(self.found(pattern="**/*.js"), {"dist/app.js"})
+
     def test_results_are_capped_and_flagged_truncated(self):
         for index in range(MAX_RESULTS + 5):
             self.write(f"f{index:03d}.txt")

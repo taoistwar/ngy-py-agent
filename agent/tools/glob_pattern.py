@@ -94,13 +94,21 @@ def _base_dir(segments: List[str]) -> str:
 class GlobPattern:
     """One compiled pattern, matched the way ripgrep's ``--glob`` does."""
 
-    def __init__(self, pattern: str, case_sensitive: Optional[bool] = None) -> None:
+    def __init__(
+        self,
+        pattern: str,
+        case_sensitive: Optional[bool] = None,
+        anchored: Optional[bool] = None,
+    ) -> None:
         self.pattern = pattern
         self.case_sensitive = (
             default_case_sensitive() if case_sensitive is None else bool(case_sensitive)
         )
         # Without a separator the pattern describes a file name, not a location.
-        self.basename_only = "/" not in pattern
+        # ``anchored`` overrides that inference for syntaxes that say it out loud:
+        # in ``.gitignore`` a leading "/" means "here, not at any depth", which
+        # survives stripping the slash only as an explicit flag.
+        self.basename_only = ("/" not in pattern) if anchored is None else not anchored
         flags = 0 if self.case_sensitive else re.IGNORECASE
         self._regex = re.compile(f"^(?:{_translate(pattern)})$", flags)
 
