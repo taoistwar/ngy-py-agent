@@ -356,9 +356,15 @@ async def get_task(task_id: str) -> TaskDetailResponse:
 
 @router.delete("/api/tasks/{task_id}")
 async def delete_task(task_id: str) -> dict[str, Any]:
+    # Read the task before deleting it: the checkpoint refs are keyed by it, and once
+    # the row is gone there is no way to find the workspace they belong to.
+    trace = app_state.monitor_store.get_task(task_id)
     removed = app_state.monitor_store.delete_task(task_id)
     if not removed:
         raise HTTPException(status_code=404, detail="Task not found.")
+    store = checkpoint_store_for_task(trace)
+    if store is not None:
+        store.forget(task_id)
     return {"task_id": task_id, "deleted": True}
 
 

@@ -147,6 +147,15 @@ class CheckpointApiTest(unittest.TestCase):
         self.assertEqual(payload["status"], TaskStatus.SUCCESS.value)
         self.assertEqual(self.store.get_task(self.task_id)["status"], TaskStatus.SUCCESS.value)
 
+    def test_deleting_a_task_drops_its_history(self):
+        """Otherwise every deleted task would leave a branch behind for good."""
+        store = CheckpointStore.for_run(str(self.workspace), self.task_id)
+
+        response = self.client.delete(f"/api/tasks/{self.task_id}")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(store.changes(self.task_id), [])
+
     def test_a_conflict_is_reported_rather_than_forced(self):
         self.path.write_text("user edit\n", encoding="utf-8")
 
