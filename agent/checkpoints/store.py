@@ -23,20 +23,49 @@ Two properties are deliberate:
 
 from __future__ import annotations
 
-import hashlib
 import json
-import os
 import threading
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from agent.checkpoints import git
-from agent.tools.file_access import default_workspace_root
-
-STORE_ROOT_ENV = "CHECKPOINT_ROOT"
-ENABLED_ENV = "CHECKPOINT_ENABLED"
-DEFAULT_STORE_DIRNAME = "data/checkpoints"
+from agent.checkpoints.layout import (
+    BASE_SUFFIX as _BASE_SUFFIX,
+)
+from agent.checkpoints.layout import (
+    BRANCH_PREFIX as _BRANCH_PREFIX,
+)
+from agent.checkpoints.layout import (
+    enabled as _enabled,
+)
+from agent.checkpoints.layout import (
+    normalized as _normalized,
+)
+from agent.checkpoints.layout import (
+    ref_component as _ref_component,
+)
+from agent.checkpoints.layout import (
+    store_root as _store_root,
+)
+from agent.checkpoints.layout import (
+    workspace_key as _workspace_key,
+)
+from agent.checkpoints.layout import (
+    workspace_path as _workspace_path,
+)
+from agent.checkpoints.records import (
+    Change,
+    RevertResult,
+)
+from agent.checkpoints.records import (
+    parse_name_status as _parse_name_status,
+)
+from agent.checkpoints.records import (
+    parse_numstat as _parse_numstat,
+)
+from agent.checkpoints.records import (
+    status_of as _status_of,
+)
 
 # Tools whose single argument names the file they write, so the snapshot can be an
 # O(1) ``git add`` of that path instead of a full tree scan.
@@ -46,13 +75,6 @@ FILE_TOOLS: Mapping[str, str] = {"write_file": "file_path", "edit_file": "file_p
 # ``write_stdin`` is here because typing into a shell session can do whatever that
 # session's command does next, not because it writes files itself.
 TREE_TOOLS = frozenset({"exec_command", "write_stdin", "code_interpreter"})
-
-STATUS_ADDED = "added"
-STATUS_MODIFIED = "modified"
-STATUS_DELETED = "deleted"
-
-_BRANCH_PREFIX = "cp"
-_BASE_SUFFIX = "-base"
 
 # Sentinels for "this tool touches no files" and "this tool can touch any file".
 _NOTHING = object()
@@ -74,118 +96,6 @@ def _lock_for(key: str) -> threading.RLock:
             lock = threading.RLock()
             _LOCKS[key] = lock
         return lock
-
-
-@dataclass(frozen=True)
-class Change:
-    """One file this task changed."""
-
-    path: str
-    status: str
-    additions: int = 0
-    deletions: int = 0
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "path": self.path,
-            "status": self.status,
-            "additions": self.additions,
-            "deletions": self.deletions,
-        }
-
-
-@dataclass
-class RevertResult:
-    """What a revert actually did, per file.
-
-    A revert is not all-or-nothing: a file the user has edited since the task wrote
-    it is a conflict, and refusing *that file* must not refuse the rest.
-    """
-
-    restored: List[str] = field(default_factory=list)
-    conflicts: List[str] = field(default_factory=list)
-    skipped: List[str] = field(default_factory=list)
-
-    @property
-    def clean(self) -> bool:
-        return not self.conflicts and not self.skipped
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "restored": list(self.restored),
-            "conflicts": list(self.conflicts),
-            "skipped": list(self.skipped),
-            "clean": self.clean,
-        }
-
-
-def _store_root() -> Path:
-    override = (os.getenv(STORE_ROOT_ENV) or "").strip()
-    return Path(override).expanduser() if override else Path.cwd() / DEFAULT_STORE_DIRNAME
-
-
-def _enabled() -> bool:
-    raw = (os.getenv(ENABLED_ENV) or "1").strip().lower()
-    return raw not in {"0", "false", "no", "off"}
-
-
-def _workspace_key(workspace: Path) -> str:
-    """A stable, filesystem-safe name for one workspace.
-
-    Case-folded on Windows: the same directory reached through two spellings must not
-    end up as two repositories, or a revert would look at the wrong history.
-    """
-    identity = str(workspace)
-    if os.name == "nt":
-        identity = identity.lower()
-    return hashlib.sha1(identity.encode("utf-8")).hexdigest()[:16]
-
-
-def _ref_component(task_id: str) -> str:
-    """A task id that is legal inside a git ref name."""
-    safe = "".join(ch if (ch.isalnum() or ch in "-_") else "_" for ch in task_id)
-    if safe != task_id:
-        safe = f"{safe[:24]}-{hashlib.sha1(task_id.encode('utf-8')).hexdigest()[:8]}"
-    return safe
-
-
-def _parse_name_status(raw: bytes) -> List[Tuple[str, str]]:
-    """Parse ``git diff --name-status -z`` into ``(status, path)`` pairs.
-
-    Renames are never produced: the diff calls pass ``--no-renames`` so that a moved
-    file reports as a delete plus an add. That keeps every entry single-path, which is
-    what a per-file revert needs.
-    """
-    fields = [item for item in raw.split(b"\0") if item]
-    pairs: List[Tuple[str, str]] = []
-    for index in range(0, len(fields) - 1, 2):
-        status = fields[index].decode("utf-8", "replace")[:1]
-        path = fields[index + 1].decode("utf-8", "replace")
-        pairs.append((status, path))
-    return pairs
-
-
-def _parse_numstat(raw: bytes) -> Dict[str, Tuple[int, int]]:
-    """Parse ``git diff --numstat -z`` into ``path -> (additions, deletions)``.
-
-    With ``-z`` each entry is one NUL-terminated record of ``added\tdel\tpath``;
-    binary files report ``-`` for both counts.
-    """
-    counts: Dict[str, Tuple[int, int]] = {}
-    for record in raw.split(b"\0"):
-        if not record:
-            continue
-        parts = record.decode("utf-8", "replace").split("\t")
-        if len(parts) < 3:
-            continue
-        added, removed = parts[0], parts[1]
-        # A path containing a tab survives the split; it is everything past the second.
-        path = "\t".join(parts[2:])
-        counts[path] = (
-            0 if added == "-" else int(added or 0),
-            0 if removed == "-" else int(removed or 0),
-        )
-    return counts
 
 
 class CheckpointStore:
@@ -604,14 +514,6 @@ class CheckpointStore:
             pass
 
 
-def _status_of(code: str) -> str:
-    if code == "A":
-        return STATUS_ADDED
-    if code == "D":
-        return STATUS_DELETED
-    return STATUS_MODIFIED
-
-
 def _read_bytes(path: Path) -> Optional[bytes]:
     try:
         if not path.is_file():
@@ -619,19 +521,3 @@ def _read_bytes(path: Path) -> Optional[bytes]:
         return path.read_bytes()
     except OSError:
         return None
-
-
-def _normalized(path: Path) -> Path:
-    try:
-        return path.resolve()
-    except OSError:  # pragma: no cover - platform specific
-        return path.absolute()
-
-
-def _workspace_path(base_dir: Optional[str]) -> Optional[Path]:
-    text = (base_dir or "").strip()
-    if text:
-        candidate = _normalized(Path(text).expanduser())
-    else:
-        candidate = _normalized(default_workspace_root())
-    return candidate if candidate.is_dir() else None
