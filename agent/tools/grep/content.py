@@ -23,10 +23,11 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Pattern, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from agent.tools.file_access import display_path
 from agent.tools.grep.description import DEFAULT_HEAD_LIMIT, MAX_COLUMNS
+from agent.tools.grep.regex import Matcher, MatchTimeout
 from agent.tools.grep.scan import Candidate, read_text
 from agent.tools.text_lines import line_index, line_offsets
 
@@ -61,12 +62,17 @@ class ContentOutcome:
 
 def collect_content(
     candidates: Sequence[Candidate],
-    regex: Pattern[str],
+    matcher: Matcher,
     options: ContentOptions,
     deadline: float,
     workspace: Optional[Path],
+    timeouts: List[Path],
 ) -> ContentOutcome:
-    """Render matching lines until the limit, the budget or the candidates run out."""
+    """Render matching lines until the limit, the budget or the candidates run out.
+
+    A file whose matching exceeds the per-call timeout is dropped and recorded in
+    ``timeouts``: a partial answer must never look like a complete one.
+    """
     rendered: List[str] = []
     skipped = 0
     truncated = False
@@ -81,11 +87,15 @@ def collect_content(
             continue
         text, lines = loaded
         display = display_path(candidate.path, workspace)
-        block = (
-            _render_multiline(display, text, regex)
-            if options.multiline
-            else _render_lines(display, lines, regex, options)
-        )
+        try:
+            block = (
+                _render_multiline(display, text, matcher)
+                if options.multiline
+                else _render_lines(display, lines, matcher, options)
+            )
+        except MatchTimeout:
+            timeouts.append(candidate.path)
+            continue
         for line in block:
             if skipped < options.offset:
                 skipped += 1
@@ -107,10 +117,10 @@ def collect_content(
 
 
 def _render_lines(
-    display: str, lines: Sequence[str], regex: Pattern[str], options: ContentOptions
+    display: str, lines: Sequence[str], matcher: Matcher, options: ContentOptions
 ) -> List[str]:
     """Format the matching lines of one file, with context and group separators."""
-    matched = [index for index, line in enumerate(lines) if regex.search(line)]
+    matched = matcher.matching_lines(lines)
     if not matched:
         return []
 
@@ -133,17 +143,16 @@ def _render_lines(
     return out
 
 
-def _render_multiline(display: str, text: str, regex: Pattern[str]) -> List[str]:
+def _render_multiline(display: str, text: str, matcher: Matcher) -> List[str]:
     """Format whole matches; a match may span lines, like ripgrep's ``-U`` output."""
-    out: List[str] = []
+    matches = matcher.text_matches(text)
+    if not matches:
+        return []
     offsets = line_offsets(text)
-    for match in regex.finditer(text):
-        if match.start() == match.end():
-            # A zero-width match carries no line worth showing.
-            continue
-        start_line = line_index(offsets, match.start()) + 1
-        out.append(f"{display}:{start_line}:{_clip_block(match.group(0))}")
-    return out
+    return [
+        f"{display}:{line_index(offsets, start) + 1}:{_clip_block(block)}"
+        for start, block in matches
+    ]
 
 
 def _format_line(

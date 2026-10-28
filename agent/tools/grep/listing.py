@@ -16,8 +16,9 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Pattern, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
+from agent.tools.grep.regex import Matcher, MatchTimeout
 from agent.tools.grep.scan import Candidate, read_text
 
 
@@ -42,11 +43,12 @@ class CountOutcome:
 
 def collect_files(
     candidates: Sequence[Candidate],
-    regex: Pattern[str],
+    matcher: Matcher,
     offset: int,
     limit: Optional[int],
     deadline: float,
     multiline: bool,
+    timeouts: List[Path],
 ) -> FilesOutcome:
     """Paths of the files containing a match, newest first (the candidates are)."""
     selected: List[Path] = []
@@ -62,7 +64,12 @@ def collect_files(
         if loaded is None:
             continue
         text, lines = loaded
-        if not _has_match(text, lines, regex, multiline):
+        try:
+            matched = _has_match(text, lines, matcher, multiline)
+        except MatchTimeout:
+            timeouts.append(candidate.path)
+            continue
+        if not matched:
             continue
         selected.append(candidate.path)
         if want_last is not None and len(selected) > want_last:
@@ -75,11 +82,12 @@ def collect_files(
 
 def collect_counts(
     candidates: Sequence[Candidate],
-    regex: Pattern[str],
+    matcher: Matcher,
     offset: int,
     limit: Optional[int],
     deadline: float,
     multiline: bool,
+    timeouts: List[Path],
 ) -> CountOutcome:
     """Matching lines per file (``multiline``: per match), most matches first."""
     counts: List[Tuple[Path, int]] = []
@@ -93,7 +101,11 @@ def collect_counts(
         if loaded is None:
             continue
         text, lines = loaded
-        count = _count(text, lines, regex, multiline)
+        try:
+            count = _count(text, lines, matcher, multiline)
+        except MatchTimeout:
+            timeouts.append(candidate.path)
+            continue
         if count:
             counts.append((candidate.path, count))
 
@@ -109,14 +121,14 @@ def collect_counts(
     )
 
 
-def _has_match(text: str, lines: Sequence[str], regex: Pattern[str], multiline: bool) -> bool:
+def _has_match(text: str, lines: Sequence[str], matcher: Matcher, multiline: bool) -> bool:
     if multiline:
-        return regex.search(text) is not None
-    return any(regex.search(line) is not None for line in lines)
+        return matcher.has_text_match(text)
+    return matcher.has_line_match(lines)
 
 
-def _count(text: str, lines: Sequence[str], regex: Pattern[str], multiline: bool) -> int:
+def _count(text: str, lines: Sequence[str], matcher: Matcher, multiline: bool) -> int:
     if multiline:
         # A block match covers several lines; the empty ones match nothing.
-        return sum(1 for match in regex.finditer(text) if match.start() != match.end())
-    return sum(1 for line in lines if regex.search(line) is not None)
+        return matcher.count_text_matches(text)
+    return matcher.count_lines(lines)

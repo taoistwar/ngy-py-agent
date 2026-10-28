@@ -30,6 +30,11 @@ NO_MATCH_HINT = (
     "No matches found. Files excluded by .gitignore or by the tool's own skip list are not "
     "searched; widen 'path', 'glob' or 'type' (or point 'path' at a skipped directory)."
 )
+REGEX_TIMEOUT_HINT = (
+    "The expression took too long on some files, so they were not searched (see "
+    "'skipped_regex_timeout'). Simplify it - nested quantifiers such as '(a+)+' make the "
+    "engine backtrack exponentially - or narrow 'path'/'glob'/'type'."
+)
 OFFSET_PAST_END_HINT = (
     "There are no results at this 'offset' - the search found fewer than 'offset' results, "
     "not none. Retry with a smaller 'offset'."

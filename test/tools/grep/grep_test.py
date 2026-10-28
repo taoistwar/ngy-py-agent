@@ -20,6 +20,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from agent.tools.file_access import FileAccessConfig  # noqa: E402
 from agent.tools.grep import make_grep_tool  # noqa: E402
+from agent.tools.grep import regex as grep_regex  # noqa: E402
 from agent.tools.grep import tool as grep_tool  # noqa: E402
 
 
@@ -225,6 +226,27 @@ class GrepToolTest(unittest.TestCase):
         self.assertEqual(spanning["num_lines"], 1)
         self.assertTrue(spanning["content"].startswith("a.rs:1:struct Foo {"))
         self.assertIn("field: u32", spanning["content"])
+
+    def test_a_pathological_pattern_is_aborted_and_reported(self):
+        self.write("a.txt", "a" * 200 + "!\n")
+        self.write("b.txt", "value\n")
+
+        with patch.object(grep_regex, "MATCH_TIMEOUT_SECONDS", 0.05):
+            result = self.tool("(a|a)+$", output_mode="content")
+
+        # A file that could not be searched must not look like a file without matches.
+        self.assertEqual(result["num_lines"], 0)
+        self.assertEqual(result["skipped_regex_timeout"], ["a.txt"])
+        self.assertIn("skipped_regex_timeout", result["hint"])
+
+    def test_the_timeout_also_drops_files_mode_candidates(self):
+        self.write("a.txt", "a" * 200 + "!\n")
+
+        with patch.object(grep_regex, "MATCH_TIMEOUT_SECONDS", 0.05):
+            result = self.tool("(a|a)+$")
+
+        self.assertEqual(result["filenames"], [])
+        self.assertEqual(result["skipped_regex_timeout"], ["a.txt"])
 
     def test_invalid_regular_expression_is_reported(self):
         result = self.tool("(unclosed", output_mode="content")

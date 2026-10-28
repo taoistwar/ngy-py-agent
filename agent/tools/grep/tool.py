@@ -36,12 +36,13 @@ from agent.tools.grep.description import (
     NO_MATCH_HINT,
     OFFSET_PAST_END_HINT,
     OUTPUT_MODES,
+    REGEX_TIMEOUT_HINT,
     SKIPPED_ONLY_HINT,
     TRUNCATED_HINT,
 )
 from agent.tools.grep.errors import GrepError
 from agent.tools.grep.listing import collect_counts, collect_files
-from agent.tools.grep.regex import compile_pattern
+from agent.tools.grep.regex import Matcher
 from agent.tools.grep.scan import CandidateSet, collect_candidates, resolve_root
 from agent.tools.grep.types import extensions_for, supported_types
 
@@ -176,6 +177,8 @@ def _apply_signals(
     candidates: CandidateSet,
     timed_out: bool,
     skipped: Sequence[str],
+    timeouts: Sequence[Path],
+    workspace: Optional[Path],
 ) -> None:
     """Attach the "the answer is incomplete, and here is why" fields."""
     # The walk and the scan share one budget, so either of them can be the part
@@ -187,6 +190,10 @@ def _apply_signals(
         payload["scanned_entries"] = candidates.scanned
     if skipped:
         payload["skipped_sensitive"] = list(skipped)
+    if timeouts:
+        # A pattern that blew its deadline leaves files unsearched; naming them is
+        # the difference between "nothing there" and "nothing we could look at".
+        payload["skipped_regex_timeout"] = [display_path(path, workspace) for path in timeouts]
 
 
 def _apply_hint(
@@ -195,6 +202,7 @@ def _apply_hint(
     has_results: bool,
     truncated: bool,
     skipped: Sequence[str],
+    timeouts: Sequence[Path],
     found: int,
     offset: int,
 ) -> None:
@@ -207,6 +215,8 @@ def _apply_hint(
         # There were results, just not at this offset. Saying "no matches" here
         # sends the model off to rewrite a pattern that was already right.
         payload["hint"] = OFFSET_PAST_END_HINT
+    elif timeouts:
+        payload["hint"] = REGEX_TIMEOUT_HINT
     elif skipped:
         payload["hint"] = SKIPPED_ONLY_HINT
     else:
@@ -223,7 +233,12 @@ def _apply_pagination(payload: Dict[str, Any], truncated: bool, limit: Optional[
 
 
 def _content_payload(
-    outcome, candidates: CandidateSet, limit: Optional[int], offset: int
+    outcome,
+    candidates: CandidateSet,
+    limit: Optional[int],
+    offset: int,
+    timeouts: Sequence[Path],
+    workspace: Optional[Path],
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "mode": MODE_CONTENT,
@@ -232,12 +247,15 @@ def _content_payload(
         "truncated": outcome.truncated,
     }
     _apply_pagination(payload, outcome.truncated, limit, offset)
-    _apply_signals(payload, candidates, outcome.timed_out, candidates.skipped_sensitive)
+    _apply_signals(
+        payload, candidates, outcome.timed_out, candidates.skipped_sensitive, timeouts, workspace
+    )
     _apply_hint(
         payload,
         has_results=bool(outcome.lines),
         truncated=outcome.truncated,
         skipped=candidates.skipped_sensitive,
+        timeouts=timeouts,
         found=outcome.found,
         offset=offset,
     )
@@ -245,7 +263,12 @@ def _content_payload(
 
 
 def _files_payload(
-    outcome, workspace: Optional[Path], candidates: CandidateSet, limit, offset
+    outcome,
+    workspace: Optional[Path],
+    candidates: CandidateSet,
+    limit,
+    offset,
+    timeouts: Sequence[Path],
 ) -> Dict[str, Any]:
     files = [display_path(path, workspace) for path in outcome.files]
     payload: Dict[str, Any] = {
@@ -255,12 +278,15 @@ def _files_payload(
         "truncated": outcome.truncated,
     }
     _apply_pagination(payload, outcome.truncated, limit, offset)
-    _apply_signals(payload, candidates, outcome.timed_out, candidates.skipped_sensitive)
+    _apply_signals(
+        payload, candidates, outcome.timed_out, candidates.skipped_sensitive, timeouts, workspace
+    )
     _apply_hint(
         payload,
         has_results=bool(files),
         truncated=outcome.truncated,
         skipped=candidates.skipped_sensitive,
+        timeouts=timeouts,
         found=outcome.found,
         offset=offset,
     )
@@ -268,7 +294,12 @@ def _files_payload(
 
 
 def _count_payload(
-    outcome, workspace: Optional[Path], candidates: CandidateSet, limit, offset
+    outcome,
+    workspace: Optional[Path],
+    candidates: CandidateSet,
+    limit,
+    offset,
+    timeouts: Sequence[Path],
 ) -> Dict[str, Any]:
     lines = [f"{display_path(path, workspace)}:{count}" for path, count in outcome.counts]
     payload: Dict[str, Any] = {
@@ -279,12 +310,15 @@ def _count_payload(
         "truncated": outcome.truncated,
     }
     _apply_pagination(payload, outcome.truncated, limit, offset)
-    _apply_signals(payload, candidates, outcome.timed_out, candidates.skipped_sensitive)
+    _apply_signals(
+        payload, candidates, outcome.timed_out, candidates.skipped_sensitive, timeouts, workspace
+    )
     _apply_hint(
         payload,
         has_results=bool(lines),
         truncated=outcome.truncated,
         skipped=candidates.skipped_sensitive,
+        timeouts=timeouts,
         found=outcome.found,
         offset=offset,
     )
@@ -316,10 +350,10 @@ def _grep_impl(
 
     cleaned = _clean_pattern(pattern)
     mode = _clean_mode(output_mode)
-    matcher = _clean_glob(glob_filter)
+    glob_matcher = _clean_glob(glob_filter)
     extensions = _clean_type(file_type)
     span_lines = _as_bool(multiline, "multiline")
-    regex = compile_pattern(
+    matcher = Matcher(
         cleaned,
         case_insensitive=_as_bool(case_insensitive, "case_insensitive"),
         multiline=span_lines,
@@ -336,7 +370,11 @@ def _grep_impl(
     # One budget for the whole call: walking and reading share it, so a slow tree
     # cannot consume the time the scan itself needs (or the other way round).
     deadline = started + MAX_DURATION_SECONDS
-    candidates = collect_candidates(root, workspace, matcher, extensions, config, deadline)
+    candidates = collect_candidates(root, workspace, glob_matcher, extensions, config, deadline)
+
+    # Files whose matching hit the per-call timeout. Collected so the answer can
+    # say what it did not look at instead of quietly returning less.
+    timeouts: List[Path] = []
 
     if mode == MODE_CONTENT:
         options = ContentOptions(
@@ -347,14 +385,20 @@ def _grep_impl(
             line_numbers=_as_bool(line_numbers, "line_numbers", default=True),
             multiline=span_lines,
         )
-        outcome = collect_content(candidates.files, regex, options, deadline, workspace)
-        payload = _content_payload(outcome, candidates, limit, skip)
+        outcome = collect_content(
+            candidates.files, matcher, options, deadline, workspace, timeouts
+        )
+        payload = _content_payload(outcome, candidates, limit, skip, timeouts, workspace)
     elif mode == MODE_COUNT:
-        outcome = collect_counts(candidates.files, regex, skip, limit, deadline, span_lines)
-        payload = _count_payload(outcome, workspace, candidates, limit, skip)
+        outcome = collect_counts(
+            candidates.files, matcher, skip, limit, deadline, span_lines, timeouts
+        )
+        payload = _count_payload(outcome, workspace, candidates, limit, skip, timeouts)
     else:
-        outcome = collect_files(candidates.files, regex, skip, limit, deadline, span_lines)
-        payload = _files_payload(outcome, workspace, candidates, limit, skip)
+        outcome = collect_files(
+            candidates.files, matcher, skip, limit, deadline, span_lines, timeouts
+        )
+        payload = _files_payload(outcome, workspace, candidates, limit, skip, timeouts)
 
     payload["duration_ms"] = int((time.monotonic() - started) * 1000)
     return payload
