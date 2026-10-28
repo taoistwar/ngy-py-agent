@@ -137,6 +137,7 @@ def build_tool_registry_from_names(
     model: str = "",
     task_id: str = "",
     should_stop: Optional[Callable[[], bool]] = None,
+    checkpoint_store: Any = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry from an explicit tool-name allow list (``None`` = all tools)."""
     options = {
@@ -147,6 +148,8 @@ def build_tool_registry_from_names(
         "task_id": task_id,
         # The run's cancel channel, so a long tool can be interrupted (ADR 0019).
         "should_stop": should_stop,
+        # The run's undo history (ADR 0020).
+        "checkpoint_store": checkpoint_store,
     }
     if tool_names is None:
         return ToolRegistry(**options)
@@ -161,6 +164,7 @@ def build_tool_registry(
     model: str = "",
     task_id: str = "",
     should_stop: Optional[Callable[[], bool]] = None,
+    checkpoint_store: Any = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry restricted to the tools allowed for ``mode``."""
     return build_tool_registry_from_names(
@@ -171,6 +175,7 @@ def build_tool_registry(
         model=model,
         task_id=task_id,
         should_stop=should_stop,
+        checkpoint_store=checkpoint_store,
     )
 
 

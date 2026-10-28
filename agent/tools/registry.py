@@ -86,6 +86,7 @@ class ToolRegistry:
         permission_broker: Optional[PermissionBroker] = None,
         user_question_broker: Optional[UserQuestionBroker] = None,
         should_stop: Optional[Callable[[], bool]] = None,
+        checkpoint_store: Optional[Any] = None,
     ):
         self.base_dir = base_dir
         self.max_tokens = max_tokens
@@ -98,6 +99,9 @@ class ToolRegistry:
         # Read per call by the tools that can block for a long time, so a stop lands
         # in the middle of one instead of after it (ADR 0019).
         self.should_stop = should_stop
+        # Records what a mutating call changed, so the task can be undone later
+        # (ADR 0020). ``None`` means "nothing to record" - a CLI run, or a test.
+        self.checkpoint_store = checkpoint_store
         # ``None`` keeps the historical behaviour (everything runs). agent_loop
         # assigns the broker after building the registry, because the registry is
         # built before the task identity exists (see ADR 0006 D1).
@@ -353,7 +357,18 @@ class ToolRegistry:
                 details=denial.details,
             )
 
-        result = self.tools[name]["function"](**arguments)
+        # Bracketed, not just recorded afterwards: the baseline has to exist before
+        # the tool touches anything, and a tool that raises still changed the disk
+        # (ADR 0020).
+        store = self.checkpoint_store
+        recording = store is not None and bool(self.task_id)
+        if recording:
+            store.begin(self.task_id, name, arguments)
+        try:
+            result = self.tools[name]["function"](**arguments)
+        finally:
+            if recording:
+                store.end(self.task_id, name, arguments)
         if isinstance(result, ToolOutcome):
             return result
         return json.dumps(result) if isinstance(result, (dict, list)) else str(result)

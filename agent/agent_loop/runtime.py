@@ -6,6 +6,7 @@ import json
 from typing import Any, Callable, Dict, List, Optional
 
 from agent.agent_loop.config import TOOL_SCHEMA_PROVIDER
+from agent.checkpoints import CheckpointStore
 from agent.models import EventSink, TaskEvent
 from agent.modes import (
     build_tool_registry,
@@ -69,6 +70,9 @@ def _build_runtime(
         # Handed to the tools that can block, so a stop interrupts the tool itself
         # rather than waiting for it to return (ADR 0019).
         "should_stop": should_stop,
+        # The undo history for this run. Built here rather than inside the registry
+        # so which directory a run may record stays a decision of the loop (ADR 0020).
+        "checkpoint_store": CheckpointStore.for_run(base_dir, task_id),
     }
     if not enable_tools:
         registry = ToolRegistry(enabled_tools=[], **registry_options)

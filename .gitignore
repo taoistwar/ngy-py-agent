@@ -22,6 +22,8 @@ data/ds-tokenizer/
 data/default_workspace/
 data/permission_rules.json
 data/traces/
+# Undo history: private git repositories, one per workspace (ADR 0020)
+data/checkpoints/
 .env
 output/
 /llm/
