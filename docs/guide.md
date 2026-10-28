@@ -149,7 +149,24 @@ http://127.0.0.1:8001
 - `GET /api/tasks/{task_id}/events/ws`：WebSocket 事件流。
   - `since`：按 `event_id` 增量拉取
   - `heartbeat`：心跳间隔（秒）
+- `POST /api/tasks/{task_id}/stop`：请求停止（见下面「停止与撤销」）。
+- `GET /api/tasks/{task_id}/changes`：这个任务改过哪些文件（`status` + 增删行数）。`available: false` 时 `reason` 说明为什么不能撤销。
+- `GET /api/tasks/{task_id}/changes/diff?path=`：单个文件的补丁，按需取。
+- `POST /api/tasks/{task_id}/revert`：撤销改动。body 可带 `paths`（省略 = 全部）与 `force`（覆盖任务之后被改过的文件），返回逐文件的 `restored` / `conflicts` / `skipped`。
 - `GET /api/healthz`：服务健康检查。
+
+### 停止与撤销
+
+**停止**是协作式中断，生效点在 step 边界、每个工具调用之间，以及阻塞等待内部（0.25 秒轮询一次）。所以正在跑的前台 `exec_command`、`write_stdin` 的等待也会被打断，不需要等命令自己的 `timeout`。[ADR 0019](decisions/0019-cancel-interrupts-running-work.md) 里有完整的边界说明：能打断的是**等待**，不是计算——进程内 `exec()` 的死循环和正在飞的模型请求仍会跑完。
+
+**撤销**把任务改过的文件恢复到它第一次改动之前。范围覆盖文件工具、`exec_command` / `write_stdin` 和 `code_interpreter`；`computer_control` 操作的宿主桌面**不在**范围内。
+
+- 判据是"当前内容仍等于任务留下的内容"。任务之后被人改过的文件会报为 **conflict 并跳过**，其余文件照常回退；确认要覆盖就带 `force`。
+- 逐文件进行，不是全有全无。
+- 只有**全部**回退成功时任务才变成 `reverted`，并且不再进入后续会话的对话上下文（它的改动已经不在了）。
+- 撤销依赖本机的 `git`，但仓库在 `data/checkpoints/<workspace-key>/` 下，**不会碰你自己的 `.git`**；工作空间不是 git 仓库也能用。拿不到 git 时接口返回 409 并说明原因，前端把入口标为不可用。
+
+实现与已知限制（并发任务共享工作树时的归属重叠）见 [ADR 0020](decisions/0020-checkpoint-rewind.md)。
 
 ### 智能体（Agent）管理
 

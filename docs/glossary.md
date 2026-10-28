@@ -134,7 +134,9 @@
 | **输出根（output root）** | `<temp>/ngy-py-agent/output/<workspace>/<scope>`，每次运行一个目录。由 `EXEC_OUTPUT_DIR` 覆盖。 | `agent/tools/output_store.py` |
 | **只读附加根（`extra_read_roots`）** | 工作空间之外**可读但不可写**的目录，目前就是输出根。这是 [ADR 0001](decisions/0001-file-edit-tool.md) D3"读得到就能改"的显式例外；全局策略仍作用于它。 | `agent/tools/file_access.py` |
 | **`read_only_root`** | 试图写入只读附加根时的拒绝原因。 | `agent/tools/file_access.py` |
-| **`interrupted`** | `exec_command` 结果里表示命令**因超时被打断**的标记。它**不等于**"用户停止"：`stop` 是协作式的，杀不掉正在执行的命令。 | [ADR 0005](decisions/0005-exec-tool.md) |
+| **`interrupted`** | `exec_command` 结果里表示命令**被打断**的标记。原因看 `interrupted_by`：`timeout`（命令自己的超时）或 `task_stop`（用户按了停止）。两者文案不同——把用户停止说成"超时 N 毫秒"是把原因错误地归给时钟。 | [ADR 0005](decisions/0005-exec-tool.md)、[ADR 0019](decisions/0019-cancel-interrupts-running-work.md) |
+| **`should_stop`** | 一次运行的取消通道，以回调形式从循环一路下传到工具绑定。工具层不认识"任务"，只知道"该停了吗"。**它只能打断等待**（命令、轮询、权限对话框），打断不了计算（进程内 `exec()`）和正在飞的模型请求。 | [ADR 0019](decisions/0019-cancel-interrupts-running-work.md) |
+| **停止的生效点** | 三处：step 边界、每个 tool call 之间、以及阻塞等待内部（0.25 秒轮询一次）。所以"停止"的含义是**最迟 0.25 秒后从最近的等待点返回**，不是立刻断电。 | [ADR 0019](decisions/0019-cancel-interrupts-running-work.md) |
 | **`tty`（伪终端）** | `exec_command` 的参数：`true` 时命令挂在**伪终端**上而不是管道，程序看到的 `isatty()` 为真（颜色、进度条、提示、"没有终端就拒绝运行"的 CLI）。代价：stderr 并入 stdout（结果里 `stderr` 恒空、`tty: true`）、行尾是 CRLF（模型文本归一为 LF，**落盘保留原始字节**）、前台 tty 无法被回答、尺寸固定 24×80、无 ANSI 剥离。 | [ADR 0009](decisions/0009-exec-tty.md) |
 | **`tty_unavailable`** | 本机拿不到终端时拒绝 `tty` 调用的原因（Windows 缺 `pywinpty`、POSIX 无 `pty` 模块、ConPTY 分配失败）。**不静默退回管道**：退回会让程序与模型对"它看到了什么"产生分歧。 | `agent/tools/pty_session.py` |
 | **`pty_session`（终端契约）** | 伪终端基础层：spawn、读字节、写字节、存活与退出码、关闭。它**不**判定死活也不杀进程——那仍是 `process_group`（Job Object / 进程组）的唯一权威。Windows 走 `pywinpty`（ConPTY），POSIX 走标准库 `pty` 且**不设控制终端**。 | `agent/tools/pty_session.py` |
@@ -189,6 +191,21 @@
 | **`pending_question`** | 任务详情/列表里的待答问题批（与 `pending_permission` 并列），前端 1 秒轮询它渲染对话框；答复后置空。 | `task_api.py`、`app_state.py` |
 | **`no_client`** | 没有客户端可问（CLI、库调用、未注入 broker）时提问结果的 `status`。**不阻塞、不抛异常、不假装问过**：模型拿到空答案并被告知自行决定。 | `agent/tools/registry.py` |
 | **提问超时（`ASK_USER_TIMEOUT_SECONDS`）** | 默认 120 秒，**独立于** `PERMISSION_TIMEOUT_SECONDS`：两人应答的语义不同（"拒绝这次调用" vs "带着假设继续"），共用一个旋钮会互相误伤。超时返回空答案 + "自行决定并说明假设"，**不是拒绝**。 | `agent/tools/user_question.py` |
+
+## 快照与回退（checkpoint）
+
+| 术语 | 定义 | 位置 |
+| --- | --- | --- |
+| **checkpoint（检查点）** | 一次"某个任务改了什么"的记录。**不暴露给用户看**，用户看到的是"这个任务改了哪些文件"。 | `agent/checkpoints/store.py` |
+| **快照仓库（checkpoint store）** | 每个工作空间一个**私有 bare git 仓库**，放在工作空间**外面**（`data/checkpoints/<workspace-key>/repo`），每次调用显式传 `--git-dir` + `--work-tree`。**不碰用户的 `.git`**，工作空间不是 git 仓库也照常工作。`core.autocrlf=false`：存的是字节，任何换行转换都会让回退去重写任务没碰过的文件。 | [ADR 0020](decisions/0020-checkpoint-rewind.md) |
+| **基线（baseline）** | 该任务**第一次改动之前**的仓库状态，记在 `cp/<task>-base`。之后 `git diff 基线..任务头` 就正好是这个任务改过的东西。 | [ADR 0020](decisions/0020-checkpoint-rewind.md) |
+| **任务分支（task branch）** | `cp/<task>`：一个任务一条历史。归属靠分支而不是"拿盘面对比全量快照"，否则分不清是谁改的。 | [ADR 0020](decisions/0020-checkpoint-rewind.md) |
+| **快照粒度** | 两档。文件工具只 `add` 那一个 `file_path`（O(1)）；`exec_command` / `write_stdin` / `code_interpreter` 才 `add -A`（O(文件数)）——因为它们不告诉任何人自己动了什么。 | [ADR 0020](decisions/0020-checkpoint-rewind.md) |
+| **`revert`（回退）** | 把文件恢复到任务的基线。逐文件进行，**不是全有全无**：一个冲突不连累其他文件。 | `agent/checkpoints/store.py` |
+| **冲突（conflict）** | 回退判据是"当前内容 == 任务留下的内容"。不等就说明任务之后有人改过，该文件**跳过**并报为冲突；`force=true` 才覆盖。不做 3-way merge：静默合并会毁掉用户手里的内容。 | [ADR 0020](decisions/0020-checkpoint-rewind.md) |
+| **`REVERTED`（任务状态）** | **全部**回退成功才置。部分回退或存在冲突时任务保持原状态——它的改动还在磁盘上，这轮仍然是工作空间的一部分。已回退的任务**不进会话历史**（`session_history` 只回放 `success`）。 | `agent/models.py` |
+| **回退不可用（`unavailable`）** | 缺 git、功能关闭、任务早于本功能，都会让回退不可用。**必须显示原因**，不给一个点不动的按钮。 | [ADR 0020](decisions/0020-checkpoint-rewind.md) |
+| **归属重叠（已知限制）** | 多个任务同时跑、共享一个工作树时，A 在 B 的基线之后做的改动会落进 B 的分支，于是 B 的改动列表会把 A 的算进来。冲突判据能挡下"任务提交之后再发生的改动"，挡不住并发窗口内的重叠。 | [ADR 0020](decisions/0020-checkpoint-rewind.md) |
 
 ## 可观测（Tracing）
 
