@@ -305,6 +305,28 @@ export async function stopTask(taskId) {
   })
 }
 
+// What a task changed, so the list can offer an undo (ADR 0020). ``available`` is
+// false when this machine cannot check-point or the run predates the feature, and
+// the payload says which - an undo button that cannot work is worse than none.
+export async function fetchTaskChanges(taskId) {
+  return requestJson(`${API_BASE}/api/tasks/${taskId}/changes`)
+}
+
+// One file's patch, fetched on demand: a task can touch enough files to matter.
+export async function fetchTaskChangeDiff(taskId, path) {
+  const query = new URLSearchParams({ path })
+  return requestJson(`${API_BASE}/api/tasks/${taskId}/changes/diff?${query.toString()}`)
+}
+
+// Undo everything (``paths`` omitted) or a chosen subset. ``force`` overwrites files
+// edited after the task wrote them; without it those come back as conflicts.
+export async function revertTask(taskId, { paths = null, force = false } = {}) {
+  return requestJson(`${API_BASE}/api/tasks/${taskId}/revert`, {
+    method: "POST",
+    body: JSON.stringify({ paths, force }),
+  })
+}
+
 export async function fetchPermissionModeConfig() {
   return requestJson(`${API_BASE}/api/admin/permission-mode`)
 }

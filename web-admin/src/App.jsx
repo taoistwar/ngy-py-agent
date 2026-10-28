@@ -60,6 +60,7 @@ import {
 import EventTimeline from "./components/EventTimeline"
 import PermissionPrompt from "./components/PermissionPrompt"
 import QuestionPrompt from "./components/QuestionPrompt"
+import RevertChangesDialog from "./components/RevertChangesDialog"
 import TaskRowActions from "./components/TaskRowActions"
 import TaskToolbarActions from "./components/TaskToolbarActions"
 import { SearchIcon, SkillIcon } from "./components/icons"
@@ -562,6 +563,7 @@ function TaskList({
   selectedId,
   onSelect,
   onRerun,
+  onRevert,
   onDelete,
   selectedTaskIds,
   isAllPageSelected,
@@ -647,6 +649,7 @@ function TaskList({
                       <TaskRowActions
                         running={isTaskRunningStatus(item.status)}
                         onRerun={() => onRerun(item)}
+                        onRevert={() => onRevert(item.task_id)}
                         onDelete={() => onDelete(item.task_id)}
                         translate={translate}
                       />
@@ -1195,6 +1198,8 @@ export default function App() {
   }, [])
   const [locale, setLocale] = useState(getDefaultLocale())
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set())
+  // Empty means "the undo dialog is closed": the dialog owns its own fetching.
+  const [revertTaskId, setRevertTaskId] = useState("")
   const [taskPage, setTaskPage] = useState(1)
   const [systemTime, setSystemTime] = useState(() => new Date())
   const [taskSearchQuery, setTaskSearchQuery] = useState("")
@@ -2362,6 +2367,7 @@ export default function App() {
                 selectedId={selectedId}
                 onSelect={selectTask}
                 onRerun={rerunTaskHandler}
+                onRevert={setRevertTaskId}
                 onDelete={deleteTaskItem}
                 selectedTaskIds={selectedTaskIds}
                 isAllPageSelected={isAllPageSelected}
@@ -2545,6 +2551,21 @@ export default function App() {
           onAnswered={handleQuestionAnswered}
           translate={translate}
         />
+        {revertTaskId ? (
+          <RevertChangesDialog
+            taskId={revertTaskId}
+            translate={translate}
+            onClose={() => setRevertTaskId("")}
+            onReverted={() => {
+              refreshTasks().catch(() => {})
+              // Only refresh the detail panel when the undone task is the one it
+              // is showing; otherwise this would replace an unrelated selection.
+              if (revertTaskId === selectedIdRef.current) {
+                refreshTask(revertTaskId).catch(() => {})
+              }
+            }}
+          />
+        ) : null}
       </div>
     </div>
   )

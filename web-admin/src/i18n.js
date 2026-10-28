@@ -101,6 +101,7 @@ const TASK_STATUS_TEXT_KEYS = {
   success: "statusSuccess",
   failed: "statusFailed",
   stopped: "statusStopped",
+  reverted: "statusReverted",
   degraded: "statusDegraded",
   unknown: "statusUnknown",
 }
@@ -132,7 +133,13 @@ export function getTaskStatusText(translate, status) {
 
 export function getTaskStatusClass(status) {
   const normalized = normalizeTaskStatus(status)
-  if (normalized === "success" || normalized === "failed" || normalized === "stopped") {
+  if (
+    normalized === "success" ||
+    normalized === "failed" ||
+    normalized === "stopped" ||
+    // Undone is a finished state, not an in-flight one: its files are back.
+    normalized === "reverted"
+  ) {
     return normalized
   }
   if (normalized === "waiting") {

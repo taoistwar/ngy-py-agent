@@ -45,6 +45,15 @@ export function SkillIcon() {
   )
 }
 
+export function UndoIcon() {
+  return (
+    <Icon>
+      <polyline points="9 14 4 9 9 4" />
+      <path d="M4 9h9a6 6 0 0 1 0 12h-3" />
+    </Icon>
+  )
+}
+
 export function TrashIcon() {
   return (
     <Icon>

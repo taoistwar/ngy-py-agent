@@ -160,6 +160,13 @@
   background: var(--status-stopped-bg);
 }
 
+/* Finished, then undone: same muted weight as "stopped" - nothing is in flight and
+   nothing changed, so it must not read as success (ADR 0020). */
+.status.reverted {
+  background: var(--status-stopped-bg);
+  color: var(--muted);
+}
+
 /* Tool confirmation dialog */
 .permission-prompt {
   display: grid;
