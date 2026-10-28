@@ -6,10 +6,11 @@ one branch per task: the branch is what makes attribution possible, because
 ``git diff <task-base> <task-head>`` then names exactly the files that task touched and
 nothing a neighbouring task did.
 
-Baselines are free. The first snapshot a task takes records the current ``HEAD`` as
-its base; the first snapshot *ever* in a workspace has to scan the whole tree once to
-create that initial commit, and every later task starts from a commit that already
-exists.
+Baselines are committed when a task first mutates something: the baseline is the disk
+as it was at that moment, not the last commit. Between two tasks the user may have
+edited files by hand, or undone an earlier task; those files exist on disk without
+being in ``HEAD``, and a baseline that ignored them would report them as created by the
+next task - and a revert would then delete them.
 
 Two properties are deliberate:
 
@@ -159,10 +160,11 @@ class CheckpointStore:
     def begin(self, task_id: str, tool: str, arguments: Mapping[str, Any]) -> None:
         """Called **before** ``tool`` runs: make sure this task has a baseline.
 
-        This is the only moment the pre-change state can be captured, so the first
-        mutating call of the first task in a workspace is where the one full tree
-        scan happens. Every later call finds the ref already recorded and returns
-        after a single ``rev-parse``.
+        This is the only moment the pre-change state can be captured, which is why the
+        baseline is committed here. It costs one ``git status`` per mutating call and a
+        full tree ``git add`` once per task - but only when the disk and the last commit
+        actually differ, so a workspace nobody has touched since the previous task pays
+        almost nothing.
         """
         pathspec = self._pathspec(tool, arguments)
         if pathspec is _NOTHING or not self.enable():
@@ -423,13 +425,24 @@ class CheckpointStore:
         self._index_task = task_id
 
     def _record_base(self, task_id: str) -> str:
-        """Capture the workspace as it is now and make it this task's baseline."""
+        """Capture the workspace as it is now and make it this task's baseline.
+
+        The baseline must be a commit of the *current disk*, not whatever ``HEAD``
+        already points at. Files the user created or edited by hand between tasks, and
+        files an earlier task's undo deleted, are on disk but not in ``HEAD``; taking
+        ``HEAD`` as the baseline would make them look like this task created them, and
+        reverting would then delete the user's files.
+        """
         head = git.run(
             self.git_dir, self.workspace, ["rev-parse", "--verify", "--quiet", "HEAD"], check=False
         )
-        if head.returncode != 0:
-            # The first snapshot in this workspace: the baseline is whatever is on
-            # disk right now. The only full tree scan the store ever does.
+        dirty = git.run(
+            self.git_dir,
+            self.workspace,
+            ["status", "--porcelain", "--untracked-files=all"],
+            check=False,
+        ).stdout
+        if head.returncode != 0 or dirty.strip():
             git.run(self.git_dir, self.workspace, ["add", "-A"])
             git.run(
                 self.git_dir,

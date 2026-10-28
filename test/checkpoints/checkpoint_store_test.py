@@ -84,6 +84,24 @@ class CheckpointStoreTest(unittest.TestCase):
         self.assertEqual(self.store.revert(TASK).restored, ["app.py"])
         self.assertEqual(self.path.read_text(encoding="utf-8"), "v0\n")
 
+    def test_a_file_created_outside_any_task_is_not_a_creation_of_the_next(self):
+        """The baseline is the disk, not the last commit (ADR 0020 D3).
+
+        A file the user created by hand between two tasks is on disk but not in
+        ``HEAD``. Treating ``HEAD`` as the baseline would report the next task's edit
+        to it as a creation, and undoing that task would delete the user's file.
+        """
+        # A first task on a different file, so the repository already has a HEAD.
+        self.write(self.workspace / "first.txt", "a\n", task_id="earlier")
+        # Then the user writes app.py themselves: no begin/end wraps this.
+        self.path.write_text("user\n", encoding="utf-8")
+
+        self.write(self.path, "task\n", task_id=TASK)
+
+        self.assertEqual(self.changes()["app.py"].status, STATUS_MODIFIED)
+        self.store.revert(TASK)
+        self.assertEqual(self.path.read_text(encoding="utf-8"), "user\n")
+
     def test_a_created_file_is_reported_as_added(self):
         created = self.workspace / "new.txt"
         self.write(created, "hello\n")
