@@ -19,6 +19,7 @@ from typing import Any, Callable, Optional
 
 import app_state
 from agent.agent_loop import DEFAULT_MAX_STEPS, run_react_loop
+from agent.checkpoints import CheckpointStore
 from agent.models import EventCategory, EventSink, TaskEvent, TaskStatus
 from agent.provider import ProviderConfig, build_provider, canonicalize_provider
 from agent.telemetry import (
@@ -140,6 +141,21 @@ def resolve_session_base_dir(session_id: str | None) -> str | None:
     workspace = app_state.monitor_store.get_workspace(workspace_id)
     root_path = str((workspace or {}).get("root_path") or "").strip()
     return root_path or None
+
+
+def checkpoint_store_for_task(trace: dict[str, Any] | None) -> CheckpointStore | None:
+    """The undo history a stored task belongs to, or ``None`` when it has none.
+
+    Resolved through the task's session: the session names the workspace, and the
+    workspace is the directory the task actually wrote into. The task record itself
+    only says which session it ran in (ADR 0020 D2).
+    """
+    if not trace:
+        return None
+    task_id = str(trace.get("task_id") or "").strip()
+    if not task_id:
+        return None
+    return CheckpointStore.for_run(resolve_session_base_dir(trace.get("session_id")), task_id)
 
 
 def agent_runtime_config(agent: dict[str, Any] | None) -> dict[str, Any] | None:

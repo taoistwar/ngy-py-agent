@@ -38,6 +38,9 @@ def _finished_turns(session_id: str) -> list[tuple[str, str]]:
 
     Only ``success`` counts: a running task is the caller's own in-flight work, a
     failed one has no answer to continue from, and a stopped one stopped mid-way.
+    A ``reverted`` task also drops out - its files are back to the baseline, so
+    replaying "it built X" would teach the model about a workspace that no longer
+    exists (ADR 0020 D6).
     """
     turns: list[tuple[str, str]] = []
     for task in app_state.monitor_store.list_tasks(session_id=session_id):

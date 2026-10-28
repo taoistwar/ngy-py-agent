@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from fastapi.responses import StreamingResponse
 
 import app_state
-from agent.models import TaskStatus
+from agent.models import EventCategory, TaskStatus
 from agent.modes import DEFAULT_MODE, VALID_MODES
 from agent.telemetry import end_task_span, start_task_span
 from agent.tools.permissions import SCOPES
@@ -29,6 +29,7 @@ from api_schemas import (
     PermissionDecisionResponse,
     QuestionAnswerRequest,
     QuestionAnswerResponse,
+    RevertTaskRequest,
     RunTaskRequest,
     RunTaskResponse,
     TaskDetailResponse,
@@ -38,6 +39,8 @@ from api_schemas import (
 from session_history import build_session_history
 from task_runtime import (
     agent_runtime_config,
+    build_event,
+    checkpoint_store_for_task,
     extract_task_result,
     purge_expired_tasks_with_log,
     resolve_session_base_dir,
@@ -161,6 +164,88 @@ async def stop_task(task_id: str) -> dict[str, Any]:
         app_state.monitor_store.finish_task(task_id, success=False, status=TaskStatus.STOPPED)
         stopped = True
     return {"task_id": task_id, "stopped": stopped}
+
+
+def _stored_task(task_id: str) -> dict[str, Any]:
+    """The task record, or the 404 every per-task route answers with."""
+    trace = app_state.monitor_store.get_task(task_id)
+    if trace is None:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    return trace
+
+
+def _undo_store(task_id: str, trace: dict[str, Any]) -> Any:
+    """The undo history for a task, or the 409 explaining why there is none.
+
+    "No history" is not "no changes": a machine without git, a task from before this
+    feature, and a workspace that no longer exists all land here, and the answer has
+    to say which one it was rather than offering an undo that cannot work (ADR 0020 D7).
+    """
+    store = checkpoint_store_for_task(trace)
+    if store is None:
+        raise HTTPException(status_code=409, detail="Checkpointing is disabled for this run.")
+    if not store.enable():
+        raise HTTPException(
+            status_code=409, detail=store.unavailable_reason or "Checkpointing is unavailable."
+        )
+    return store
+
+
+@router.get("/api/tasks/{task_id}/changes")
+async def task_changes(task_id: str) -> dict[str, Any]:
+    """What this task changed, per file, so the UI can offer an undo."""
+    trace = _stored_task(task_id)
+    store = checkpoint_store_for_task(trace)
+    if store is None or not store.enable():
+        return {
+            "task_id": task_id,
+            "available": False,
+            "reason": (
+                store.unavailable_reason
+                if store is not None
+                else "Checkpointing is disabled for this run."
+            ),
+            "files": [],
+        }
+    return {
+        "task_id": task_id,
+        "available": True,
+        "reason": "",
+        "files": [item.to_dict() for item in store.changes(task_id)],
+    }
+
+
+@router.get("/api/tasks/{task_id}/changes/diff")
+async def task_change_diff(task_id: str, path: str = Query(..., min_length=1)) -> dict[str, Any]:
+    """One file's diff. Fetched on demand: a task can touch enough files to matter."""
+    store = _undo_store(task_id, _stored_task(task_id))
+    return {"task_id": task_id, "path": path, "diff": store.diff(task_id, path)}
+
+
+@router.post("/api/tasks/{task_id}/revert")
+async def revert_task(task_id: str, payload: RevertTaskRequest) -> dict[str, Any]:
+    """Undo this task's changes, per file, and record what happened."""
+    store = _undo_store(task_id, _stored_task(task_id))
+    result = store.revert(task_id, payload.paths, payload.force)
+    payload_out = {"task_id": task_id, **result.to_dict()}
+    app_state.monitor_store.append_event(
+        task_id,
+        build_event(task_id, EventCategory.DEBUG, "Task reverted", payload_out),
+    )
+    # Only a revert that leaves nothing behind makes the task "reverted". A partial
+    # undo, or one with conflicts, leaves the task as it was: its changes are still
+    # on disk, so the turn is still part of what the workspace contains.
+    completed = bool(result.restored) and result.clean and not store.changes(task_id)
+    if completed:
+        # ``set_task_status`` rather than ``finish_task``: the result is still worth
+        # reading, and only the status changes (see its docstring).
+        app_state.monitor_store.set_task_status(task_id, TaskStatus.REVERTED)
+    payload_out["status"] = (
+        TaskStatus.REVERTED.value
+        if completed
+        else str(_stored_task(task_id).get("status"))
+    )
+    return payload_out
 
 
 @router.post(

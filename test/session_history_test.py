@@ -94,6 +94,14 @@ class SessionHistoryTest(unittest.TestCase):
 
         self.assertEqual([], session_history.build_session_history(self.session_id))
 
+    def test_a_reverted_task_is_not_context(self):
+        """Its files are back to the baseline, so "it built X" is no longer true."""
+        task_id = self.store.create_task("reverted", "openai", session_id=self.session_id)
+        self.store.finish_task(task_id, success=True, result="Done.")
+        self.store.set_task_status(task_id, TaskStatus.REVERTED)
+
+        self.assertEqual([], session_history.build_session_history(self.session_id))
+
     def test_another_sessions_tasks_are_not_context(self):
         other_session = self.store.create_session("other")
         self._finished_task("elsewhere", "answering elsewhere", session_id=other_session)

@@ -104,6 +104,17 @@ class TaskDetailResponse(BaseModel):
     events: list[dict[str, Any]]
 
 
+class RevertTaskRequest(BaseModel):
+    """Which files to undo, and whether to overwrite ones edited since (ADR 0020)."""
+
+    # ``None`` means "everything this task changed"; an explicit list is a per-file undo.
+    paths: list[str] | None = None
+    force: bool = Field(
+        default=False,
+        description="Overwrite files whose content changed after the task wrote them.",
+    )
+
+
 class EventResponse(BaseModel):
     """Event response."""
 

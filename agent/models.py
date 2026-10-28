@@ -48,6 +48,9 @@ class TaskStatus(str, Enum):
     SUCCESS = "success"
     FAILED = "failed"
     STOPPED = "stopped"
+    # Finished, then undone: the files are back to the task's baseline, so this turn
+    # must not be replayed as conversation history (ADR 0020 D6).
+    REVERTED = "reverted"
 
 
 class TaskEvent(BaseModel):
