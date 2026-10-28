@@ -7,7 +7,7 @@ falls back to a replacement marker instead of raising.
 from __future__ import annotations
 
 import time
-from typing import List
+from typing import Callable, List, Optional
 
 from agent.tools import process_store
 from agent.tools.text_encoding import DecodeError, decode_file_bytes
@@ -46,8 +46,17 @@ def write_to_session(session: process_store.Session, chars: str) -> None:
         ) from exc
 
 
-def collect_output(session: process_store.Session, wait_ms: int) -> str:
-    """Wait up to ``wait_ms`` for new output, returning as soon as there is some."""
+def collect_output(
+    session: process_store.Session,
+    wait_ms: int,
+    should_stop: Optional[Callable[[], bool]] = None,
+) -> str:
+    """Wait up to ``wait_ms`` for new output, returning as soon as there is some.
+
+    A poll may be given minutes of patience, so the loop also watches the run's stop
+    flag: the wait exists to give the command time to print, not to outlast the
+    user's cancel (ADR 0019).
+    """
     deadline = time.monotonic() + (wait_ms / 1000)
     chunks: List[bytes] = []
     while True:
@@ -62,6 +71,8 @@ def collect_output(session: process_store.Session, wait_ms: int) -> str:
                 chunks.append(tail)
             break
         if time.monotonic() >= deadline:
+            break
+        if should_stop is not None and should_stop():
             break
         time.sleep(POLL_INTERVAL_SECONDS)
     return decode_output(b"".join(chunks))

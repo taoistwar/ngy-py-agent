@@ -31,6 +31,10 @@ class ToolBindings:
     # The task that owns this run; background sessions are stamped with it so the
     # task can stop them when it ends (ADR 0008).
     task_id: str = ""
+    # Whether this run has been asked to stop (ADR 0019). A callable rather than an
+    # event so the tool layer keeps no dependency on the app's state module, and so a
+    # run with no cancel channel (the CLI) simply passes ``None``.
+    should_stop: Optional[Callable[[], bool]] = None
     # Output token budget for one tool result.
     max_tokens: int = 0
     # Tokenizer hints for the budget check.

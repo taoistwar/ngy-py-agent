@@ -7,7 +7,7 @@ Each task mode (build / ask / plan) provides its own:
 - ``icon``: default icon key shown in the agent picker (see web-admin agentIcons)
 """
 
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from agent.tool_registry import ToolRegistry
 
@@ -136,6 +136,7 @@ def build_tool_registry_from_names(
     provider: str = "",
     model: str = "",
     task_id: str = "",
+    should_stop: Optional[Callable[[], bool]] = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry from an explicit tool-name allow list (``None`` = all tools)."""
     options = {
@@ -144,6 +145,8 @@ def build_tool_registry_from_names(
         "provider": provider,
         "model": model,
         "task_id": task_id,
+        # The run's cancel channel, so a long tool can be interrupted (ADR 0019).
+        "should_stop": should_stop,
     }
     if tool_names is None:
         return ToolRegistry(**options)
@@ -157,6 +160,7 @@ def build_tool_registry(
     provider: str = "",
     model: str = "",
     task_id: str = "",
+    should_stop: Optional[Callable[[], bool]] = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry restricted to the tools allowed for ``mode``."""
     return build_tool_registry_from_names(
@@ -166,6 +170,7 @@ def build_tool_registry(
         provider=provider,
         model=model,
         task_id=task_id,
+        should_stop=should_stop,
     )
 
 

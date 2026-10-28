@@ -3,7 +3,7 @@
 import functools
 import inspect
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from agent.agent_loop.config import TOOL_SCHEMA_PROVIDER
 from agent.models import EventSink, TaskEvent
@@ -57,6 +57,7 @@ def _build_runtime(
     base_dir: Optional[str] = None,
     agent_config: Optional[Dict[str, Any]] = None,
     task_id: str = "",
+    should_stop: Optional[Callable[[], bool]] = None,
 ) -> tuple[str, ToolRegistry, Any, Optional[List[Dict[str, Any]]]]:
     provider_name = canonicalize_provider(provider_name or TOOL_SCHEMA_PROVIDER)
     registry_options = {
@@ -65,6 +66,9 @@ def _build_runtime(
         "provider": provider_name,
         "model": getattr(provider_config, "model", "") or "",
         "task_id": task_id,
+        # Handed to the tools that can block, so a stop interrupts the tool itself
+        # rather than waiting for it to return (ADR 0019).
+        "should_stop": should_stop,
     }
     if not enable_tools:
         registry = ToolRegistry(enabled_tools=[], **registry_options)

@@ -21,7 +21,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 from agent.tools import process_group, process_store, pty_session
 from agent.tools.exec_command.containment import (
@@ -34,6 +34,9 @@ from agent.tools.exec_command.description import (
     DEFAULT_TIMEOUT_MS,
     MAX_TIMEOUT_MS,
     MIN_TIMEOUT_MS,
+    STOP_POLL_SECONDS,
+    STOPPED_BY_TASK,
+    STOPPED_BY_TIMEOUT,
 )
 from agent.tools.exec_command.errors import ExecError
 from agent.tools.exec_command.output import foreground_text, persist_and_preview
@@ -92,40 +95,69 @@ def _start_foreground(
 
 
 def _finish_pipe_foreground(
-    running: process_group.RunningCommand, timeout_ms: int
-) -> Tuple[Optional[int], bytes, bytes, bool]:
-    """The pipe path: drain both pipes, stopping the tree if the timeout fires."""
-    interrupted = False
-    try:
-        stdout_raw, stderr_raw = running.process.communicate(timeout=timeout_ms / 1000)
-    except subprocess.TimeoutExpired:
-        interrupted = True
+    running: process_group.RunningCommand,
+    timeout_ms: int,
+    should_stop: Optional[Callable[[], bool]] = None,
+) -> Tuple[Optional[int], bytes, bytes, bool, str]:
+    """The pipe path: drain both pipes, stopping the tree on a timeout or a stop.
+
+    The wait goes in short slices through ``communicate`` rather than one long call,
+    because that is the only wait that also drains stdout/stderr - waiting on the
+    process alone deadlocks as soon as the child fills a pipe buffer. ``communicate``
+    is explicitly safe to call again after a timeout, so slicing loses no output.
+
+    Returns ``(exit_code, stdout, stderr, interrupted, interrupted_by)``.
+    """
+    process = running.process
+    deadline = time.monotonic() + timeout_ms / 1000
+    interrupted_by = ""
+    stdout_raw, stderr_raw = b"", b""
+    while True:
+        if should_stop is not None and should_stop():
+            interrupted_by = STOPPED_BY_TASK
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            interrupted_by = STOPPED_BY_TIMEOUT
+            break
+        try:
+            stdout_raw, stderr_raw = process.communicate(
+                timeout=min(STOP_POLL_SECONDS, remaining)
+            )
+            break
+        except subprocess.TimeoutExpired:
+            continue
+
+    if interrupted_by:
         running.stop()
         try:
-            stdout_raw, stderr_raw = running.process.communicate(timeout=TERMINATE_GRACE_SECONDS)
+            stdout_raw, stderr_raw = process.communicate(timeout=TERMINATE_GRACE_SECONDS)
         except subprocess.TimeoutExpired:
             running.kill()
             try:
-                stdout_raw, stderr_raw = running.process.communicate(timeout=TERMINATE_GRACE_SECONDS)
+                stdout_raw, stderr_raw = process.communicate(timeout=TERMINATE_GRACE_SECONDS)
             except subprocess.TimeoutExpired:  # pragma: no cover - defensive
                 stdout_raw, stderr_raw = b"", b""
-    exit_code = running.process.returncode
+    exit_code = process.returncode
     running.release()
-    return exit_code, stdout_raw or b"", stderr_raw or b"", interrupted
+    return exit_code, stdout_raw or b"", stderr_raw or b"", bool(interrupted_by), interrupted_by
 
 
 def _finish_foreground(
-    running: process_group.RunningCommand, timeout_ms: int, use_tty: bool
-) -> Tuple[Optional[int], bytes, bytes, bool]:
-    """Return ``(exit_code, stdout_raw, stderr_raw, interrupted)``.
+    running: process_group.RunningCommand,
+    timeout_ms: int,
+    use_tty: bool,
+    should_stop: Optional[Callable[[], bool]] = None,
+) -> Tuple[Optional[int], bytes, bytes, bool, str]:
+    """Return ``(exit_code, stdout_raw, stderr_raw, interrupted, interrupted_by)``.
 
     A terminal reports one merged stream, so ``stderr_raw`` is always empty on that
     path: the bytes are in stdout, exactly as the terminal produced them.
     """
     if use_tty:
-        run = run_foreground_tty(running, timeout_ms, TERMINATE_GRACE_SECONDS)
-        return run.exit_code, run.output, b"", run.interrupted
-    return _finish_pipe_foreground(running, timeout_ms)
+        run = run_foreground_tty(running, timeout_ms, TERMINATE_GRACE_SECONDS, should_stop)
+        return run.exit_code, run.output, b"", run.interrupted, run.interrupted_by
+    return _finish_pipe_foreground(running, timeout_ms, should_stop)
 
 
 def _render_foreground_text(
@@ -135,6 +167,7 @@ def _render_foreground_text(
     interrupted: bool,
     timeout_ms: int,
     use_tty: bool,
+    stopped_by_task: bool = False,
 ) -> Tuple[str, str]:
     """``(text for the model, text to persist)`` - they differ only for a terminal."""
     display = foreground_text(
@@ -143,11 +176,14 @@ def _render_foreground_text(
         normalize_line_endings(stderr) if use_tty else stderr,
         interrupted,
         timeout_ms,
+        stopped_by_task,
     )
     if not use_tty:
         return display, display
     # The persisted copy is the command's own output, so it keeps its CRLFs.
-    return display, foreground_text(exit_code, stdout, stderr, interrupted, timeout_ms)
+    return display, foreground_text(
+        exit_code, stdout, stderr, interrupted, timeout_ms, stopped_by_task
+    )
 
 
 def _start_background(
@@ -181,8 +217,14 @@ def exec_impl(
     max_tokens: int,
     output_directory: Optional[Path],
     task_id: str = "",
+    should_stop: Optional[Callable[[], bool]] = None,
 ) -> Tuple[str, Dict[str, Any]]:
-    """Run the command; return ``(model_text, details)``."""
+    """Run the command; return ``(model_text, details)``.
+
+    ``should_stop`` is the run's cancel channel. Only the foreground path reads it:
+    a background command is a session the model talks to, and those are stopped by
+    the task boundary (ADR 0008), not by abandoning the call.
+    """
     if not isinstance(command, str) or not command.strip():
         raise ExecError(
             "'command' must be a non-empty string.", reason="invalid_argument", argument="command"
@@ -307,7 +349,9 @@ def exec_impl(
         return model_text, details
 
     running = _start_foreground(argv, cwd, env, use_tty)
-    exit_code, stdout_raw, stderr_raw, interrupted = _finish_foreground(running, timeout_ms, use_tty)
+    exit_code, stdout_raw, stderr_raw, interrupted, interrupted_by = _finish_foreground(
+        running, timeout_ms, use_tty, should_stop
+    )
 
     stdout, stdout_encoding, stdout_replaced = decode_capture(stdout_raw)
     stderr, stderr_encoding, stderr_replaced = decode_capture(stderr_raw)
@@ -322,7 +366,13 @@ def exec_impl(
         else (display_stdout or display_stderr)
     )
     display_text, stored_text = _render_foreground_text(
-        exit_code, stdout, stderr, interrupted, timeout_ms, use_tty
+        exit_code,
+        stdout,
+        stderr,
+        interrupted,
+        timeout_ms,
+        use_tty,
+        interrupted_by == STOPPED_BY_TASK,
     )
 
     persisted_path: Optional[str] = None
@@ -374,6 +424,8 @@ def exec_impl(
         "stdout": stdout_for_details,
         "stderr": stderr_for_details,
         "interrupted": interrupted,
+        # Why it ended early: the command's own timeout, or the user's stop (ADR 0019).
+        "interrupted_by": interrupted_by or None,
         "persistedOutputPath": persisted_path,
         "output_truncated": truncated,
         "output_encoding": stdout_encoding if stdout_encoding != "utf-8" else stderr_encoding,

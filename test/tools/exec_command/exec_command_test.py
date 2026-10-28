@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -130,6 +131,40 @@ class ExecToolTest(unittest.TestCase):
 
         self.assertTrue(outcome.details["interrupted"])
         self.assertFalse((self.root / "finished.txt").exists())
+
+    def test_a_stop_request_interrupts_a_foreground_command(self):
+        """Cancelling a task must not wait for the command *or* its timeout.
+
+        The timeout here is 60 s: a stop that only lands at the boundary would make
+        this test take a minute, so the elapsed assertion is the actual contract.
+        """
+        stop = threading.Event()
+        registry = ToolRegistry(
+            base_dir=str(self.root), session_id="test", should_stop=stop.is_set
+        )
+        threading.Timer(0.5, stop.set).start()
+
+        started = time.monotonic()
+        outcome = registry.execute_tool(
+            "exec_command", {"command": self.sleep(60), "timeout": 60_000}
+        )
+        elapsed = time.monotonic() - started
+
+        self.assertTrue(outcome.details["interrupted"])
+        self.assertEqual(outcome.details["interrupted_by"], "task_stop")
+        self.assertLess(elapsed, 15.0, "a stop must not wait for the command to end")
+
+    def test_a_command_that_finishes_before_the_stop_is_not_interrupted(self):
+        stop = threading.Event()
+        registry = ToolRegistry(
+            base_dir=str(self.root), session_id="test", should_stop=stop.is_set
+        )
+
+        outcome = registry.execute_tool("exec_command", {"command": self.echo("done")})
+
+        self.assertFalse(outcome.details["interrupted"])
+        self.assertIsNone(outcome.details["interrupted_by"])
+        self.assertIn("done", outcome.details["stdout"])
 
     def test_timeout_is_clamped_to_the_documented_range(self):
         outcome = self.exec_cmd({"command": self.echo("x"), "timeout": 1})

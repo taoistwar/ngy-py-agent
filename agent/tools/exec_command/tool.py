@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from agent.models import EventCategory, ToolOutcome
 from agent.tools import process_store
@@ -53,6 +53,7 @@ def make_exec_tool(
     max_tokens: int = 0,
     output_directory: Optional[Path] = None,
     task_id: str = "",
+    should_stop: Optional[Callable[[], bool]] = None,
 ):
     """Bind the exec_command tool to a workspace root and an output directory."""
 
@@ -77,6 +78,7 @@ def make_exec_tool(
                 max_tokens,
                 output_directory,
                 task_id,
+                should_stop=should_stop,
             )
         except ExecError as exc:
             payload = exc.to_dict()

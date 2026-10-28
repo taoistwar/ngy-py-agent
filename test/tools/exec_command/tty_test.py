@@ -14,6 +14,7 @@ Run from the repository root::
 import os
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -210,6 +211,25 @@ class TtyIntegrationTest(TtyToolTestBase):
 
         self.assertTrue(outcome.details["interrupted"])
         self.assertTrue(outcome.details["tty"])
+
+    def test_a_stop_request_interrupts_a_foreground_terminal_command(self):
+        """The terminal path waits by polling, so it honours a stop the same way."""
+        path = self.script("import time\ntime.sleep(60)\n")
+        stop = threading.Event()
+        registry = ToolRegistry(
+            base_dir=str(self.root), session_id="test", should_stop=stop.is_set
+        )
+        threading.Timer(0.5, stop.set).start()
+
+        started = time.monotonic()
+        outcome = registry.execute_tool(
+            "exec_command", {"command": self.run_script(path), "tty": True, "timeout": 60_000}
+        )
+        elapsed = time.monotonic() - started
+
+        self.assertTrue(outcome.details["interrupted"])
+        self.assertEqual(outcome.details["interrupted_by"], "task_stop")
+        self.assertLess(elapsed, 20.0, "a stop must not wait for the command to end")
 
     def test_a_background_terminal_pumps_its_output_into_the_log(self):
         path = self.script(

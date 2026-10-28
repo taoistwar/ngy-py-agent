@@ -63,6 +63,7 @@ def run_react_loop(
         base_dir=base_dir,
         agent_config=agent_config,
         task_id=task_id or "",
+        should_stop=should_stop,
     )
 
     if permission_broker is not None:

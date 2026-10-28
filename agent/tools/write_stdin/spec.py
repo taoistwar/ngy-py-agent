@@ -29,6 +29,8 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
             task_id=bindings.task_id,
             workspace=bindings.base_dir or "",
             output_directory=bindings.output_directory,
+            # A poll can be given minutes of patience; the stop flag ends it (ADR 0019).
+            should_stop=bindings.should_stop,
         ),
         description=WRITE_STDIN_DESCRIPTION,
         parameters=WRITE_STDIN_PARAMETERS,

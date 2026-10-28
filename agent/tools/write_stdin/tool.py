@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from agent.models import EventCategory, ToolOutcome
 from agent.tools import process_group, process_store
@@ -28,6 +28,7 @@ def write_stdin_impl(
     task_id: str,
     workspace: str,
     output_directory: Optional[Path],
+    should_stop: Optional[Callable[[], bool]] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """Answer one ``write_stdin`` call; return ``(model_text, details)``."""
     if not isinstance(session_id, str) or not session_id.strip():
@@ -60,7 +61,7 @@ def write_stdin_impl(
 
     wait_ms = effective_yield_ms(yield_time_ms, is_write=bool(typed) and not interrupt)
     started = time.monotonic()
-    output = collect_output(session, wait_ms)
+    output = collect_output(session, wait_ms, should_stop)
     wall_seconds = time.monotonic() - started
 
     exit_code = session.command.poll()
@@ -91,6 +92,7 @@ def make_write_stdin_tool(
     task_id: str = "",
     workspace: str = "",
     output_directory: Optional[Path] = None,
+    should_stop: Optional[Callable[[], bool]] = None,
 ):
     """Bind ``write_stdin`` to the process store, the run's budget and its workspace.
 
@@ -114,6 +116,7 @@ def make_write_stdin_tool(
                 task_id,
                 workspace,
                 output_directory,
+                should_stop,
             )
         except WriteStdinError as exc:
             return ToolOutcome(

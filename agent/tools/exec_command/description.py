@@ -22,6 +22,16 @@ DEFAULT_TIMEOUT_MS = 120_000
 MIN_TIMEOUT_MS = 1_000
 MAX_TIMEOUT_MS = 30 * 60 * 1000
 
+# How long a blocking wait goes before re-checking the run's stop flag (ADR 0019).
+# It bounds the lag a user sees between pressing stop and the command dying, and it
+# is also the slice ``communicate`` is given, so it must stay well under a second.
+STOP_POLL_SECONDS = 0.25
+
+# Why a foreground command was cut short. A timeout is the command's own fault; a stop
+# is the user's instruction, and the model is told which one happened.
+STOPPED_BY_TASK = "task_stop"
+STOPPED_BY_TIMEOUT = "timeout"
+
 
 def _dialect_hint(shell: Any) -> str:
     # Name the concrete shell (bash/zsh/sh, not a generic "zsh/bash") so the model

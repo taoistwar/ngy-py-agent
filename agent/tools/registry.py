@@ -85,6 +85,7 @@ class ToolRegistry:
         task_id: str = "",
         permission_broker: Optional[PermissionBroker] = None,
         user_question_broker: Optional[UserQuestionBroker] = None,
+        should_stop: Optional[Callable[[], bool]] = None,
     ):
         self.base_dir = base_dir
         self.max_tokens = max_tokens
@@ -94,6 +95,9 @@ class ToolRegistry:
         # Stamped on every background session this registry's tools start, and the
         # capability ``write_stdin`` checks before touching one.
         self.task_id = task_id
+        # Read per call by the tools that can block for a long time, so a stop lands
+        # in the middle of one instead of after it (ADR 0019).
+        self.should_stop = should_stop
         # ``None`` keeps the historical behaviour (everything runs). agent_loop
         # assigns the broker after building the registry, because the registry is
         # built before the task identity exists (see ADR 0006 D1).
@@ -132,6 +136,7 @@ class ToolRegistry:
             base_dir=self.base_dir,
             session_id=self.session_id,
             task_id=self.task_id,
+            should_stop=self.should_stop,
             max_tokens=self.max_tokens,
             provider=self.provider,
             model=self.model,

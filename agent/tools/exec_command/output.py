@@ -19,10 +19,18 @@ def foreground_text(
     stderr: str,
     interrupted: bool,
     timeout_ms: int,
+    stopped_by_task: bool = False,
 ) -> str:
     """The readable rendering of a finished command."""
     lines: List[str] = [f"exit_code: {exit_code if exit_code is not None else 'unknown'}"]
-    if interrupted:
+    if interrupted and stopped_by_task:
+        # Not a timeout: saying "after N ms" would misattribute the ending to the
+        # clock when it was the user's stop (ADR 0019).
+        lines.append(
+            "The command was interrupted because the task was stopped, "
+            "and its process tree was terminated."
+        )
+    elif interrupted:
         lines.append(
             f"The command was stopped after {timeout_ms} ms and its process tree was terminated."
         )

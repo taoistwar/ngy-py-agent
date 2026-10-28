@@ -30,6 +30,9 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
             max_tokens=bindings.max_tokens,
             output_directory=bindings.output_directory,
             task_id=bindings.task_id,
+            # A foreground command may run for minutes; the stop flag is what keeps
+            # "stop" from meaning "stop after it finishes" (ADR 0019).
+            should_stop=bindings.should_stop,
         ),
         description=build_exec_description(),
         parameters=EXEC_PARAMETERS,
