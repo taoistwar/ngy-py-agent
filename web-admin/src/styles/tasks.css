@@ -246,6 +246,134 @@
   grid-column: 1 / -1;
 }
 
+.detail-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Task change list: the "view changes" dialog. */
+
+.change-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.change-list {
+  display: grid;
+  gap: 6px;
+}
+
+.change-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-inset);
+}
+
+.change-row-conflict {
+  border-color: var(--danger-border);
+}
+
+.change-open {
+  display: flex;
+  grid-column: 1;
+  grid-row: 1;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.change-row > .btn {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.change-status {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.change-status-added {
+  border-color: var(--success-border);
+  color: var(--success);
+}
+
+.change-status-deleted {
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.change-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-family: monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.change-counts {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.change-additions {
+  color: var(--success);
+}
+
+.change-deletions {
+  color: var(--danger);
+}
+
+.change-conflict {
+  grid-column: 1;
+  grid-row: 2;
+  color: var(--danger-text);
+  font-size: 11px;
+}
+
+.change-diff {
+  grid-column: 1 / -1;
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-code);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
   .detail-grid {
     grid-template-columns: minmax(0, 1fr);

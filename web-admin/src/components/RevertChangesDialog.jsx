@@ -29,9 +29,11 @@ export default function RevertChangesDialog({ taskId, translate, onClose, onReve
     try {
       const payload = await fetchTaskChanges(taskId)
       setState(payload)
-      // Everything is pre-selected: "undo this task" is the common case, and
-      // un-ticking a file is a cheaper gesture than ticking ten.
-      setSelected(payload.files.map((file) => file.path))
+      // Everything still undoable is pre-selected: "undo this task" is the common
+      // case, and un-ticking a file is a cheaper gesture than ticking ten. A
+      // conflict file is not offered: undoing it would overwrite an edit made
+      // after the task (ADR 0020 D5).
+      setSelected(payload.files.filter((file) => !file.conflict).map((file) => file.path))
     } catch (loadError) {
       setError(loadError?.message || translate("revertFailed"))
     } finally {
@@ -105,6 +107,7 @@ export default function RevertChangesDialog({ taskId, translate, onClose, onReve
               <input
                 type="checkbox"
                 checked={selected.includes(file.path)}
+                disabled={file.conflict}
                 onChange={() => toggle(file.path)}
               />
               <strong>{file.path}</strong>
@@ -112,6 +115,9 @@ export default function RevertChangesDialog({ taskId, translate, onClose, onReve
             <span className="hint">
               {file.status} +{file.additions} -{file.deletions}
             </span>
+            {file.conflict ? (
+              <span className="permission-error">{translate("taskChangesConflict")}</span>
+            ) : null}
             <button type="button" className="btn btn-compact" onClick={() => showDiff(file.path)}>
               {translate("revertPreview")}
             </button>

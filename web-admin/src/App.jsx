@@ -63,6 +63,7 @@ import PermissionPrompt from "./components/PermissionPrompt"
 import QuestionPrompt from "./components/QuestionPrompt"
 import RevertChangesDialog from "./components/RevertChangesDialog"
 import SessionTabs from "./components/SessionTabs"
+import TaskChangesDialog from "./components/TaskChangesDialog"
 import TaskRowActions from "./components/TaskRowActions"
 import TaskToolbarActions from "./components/TaskToolbarActions"
 import { SearchIcon, SkillIcon } from "./components/icons"
@@ -650,8 +651,9 @@ function TaskComposer({
   )
 }
 
-function TaskDetail({ task, result, agents, translate }) {
+function TaskDetail({ task, result, agents, translate, onChangesReverted }) {
   const { monacoTheme } = useTheme()
+  const [changesOpen, setChangesOpen] = useState(false)
 
   if (!task) {
     return <div className="empty">{translate("taskSelectHint")}</div>
@@ -735,7 +737,12 @@ function TaskDetail({ task, result, agents, translate }) {
         </div>
       </section>
       <section className="detail-section detail-section-result">
-        <p className="detail-section-title">{translate("detailResult")}</p>
+        <div className="detail-section-header">
+          <p className="detail-section-title">{translate("detailResult")}</p>
+          <button type="button" className="btn btn-compact" onClick={() => setChangesOpen(true)}>
+            {translate("taskChangesView")}
+          </button>
+        </div>
         <div className="detail-json-editor">
           <MonacoEditor
             height="180px"
@@ -758,11 +765,20 @@ function TaskDetail({ task, result, agents, translate }) {
           />
         </div>
       </section>
+      {/* The dialog renders through a portal, so its place in this grid costs no layout. */}
+      {changesOpen ? (
+        <TaskChangesDialog
+          taskId={task.task_id}
+          translate={translate}
+          onClose={() => setChangesOpen(false)}
+          onReverted={onChangesReverted}
+        />
+      ) : null}
     </div>
   )
 }
 
-function TaskDetailPage({ task, taskResult, agents, taskTab, setTaskTab, events, hasMoreEvents, isLoadingEvents, onLoadMore, translate, locale }) {
+function TaskDetailPage({ task, taskResult, agents, taskTab, setTaskTab, events, hasMoreEvents, isLoadingEvents, onLoadMore, onChangesReverted, translate, locale }) {
   return (
     <section className="panel">
       <div className="task-page-titlebar">
@@ -793,6 +809,7 @@ function TaskDetailPage({ task, taskResult, agents, taskTab, setTaskTab, events,
             result={taskResult}
             agents={agents}
             translate={translate}
+            onChangesReverted={onChangesReverted}
           />
         ) : (
           <EventTimeline
@@ -2196,6 +2213,12 @@ export default function App() {
                 hasMoreEvents={hasMoreEvents}
                 isLoadingEvents={isLoadingEvents}
                 onLoadMore={() => loadEvents(selectedId, false, null, true)}
+                onChangesReverted={() => {
+                  // An undo can settle the task (status "reverted"), so both the list
+                  // and the open detail panel have to catch up.
+                  refreshTasks().catch(() => {})
+                  if (selectedIdRef.current) refreshTask(selectedIdRef.current).catch(() => {})
+                }}
                 translate={translate}
                 locale={locale}
               />

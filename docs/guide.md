@@ -150,7 +150,7 @@ http://127.0.0.1:8001
   - `since`：按 `event_id` 增量拉取
   - `heartbeat`：心跳间隔（秒）
 - `POST /api/tasks/{task_id}/stop`：请求停止（见下面「停止与撤销」）。
-- `GET /api/tasks/{task_id}/changes`：这个任务改过哪些文件（`status` + 增删行数）。`available: false` 时 `reason` 说明为什么不能撤销。
+- `GET /api/tasks/{task_id}/changes`：这个任务改过哪些文件（`status` + 增删行数 + `conflict`）。`conflict: true` 表示任务之后该文件又被改过，撤销会覆盖别人的改动，因此不可撤销；`available: false` 时 `reason` 说明为什么不能撤销。
 - `GET /api/tasks/{task_id}/changes/diff?path=`：单个文件的补丁，按需取。
 - `POST /api/tasks/{task_id}/revert`：撤销改动。body 可带 `paths`（省略 = 全部）与 `force`（覆盖任务之后被改过的文件），返回逐文件的 `restored` / `conflicts` / `skipped`。
 - `GET /api/healthz`：服务健康检查。
@@ -162,6 +162,7 @@ http://127.0.0.1:8001
 **撤销**把任务改过的文件恢复到它第一次改动之前。范围覆盖文件工具、`exec_command` / `write_stdin` 和 `code_interpreter`；`computer_control` 操作的宿主桌面**不在**范围内。
 
 - 判据是"当前内容仍等于任务留下的内容"。任务之后被人改过的文件会报为 **conflict 并跳过**，其余文件照常回退；确认要覆盖就带 `force`。
+- 任务详情的结果区有「查看变更」入口：列出每个文件的增删行数，可展开单个文件的补丁；被之后改动过的文件标为冲突，撤销按钮禁用（服务端的 `conflict` 标记，见上）。
 - 逐文件进行，不是全有全无。
 - 只有**全部**回退成功时任务才变成 `reverted`，并且不再进入后续会话的对话上下文（它的改动已经不在了）。
 - 撤销依赖本机的 `git`，但仓库在 `data/checkpoints/<workspace-key>/` 下，**不会碰你自己的 `.git`**；工作空间不是 git 仓库也能用。拿不到 git 时接口返回 409 并说明原因，前端把入口标为不可用。
