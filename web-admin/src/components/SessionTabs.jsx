@@ -12,6 +12,7 @@ export default function SessionTabs({
   scopedWorkspaceId,
   onSelect,
   onSelectWorkspace,
+  onOpenWorkspace,
   onCreate,
   onRename,
   onDelete,
@@ -245,6 +246,9 @@ export default function SessionTabs({
                             [workspace.workspace_id]: false,
                           }))
                         }}
+                        // A double click enters the single-workspace console, the
+                        // same way opening the workspace from the workspace list does.
+                        onDoubleClick={() => onOpenWorkspace(workspace.workspace_id)}
                         onContextMenu={(event) => openWorkspaceMenu(event, workspace.workspace_id)}
                       >
                         <svg className="workspace-icon" viewBox="0 0 24 24" aria-hidden="true">

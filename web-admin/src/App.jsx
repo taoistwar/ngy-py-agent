@@ -2080,6 +2080,7 @@ export default function App() {
                   scopedWorkspaceId={workspaceScopeId}
                   onSelect={handleSelectSession}
                   onSelectWorkspace={handleSelectWorkspace}
+                  onOpenWorkspace={openWorkspaceConsole}
                   onCreate={createNewSession}
                   onRename={renameSessionHandler}
                   onDelete={deleteSessionHandler}
