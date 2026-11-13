@@ -302,6 +302,14 @@ npm run i18n:check
 - 删 provider 前必须先删/迁走它的模型（409，不级联）。
 - `PUT /api/models/{id}` 只改模型自己；换 provider 就是换端点，等价于换配额。
 
+### 本地 Ollama 的上下文长度（模型记录里的 token 上限只是"声明"）
+
+- Ollama 默认 `n_ctx = 4096`，超出即回 400 `exceed_context_size_error`（`request (N tokens) exceeds the available context size (4096 tokens)`）。模型记录里的 `max_input_tokens` 只决定 agent 侧的压缩阈值（`max_input_tokens × 4` 字符），**不会**改变服务端窗口；两者不一致时第 1 步就可能撞上 400——系统提示 + 工具 schema 本身已有数千 token，压缩无从下手。
+- OpenAI 兼容接口（`/v1/chat/completions`）**没有**设置上下文长度的字段（官方文档明确说明 `num_ctx` 不是请求参数），只能改服务端默认值或把参数烘进模型：
+  - Windows：把用户环境变量 `OLLAMA_CONTEXT_LENGTH` 设为"输入上限 + 输出上限"（本项目模型记录是 32768 + 8192 = `40960`），然后**重启 Ollama 应用**。只写注册表不够：已经在跑的进程继承的是旧环境，托盘退出再打开（或在新 shell 里 `$env:OLLAMA_CONTEXT_LENGTH='40960'` 后启动 `ollama app.exe`）才生效。
+  - 按模型单独设置：Modelfile 写 `FROM granite4.2:3b` + `PARAMETER num_ctx 40960`，`ollama create granite4.2:3b-40k`，模型记录改用新名字。
+- 窗口调大会按并行数放大 KV cache 内存（`OLLAMA_NUM_PARALLEL × 上下文长度`），给大模型开窗口时要一起算。
+
 ### 模型请求频率（RPM）
 
 - 桶按 **provider + base_url** 分（`agent/rate_limit.py` 的 `bucket_key()`），进程级单例：provider 实例每个任务重建，挂在实例上的计数器等于每任务清零（[ADR 0013](decisions/0013-llm-rpm-limit.md)、[ADR 0014](decisions/0014-provider-model-split.md)）。
