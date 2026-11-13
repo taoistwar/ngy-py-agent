@@ -3,6 +3,9 @@ import { useEffect, useState } from "react"
 export function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }) {
   const [value, setValue] = useState("")
   const [busy, setBusy] = useState(false)
+  // One editable field shows the live value, so the panel needs no separate read-only copy.
+  const current = maxStepsConfig ? String(maxStepsConfig.max_steps ?? "") : ""
+  const changed = Boolean(value) && value !== current
 
   useEffect(() => {
     if (!maxStepsConfig) return
@@ -40,14 +43,17 @@ export function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }
       <div className="panel-body">
         <form className="form-grid" onSubmit={submit}>
           <label>
-            <span>{translate("maxStepsCurrent")}</span>
-            <input type="text" readOnly value={maxStepsConfig ? maxStepsConfig.max_steps : ""} />
-          </label>
-          <label>
             <span>{translate("maxStepsSet")}</span>
-            <input type="number" min="1" max="1000" value={value} onChange={(event) => setValue(event.target.value)} />
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              value={value}
+              disabled={!maxStepsConfig}
+              onChange={(event) => setValue(event.target.value)}
+            />
           </label>
-          <button type="submit" className="btn btn-primary" disabled={busy || !value}>
+          <button type="submit" className="btn btn-primary" disabled={busy || !changed}>
             {busy ? translate("maxStepsSaving") : translate("maxStepsSave")}
           </button>
         </form>
@@ -60,6 +66,8 @@ export function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }
 export function PermissionModeManager({ permissionModeConfig, onSave, onRefresh, translate }) {
   const [mode, setMode] = useState("")
   const [busy, setBusy] = useState(false)
+  const current = permissionModeConfig ? String(permissionModeConfig.mode || "") : ""
+  const changed = Boolean(mode) && mode !== current
 
   useEffect(() => {
     if (!permissionModeConfig) return
@@ -96,22 +104,18 @@ export function PermissionModeManager({ permissionModeConfig, onSave, onRefresh,
       <div className="panel-body">
         <form className="form-grid" onSubmit={submit}>
           <label>
-            <span>{translate("permissionModeCurrent")}</span>
-            <input
-              type="text"
-              readOnly
-              value={permissionModeConfig ? permissionModeConfig.mode : ""}
-            />
-          </label>
-          <label>
             <span>{translate("permissionModeSet")}</span>
-            <select value={mode} onChange={(event) => setMode(event.target.value)}>
+            <select
+              value={mode}
+              disabled={!permissionModeConfig}
+              onChange={(event) => setMode(event.target.value)}
+            >
               <option value="ask">{translate("permissionModeAsk")}</option>
               <option value="auto_approve">{translate("permissionModeAuto")}</option>
               <option value="deny_all">{translate("permissionModeDenyAll")}</option>
             </select>
           </label>
-          <button type="submit" className="btn btn-primary" disabled={busy || !mode}>
+          <button type="submit" className="btn btn-primary" disabled={busy || !changed}>
             {busy ? translate("permissionModeSaving") : translate("permissionModeSave")}
           </button>
         </form>
@@ -178,6 +182,8 @@ export function PermissionRulesManager({ rules, onDelete, onRefresh, translate }
 export function RetentionManager({ retentionConfig, onSave, onRefresh, translate }) {
   const [days, setDays] = useState("")
   const [busy, setBusy] = useState(false)
+  const current = retentionConfig ? String(retentionConfig.retention_days ?? "") : ""
+  const changed = Boolean(days) && days !== current
 
   useEffect(() => {
     if (!retentionConfig) return
@@ -215,14 +221,16 @@ export function RetentionManager({ retentionConfig, onSave, onRefresh, translate
       <div className="panel-body">
         <form className="form-grid" onSubmit={submit}>
           <label>
-            <span>{translate("retentionCurrentDays")}</span>
-            <input type="text" readOnly value={retentionConfig ? retentionConfig.retention_days : ""} />
-          </label>
-          <label>
             <span>{translate("retentionSetDays")}</span>
-            <input type="number" min="0" value={days} onChange={(event) => setDays(event.target.value)} />
+            <input
+              type="number"
+              min="0"
+              value={days}
+              disabled={!retentionConfig}
+              onChange={(event) => setDays(event.target.value)}
+            />
           </label>
-          <button type="submit" className="btn btn-primary" disabled={busy || !days}>
+          <button type="submit" className="btn btn-primary" disabled={busy || !changed}>
             {busy ? translate("retentionSaving") : translate("retentionSave")}
           </button>
         </form>
