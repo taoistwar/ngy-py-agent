@@ -253,6 +253,88 @@
   gap: 8px;
 }
 
+/* Result pane: the answer reads as Markdown, the raw text stays one tab away. */
+
+.task-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-result-actions .icon-btn {
+  width: 22px;
+  height: 22px;
+}
+
+.task-result-actions .icon-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.task-result-markdown {
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-code);
+}
+
+.task-result-markdown.is-fullscreen {
+  max-height: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.task-result-markdown.is-fullscreen .markdown-body {
+  font-size: 14px;
+}
+
+/* Full-screen reader. A portal over the console, so it only has to beat the topbar;
+   the background stays opaque or the console below ghosts through. */
+.task-result-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.task-result-overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--header-bg);
+}
+
+.task-result-overlay-header .detail-section-title {
+  margin-right: auto;
+}
+
+.task-result-overlay-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 22px 24px;
+}
+
+/* The raw view fills the reader instead of stopping at the inline 180px. */
+.task-result-overlay-body .detail-json-editor {
+  flex: 1;
+  min-height: 0;
+}
+
+.task-result-overlay-body .task-result-markdown {
+  flex: 1;
+  min-height: 0;
+}
+
 /* Task change list: the "view changes" dialog. */
 
 .change-toolbar {

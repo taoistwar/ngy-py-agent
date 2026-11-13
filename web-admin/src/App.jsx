@@ -64,6 +64,7 @@ import QuestionPrompt from "./components/QuestionPrompt"
 import RevertChangesDialog from "./components/RevertChangesDialog"
 import SessionTabs from "./components/SessionTabs"
 import TaskChangesDialog from "./components/TaskChangesDialog"
+import TaskResultPanel from "./components/TaskResultPanel"
 import TaskRowActions from "./components/TaskRowActions"
 import TaskToolbarActions from "./components/TaskToolbarActions"
 import { SearchIcon, SkillIcon } from "./components/icons"
@@ -93,7 +94,7 @@ import {
   resolveModelId,
   saveRememberedModel,
 } from "./utils/composerModelMemory"
-import { formatTime, safeStringify } from "./utils/format"
+import { formatTime } from "./utils/format"
 
 const EVENT_PAGE_SIZE = 30
 const TASK_PAGE_SIZE = 12
@@ -681,9 +682,6 @@ function TaskDetail({ task, result, agents, translate, onChangesReverted }) {
     return <div className="empty">{translate("taskSelectHint")}</div>
   }
 
-  const hasResult = result !== undefined && result !== null
-  const taskResult = hasResult ? (typeof result === "string" ? result : safeStringify(result)) : ""
-  const resultText = hasResult ? taskResult : translate("detailNoResult")
   const queryText = task.query || ""
 
   return (
@@ -758,35 +756,11 @@ function TaskDetail({ task, result, agents, translate, onChangesReverted }) {
           />
         </div>
       </section>
-      <section className="detail-section detail-section-result">
-        <div className="detail-section-header">
-          <p className="detail-section-title">{translate("detailResult")}</p>
-          <button type="button" className="btn btn-compact" onClick={() => setChangesOpen(true)}>
-            {translate("taskChangesView")}
-          </button>
-        </div>
-        <div className="detail-json-editor">
-          <MonacoEditor
-            height="180px"
-            defaultLanguage="json"
-            defaultValue={resultText}
-            options={{
-              readOnly: true,
-              minimap: {
-                enabled: false,
-              },
-              scrollBeyondLastLine: false,
-              wordWrap: "on",
-              fontSize: 14,
-              folding: true,
-              lineNumbers: "on",
-              renderLineHighlight: "none",
-              automaticLayout: true,
-            }}
-            theme={monacoTheme}
-          />
-        </div>
-      </section>
+      <TaskResultPanel
+        result={result}
+        translate={translate}
+        onOpenChanges={() => setChangesOpen(true)}
+      />
       {/* The dialog renders through a portal, so its place in this grid costs no layout. */}
       {changesOpen ? (
         <TaskChangesDialog
