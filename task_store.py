@@ -21,6 +21,11 @@ ROOT_DIR = Path(__file__).resolve().parent
 TASK_DB_PATH = ROOT_DIR / "monitor_tasks.db"
 TASK_RETENTION_DEFAULT_DAYS = 36600
 
+# Statuses the *user* settles, which a thread still unwinding must not overwrite:
+# a stop click is the decision (ADR 0019 D6: the in-flight model request can outlive
+# it) and a revert already put the files back (ADR 0020).
+_USER_SETTLED_STATUSES = frozenset({TaskStatus.STOPPED.value, TaskStatus.REVERTED.value})
+
 
 class _SqliteTaskStore:
     """SQLite-based task and event persistence."""
@@ -956,8 +961,21 @@ class _SqliteTaskStore:
         result: str | None = None,
         status: TaskStatus | None = None,
     ) -> None:
+        """Record a task's final state, unless the user already settled it.
+
+        ``_USER_SETTLED_STATUSES`` wins over what the agent thread reports: after a
+        stop click that thread keeps running until its in-flight model request returns
+        (ADR 0019 D6) and may then report a result - even a successful one - long
+        after the click. Letting that write win would put "running"/"success" back on
+        a row the user has already ended; the result itself is still worth keeping.
+        """
         final_status = status if status is not None else (TaskStatus.SUCCESS if success else TaskStatus.FAILED)
         with self._lock:
+            current = self._conn.execute(
+                "SELECT status FROM tasks WHERE task_id = ?", (task_id,)
+            ).fetchone()
+            if current is not None and str(current["status"]) in _USER_SETTLED_STATUSES:
+                final_status = TaskStatus(str(current["status"]))
             self._conn.execute(
                 """
                 UPDATE tasks

@@ -515,7 +515,14 @@ def _execute_task(
             "Task failed",
             {"error": str(exc), "type": exc.__class__.__name__, **current_trace_ids()},
         )
-        app_state.monitor_store.finish_task(task_id, success=False)
+        # An error raised after the user stopped the task is a consequence of the
+        # stop (the request in flight was abandoned): the row stays stopped.
+        stopped = stop_event is not None and stop_event.is_set()
+        app_state.monitor_store.finish_task(
+            task_id,
+            success=False,
+            status=TaskStatus.STOPPED if stopped else None,
+        )
     finally:
         active_broker = app_state.get_task_permission_broker(task_id)
         if active_broker is not None:

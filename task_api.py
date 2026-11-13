@@ -153,17 +153,36 @@ async def list_tasks(
     )
 
 
+# Statuses a stop request has nothing left to do for: the task is settled, and
+# rewriting it would only replace a result somebody may still be reading.
+_SETTLED_STATUSES = frozenset(
+    {
+        TaskStatus.SUCCESS.value,
+        TaskStatus.FAILED.value,
+        TaskStatus.STOPPED.value,
+        TaskStatus.REVERTED.value,
+    }
+)
+
+
 @router.post("/api/tasks/{task_id}/stop")
 async def stop_task(task_id: str) -> dict[str, Any]:
-    """Request a running task to stop; marks stale running tasks as stopped."""
-    trace = app_state.monitor_store.get_task(task_id)
-    if trace is None:
-        raise HTTPException(status_code=404, detail="Task not found.")
-    stopped = app_state.signal_task_stop(task_id)
-    if not stopped and str(trace.get("status")) == TaskStatus.RUNNING.value:
-        app_state.monitor_store.finish_task(task_id, success=False, status=TaskStatus.STOPPED)
-        stopped = True
-    return {"task_id": task_id, "stopped": stopped}
+    """Stop a task: signal its thread, and settle the record on the spot.
+
+    The signal is cooperative (ADR 0019): the loop reads it at a step boundary, and
+    a thread parked inside a model request only reads it when that request returns -
+    seconds to minutes later. Waiting for that to change the record made the click
+    look broken: the row kept saying "running", and clicking again did nothing
+    because the flag was already set. So the click is the decision and is recorded
+    here; the thread unwinding afterwards fills in its result but cannot flip the
+    status back (see ``_SqliteTaskStore.finish_task``).
+    """
+    trace = _stored_task(task_id)
+    if str(trace.get("status")) in _SETTLED_STATUSES:
+        return {"task_id": task_id, "stopped": False}
+    app_state.signal_task_stop(task_id)
+    app_state.monitor_store.finish_task(task_id, success=False, status=TaskStatus.STOPPED)
+    return {"task_id": task_id, "stopped": True}
 
 
 def _stored_task(task_id: str) -> dict[str, Any]:
