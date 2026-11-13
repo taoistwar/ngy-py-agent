@@ -233,7 +233,7 @@
   "menuModels": "模型",
   "menuTools": "工具",
   "menuConfig": "設定",
-  "menuPermissionRules": "始終允許的呼叫",
+  "menuPermissionRules": "白名單",
   "sessionTitle": "工作階段",
   "sessionAdd": "新增工作階段",
   "sessionNamePlaceholder": "輸入工作階段名稱",

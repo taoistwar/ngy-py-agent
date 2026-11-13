@@ -233,7 +233,7 @@
   "menuModels": "Modelle",
   "menuTools": "Werkzeuge",
   "menuConfig": "Einstellungen",
-  "menuPermissionRules": "Immer erlaubte Aufrufe",
+  "menuPermissionRules": "Whitelist",
   "sessionTitle": "Sitzungen",
   "sessionAdd": "Neue Sitzung",
   "sessionNamePlaceholder": "Sitzungsnamen eingeben",

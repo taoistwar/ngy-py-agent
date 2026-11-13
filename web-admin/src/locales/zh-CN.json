@@ -233,7 +233,7 @@
   "menuModels": "模型",
   "menuTools": "工具",
   "menuConfig": "全局配置",
-  "menuPermissionRules": "始终允许的调用",
+  "menuPermissionRules": "白名单",
   "sessionTitle": "会话",
   "sessionAdd": "新建会话",
   "sessionNamePlaceholder": "输入会话名称",

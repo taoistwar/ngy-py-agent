@@ -233,7 +233,7 @@
   "menuModels": "Модели",
   "menuTools": "Инструменты",
   "menuConfig": "Настройки",
-  "menuPermissionRules": "Всегда разрешённые вызовы",
+  "menuPermissionRules": "Белый список",
   "sessionTitle": "Сеансы",
   "sessionAdd": "Новый сеанс",
   "sessionNamePlaceholder": "Введите имя сеанса",

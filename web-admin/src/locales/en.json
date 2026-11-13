@@ -233,7 +233,7 @@
   "menuModels": "Models",
   "menuTools": "Tools",
   "menuConfig": "Settings",
-  "menuPermissionRules": "Always-allowed calls",
+  "menuPermissionRules": "Whitelist",
   "sessionTitle": "Sessions",
   "sessionAdd": "New session",
   "sessionNamePlaceholder": "Enter session name",

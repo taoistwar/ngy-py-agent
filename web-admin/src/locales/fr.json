@@ -233,7 +233,7 @@
   "menuModels": "Modèles",
   "menuTools": "Outils",
   "menuConfig": "Paramètres",
-  "menuPermissionRules": "Appels toujours autorisés",
+  "menuPermissionRules": "Liste blanche",
   "sessionTitle": "Sessions",
   "sessionAdd": "Nouvelle session",
   "sessionNamePlaceholder": "Saisissez le nom de la session",
