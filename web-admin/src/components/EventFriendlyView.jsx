@@ -106,11 +106,19 @@ export default function EventFriendlyView({ event, locale, translate }) {
   const view = useMemo(() => buildFriendlyEvent(event, locale), [event, locale])
   const isEmpty = view.fields.length === 0 && view.sections.length === 0
 
+  // The reasoning trace leads the panel: it is what explains the step, and the field
+  // table below it is reference material read after the fact.
+  const thinking = view.sections.filter((section) => section.kind === "thinking")
+  const rest = view.sections.filter((section) => section.kind !== "thinking")
+
   return (
     <div className={`event-friendly tone-${view.tone}`}>
       <p className="event-friendly-headline">{view.headline}</p>
+      {thinking.map((section, index) => (
+        <Section section={section} translate={translate} key={`thinking-${index}`} />
+      ))}
       {view.fields.length > 0 && <KeyValueTable rows={view.fields} />}
-      {view.sections.map((section, index) => (
+      {rest.map((section, index) => (
         <Section section={section} translate={translate} key={`${section.title}-${index}`} />
       ))}
       {isEmpty && <p className="hint">{view.emptyText}</p>}

@@ -1,8 +1,20 @@
 import { useEffect, useState } from "react"
-import { getEventCategoryText } from "../i18n"
+import { getEventCategoryText, isTaskRunningStatus } from "../i18n"
 import { formatTime } from "../utils/format"
 import { EventDetailBody, EventDetailOverlay, eventDetailUrl, getTagClass } from "./EventDetail"
 import { ChevronsDownIcon, ChevronsUpIcon, ExpandIcon, ExternalLinkIcon } from "./icons"
+
+// While a task is in flight the log is a progress feed: the model's answers are what
+// the reader is waiting for, so they open on arrival and the tool calls, debug traces
+// and permission decisions stay folded. Otherwise a busy step pushes the newest
+// answer off screen exactly when it matters.
+const LIVE_OPEN_CATEGORIES = new Set(["llm_response"])
+
+function defaultCollapsed(event, running) {
+  const category = String(event.category || "").toLowerCase()
+  if (running && LIVE_OPEN_CATEGORIES.has(category)) return false
+  return event.collapsed ?? true
+}
 
 function EventItem({ event, taskId, collapsed, onToggle, translate, locale }) {
   const [fullscreen, setFullscreen] = useState(false)
@@ -82,18 +94,19 @@ function EventItem({ event, taskId, collapsed, onToggle, translate, locale }) {
 export default function EventTimeline({ task, events, hasMore, loadingMore, onLoadMore, translate, locale }) {
   const [collapsedMap, setCollapsedMap] = useState({})
   const taskId = task?.task_id || ""
+  const running = isTaskRunningStatus(task?.status)
 
   useEffect(() => {
     const next = {}
     events.forEach((event) => {
       if (collapsedMap[event.event_id] === undefined) {
-        next[event.event_id] = event.collapsed ?? true
+        next[event.event_id] = defaultCollapsed(event, running)
       }
     })
     if (Object.keys(next).length > 0) {
       setCollapsedMap((prev) => ({ ...prev, ...next }))
     }
-  }, [events])
+  }, [events, running])
 
   if (!task) {
     return <div className="timeline-empty">{translate("taskEventsNoTask")}</div>
@@ -135,7 +148,7 @@ export default function EventTimeline({ task, events, hasMore, loadingMore, onLo
               key={event.event_id}
               event={event}
               taskId={taskId}
-              collapsed={collapsedMap[event.event_id]}
+              collapsed={collapsedMap[event.event_id] ?? defaultCollapsed(event, running)}
               onToggle={() =>
                 setCollapsedMap((prev) => ({
                   ...prev,
