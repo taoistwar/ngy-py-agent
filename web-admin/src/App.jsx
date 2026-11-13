@@ -1540,11 +1540,18 @@ export default function App() {
 
   const stopComposerTask = useCallback(async () => {
     if (!composerTaskId) return
+    const taskId = composerTaskId
+    // Answer the click at once: the backend settles the task record, but what the
+    // user reads as "it worked" is the stop button turning back into "send" - waiting
+    // for the round trip made the click look dead.
+    setComposerTaskId("")
     try {
-      await stopTask(composerTaskId)
+      await stopTask(taskId)
       await refreshTasks()
-      await refreshTask(composerTaskId)
+      await refreshTask(taskId)
     } catch (stopError) {
+      // The stop did not land: keep watching the task it was meant for.
+      setComposerTaskId(taskId)
       setError(stopError?.message || translate("errorUnknown"))
     }
   }, [composerTaskId, refreshTask, refreshTasks, translate])
