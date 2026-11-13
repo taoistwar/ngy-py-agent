@@ -15,6 +15,10 @@ from pydantic import BaseModel, Field
 
 from agent.modes import DEFAULT_MODE
 
+# One cap for the global setting and the per-task override. The ReAct loop is linear in
+# steps, so this exists to reject runaway values, not to model a budget.
+MAX_STEPS_LIMIT = 10_000
+
 
 class RunTaskRequest(BaseModel):
     """Create task request."""
@@ -26,7 +30,7 @@ class RunTaskRequest(BaseModel):
     max_steps: int | None = Field(
         default=None,
         ge=1,
-        le=1000,
+        le=MAX_STEPS_LIMIT,
         description="Optional override; omit to use the global REACT_MAX_STEPS config.",
     )
     agent_id: str | None = Field(
@@ -150,7 +154,7 @@ class MaxStepsConfigRequest(BaseModel):
     """Global ReAct max steps config request."""
 
     max_steps: int = Field(
-        ge=1, le=40, description="Global limit of ReAct steps applied to new tasks."
+        ge=1, le=MAX_STEPS_LIMIT, description="Global limit of ReAct steps applied to new tasks."
     )
 
 

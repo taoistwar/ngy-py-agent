@@ -21,6 +21,7 @@ import llm_api
 from agent.agent_loop import DEFAULT_MAX_STEPS
 from agent.tools.permissions import PermissionMode, normalize_mode
 from api_schemas import (
+    MAX_STEPS_LIMIT,
     MaxStepsConfigRequest,
     MaxStepsConfigResponse,
     PermissionModeConfigRequest,
@@ -47,18 +48,23 @@ def load_env_file() -> None:
         load_dotenv(root_env)
 
 
+def _clamp_max_steps(value: int) -> int:
+    """Keep a step limit inside the range the API advertises."""
+    return max(1, min(value, MAX_STEPS_LIMIT))
+
+
 def _load_agent_max_steps_config() -> tuple[int, str]:
     env_raw = os.getenv("REACT_MAX_STEPS", str(DEFAULT_MAX_STEPS)).strip()
     try:
         env_steps = int(env_raw)
     except ValueError:
         env_steps = DEFAULT_MAX_STEPS
-    env_steps = max(1, min(env_steps, 1000))
+    env_steps = _clamp_max_steps(env_steps)
 
     db_steps = app_state.monitor_store.get_agent_max_steps()
     if db_steps is None:
         return env_steps, "env"
-    return max(1, min(db_steps, 1000)), "database"
+    return _clamp_max_steps(db_steps), "database"
 
 
 def _load_permission_mode_config() -> tuple[PermissionMode, str]:
@@ -140,7 +146,7 @@ async def get_max_steps_config() -> MaxStepsConfigResponse:
 async def set_max_steps_config(
     payload: MaxStepsConfigRequest,
 ) -> MaxStepsConfigResponse:
-    steps = max(1, min(payload.max_steps, 1000))
+    steps = _clamp_max_steps(payload.max_steps)
     app_state.monitor_store.set_agent_max_steps(steps)
     app_state.agent_max_steps = steps
     app_state.agent_max_steps_source = "database"

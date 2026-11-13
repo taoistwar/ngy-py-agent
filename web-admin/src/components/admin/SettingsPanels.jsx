@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react"
 
+// Mirrors MAX_STEPS_LIMIT in api_schemas.py so the field never offers a rejected value.
+const MAX_STEPS_LIMIT = 10000
+
 export function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }) {
   const [value, setValue] = useState("")
   const [busy, setBusy] = useState(false)
@@ -18,7 +21,7 @@ export function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }
     if (!Number.isFinite(parsed) || parsed < 1) return
     setBusy(true)
     try {
-      await onSave(Math.max(1, Math.min(parsed, 1000)))
+      await onSave(Math.max(1, Math.min(parsed, MAX_STEPS_LIMIT)))
     } finally {
       setBusy(false)
     }
@@ -47,7 +50,7 @@ export function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }
             <input
               type="number"
               min="1"
-              max="1000"
+              max={MAX_STEPS_LIMIT}
               value={value}
               disabled={!maxStepsConfig}
               onChange={(event) => setValue(event.target.value)}

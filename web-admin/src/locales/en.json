@@ -143,7 +143,7 @@
   "maxStepsSet": "Set max steps",
   "maxStepsSave": "Save",
   "maxStepsSaving": "Saving...",
-  "maxStepsHint": "Set the global ReAct step limit applied to all new tasks (1-40).",
+  "maxStepsHint": "Set the global ReAct step limit applied to all new tasks (1-10000).",
   "sidebarQuickRefreshMaxSteps": "Refresh global config",
   "metricTotal": "Total tasks",
   "metricRunning": "Running",

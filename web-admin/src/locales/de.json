@@ -143,7 +143,7 @@
   "maxStepsSet": "Maximale Schritte festlegen",
   "maxStepsSave": "Speichern",
   "maxStepsSaving": "Wird gespeichert...",
-  "maxStepsHint": "Globale ReAct-Schrittgrenze für alle neuen Aufgaben (1-40).",
+  "maxStepsHint": "Globale ReAct-Schrittgrenze für alle neuen Aufgaben (1-10000).",
   "sidebarQuickRefreshMaxSteps": "Globale Konfiguration aktualisieren",
   "metricTotal": "Aufgaben gesamt",
   "metricRunning": "Laufend",

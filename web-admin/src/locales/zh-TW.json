@@ -143,7 +143,7 @@
   "maxStepsSet": "設定最大步數",
   "maxStepsSave": "儲存",
   "maxStepsSaving": "儲存中…",
-  "maxStepsHint": "設定套用到所有新任務的全域 ReAct 步數上限（1-40）。",
+  "maxStepsHint": "設定套用到所有新任務的全域 ReAct 步數上限（1-10000）。",
   "sidebarQuickRefreshMaxSteps": "重新整理全域設定",
   "metricTotal": "任務總數",
   "metricRunning": "執行中",

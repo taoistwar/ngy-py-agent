@@ -143,7 +143,7 @@
   "maxStepsSet": "Définir les étapes maximales",
   "maxStepsSave": "Enregistrer",
   "maxStepsSaving": "Enregistrement...",
-  "maxStepsHint": "Limite globale d'étapes ReAct appliquée à toutes les nouvelles tâches (1-40).",
+  "maxStepsHint": "Limite globale d'étapes ReAct appliquée à toutes les nouvelles tâches (1-10000).",
   "sidebarQuickRefreshMaxSteps": "Rafraîchir la configuration globale",
   "metricTotal": "Tâches au total",
   "metricRunning": "En cours",
