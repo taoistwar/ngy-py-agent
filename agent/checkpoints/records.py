@@ -23,6 +23,9 @@ class Change:
     status: str
     additions: int = 0
     deletions: int = 0
+    #: The disk no longer holds what the task left behind, so undoing this file
+    #: would overwrite somebody else's edit (ADR 0020 D5).
+    conflict: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -30,6 +33,7 @@ class Change:
             "status": self.status,
             "additions": self.additions,
             "deletions": self.deletions,
+            "conflict": self.conflict,
         }
 
 

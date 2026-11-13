@@ -227,6 +227,26 @@ class CheckpointStoreTest(unittest.TestCase):
         self.assertIn("-v0", diff)
         self.assertIn("+v1", diff)
 
+    # --- conflicts --------------------------------------------------------
+
+    def test_a_file_edited_after_the_task_is_flagged_as_a_conflict(self):
+        """The UI has to know before the click, not only after the refusal."""
+        self.write(self.path, "v1\n")
+        self.assertFalse(self.changes()["app.py"].conflict)
+
+        self.path.write_text("user edit\n", encoding="utf-8")
+
+        self.assertTrue(self.changes()["app.py"].conflict)
+
+    def test_a_file_the_task_created_is_flagged_once_someone_edits_it(self):
+        created = self.workspace / "new.txt"
+        self.write(created, "hello\n")
+        self.assertFalse(self.changes()["new.txt"].conflict)
+
+        created.write_text("someone else\n", encoding="utf-8")
+
+        self.assertTrue(self.changes()["new.txt"].conflict)
+
     # --- plumbing ---------------------------------------------------------
 
     def test_the_store_never_touches_the_workspace_git_directory(self):

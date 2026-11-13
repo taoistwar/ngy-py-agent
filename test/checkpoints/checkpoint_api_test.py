@@ -104,6 +104,13 @@ class CheckpointApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_changes_reports_a_file_that_can_no_longer_be_undone(self):
+        self.assertFalse(self.changes()["files"][0]["conflict"])
+
+        self.path.write_text("user edit\n", encoding="utf-8")
+
+        self.assertTrue(self.changes()["files"][0]["conflict"])
+
     def test_a_run_without_checkpointing_says_so_instead_of_failing(self):
         with mock.patch.dict(os.environ, {"CHECKPOINT_ENABLED": "0"}):
             payload = self.changes()

@@ -228,9 +228,25 @@ class CheckpointStore:
                 continue
             added, removed = counts.get(path, (0, 0))
             changes.append(
-                Change(path=path, status=_status_of(status_code), additions=added, deletions=removed)
+                Change(
+                    path=path,
+                    status=_status_of(status_code),
+                    additions=added,
+                    deletions=removed,
+                    conflict=self._conflicts(tip, path),
+                )
             )
         return changes
+
+    def _conflicts(self, tip: str, path: str) -> bool:
+        """Whether the disk holds something other than what the task left behind.
+
+        Same comparison :meth:`revert` makes before touching a file, exposed ahead of
+        the click: a file the user or another agent edited after this task wrote it
+        cannot be undone, and the UI should say so rather than offer a button that
+        will refuse (ADR 0020 D5, D7).
+        """
+        return _read_bytes(self.workspace / path) != self._blob(tip, path)
 
     def diff(self, task_id: str, path: str) -> str:
         """The unified diff of one file, for the confirmation dialog."""
