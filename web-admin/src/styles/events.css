@@ -273,7 +273,20 @@
   color: var(--muted);
 }
 
-/* Reasoning trace: a dashed summary row, the text mounts only when opened. */
+/* Reasoning trace: a labelled block, expanded by default. The trace is what explains
+   a slow or surprising step, so it should be readable without a click. */
+.event-thinking-chip {
+  padding: 1px 8px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 .event-thinking-toggle {
   display: flex;
   align-items: center;

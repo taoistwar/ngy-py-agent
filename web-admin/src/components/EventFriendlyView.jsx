@@ -45,10 +45,10 @@ function KeyValueTable({ rows }) {
 }
 
 function ThinkingBlock({ section, translate }) {
-  const [open, setOpen] = useState(false)
+  // Open by default: when a step was slow or surprising, the reasoning is the first
+  // thing a reader looks for, and making them click for it hides the answer.
+  const [open, setOpen] = useState(true)
 
-  // The body is mounted only once the reader opens it: a reasoning trace can run to
-  // thousands of characters and every LLM step in the log carries one.
   return (
     <div className="event-friendly-section">
       <button
@@ -57,7 +57,7 @@ function ThinkingBlock({ section, translate }) {
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
       >
-        <span className="event-thinking-title">{section.title}</span>
+        <span className="event-thinking-chip">{section.title}</span>
         <span className="event-thinking-meta">{section.meta}</span>
         <span className="event-thinking-action">
           {open ? translate("eventShowLess") : translate("eventShowMore")}

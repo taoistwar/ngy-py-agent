@@ -320,8 +320,12 @@ function thinkingText(value) {
 }
 
 // Providers disagree on the field name and a few send an array of blocks, so all
-// known spellings are folded into one string.
+// known spellings are folded into one string. The event itself carries the trace
+// for streamed turns, which is where it is read from first.
 function responseThinking(data) {
+  const explicit = thinkingText(data.reasoning)
+  if (explicit) return explicit.trim()
+
   const message = responseMessage(data)
   if (!message) return ""
   return ["reasoning", "reasoning_content", "thinking"]
@@ -431,6 +435,15 @@ function buildLlmResponse({ data, dict }) {
   if (data.finish_reason !== undefined) fields.push(makeField(dict, "finish_reason", data.finish_reason))
   const callCount = data.tool_call_count ?? calls.length
   if (callCount) fields.push(makeField(dict, "tool_call_count", callCount))
+  // How the answer arrived, next to how long it took to start: a step that "felt
+  // slow" is usually the wait for the first token, not the generation.
+  if (data.stream !== undefined) fields.push(makeField(dict, "stream", data.stream))
+  if (data.first_token_ms !== undefined && data.first_token_ms !== null) {
+    fields.push(makeField(dict, "first_token_ms", `${data.first_token_ms} ms`))
+  }
+  if (data.duration_ms !== undefined && data.duration_ms !== null) {
+    fields.push(makeField(dict, "duration_ms", `${data.duration_ms} ms`))
+  }
 
   const sections = []
   // Reasoning first: it is what the model thought before producing the answer below.

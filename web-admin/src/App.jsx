@@ -515,7 +515,9 @@ function TaskComposer({
     if (composerRunning || !query.trim()) return
     setBusy(true)
     try {
-      const payload = { query, stream: false, agent_id: effectiveAgentId }
+      // Streamed by default: the reasoning trace many models emit is only sent
+      // incrementally, and the event log shows the turn sooner.
+      const payload = { query, stream: true, agent_id: effectiveAgentId }
       if (models && models.length) {
         payload.model_id = effectiveModelId
       } else {
@@ -1552,7 +1554,7 @@ export default function App() {
   const rerunTaskHandler = useCallback(
     async (task) => {
       if (!task?.task_id) return
-      const payload = { query: task.query, agent_id: task.mode || "build", stream: false }
+      const payload = { query: task.query, agent_id: task.mode || "build", stream: true }
       if (task.model_id && models.some((item) => item.model_id === task.model_id)) {
         payload.model_id = task.model_id
       } else if (task.provider) {
