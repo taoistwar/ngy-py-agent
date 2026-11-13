@@ -6,7 +6,15 @@ function emptyWorkspaceForm() {
   return { workspace_id: "", name: "", root_path: "" }
 }
 
-export default function WorkspaceManager({ workspaces, onCreate, onUpdate, onDelete, onRefresh, translate }) {
+export default function WorkspaceManager({
+  workspaces,
+  onCreate,
+  onUpdate,
+  onDelete,
+  onOpenTasks,
+  onRefresh,
+  translate,
+}) {
   const [search, setSearch] = useState("")
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -121,12 +129,25 @@ export default function WorkspaceManager({ workspaces, onCreate, onUpdate, onDel
                 </tr>
               </thead>
               <tbody>
+                {/* The row is the entry point: clicking a workspace opens its task
+                    console. Edit and delete keep their own clicks. */}
                 {filtered.map((workspace) => (
-                  <tr key={workspace.workspace_id}>
+                  <tr
+                    key={workspace.workspace_id}
+                    className="model-row-link"
+                    title={translate("workspaceOpenTasksHint")}
+                    tabIndex={0}
+                    onClick={() => onOpenTasks(workspace.workspace_id)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return
+                      event.preventDefault()
+                      onOpenTasks(workspace.workspace_id)
+                    }}
+                  >
                     <td className="model-name">{workspace.name}</td>
                     <td className="mono">{workspace.root_path}</td>
                     <td>{workspace.session_count || 0}</td>
-                    <td className="model-actions">
+                    <td className="model-actions" onClick={(event) => event.stopPropagation()}>
                       <button type="button" className="btn btn-xs" onClick={() => openEdit(workspace)}>
                         {translate("modelEdit")}
                       </button>

@@ -56,6 +56,55 @@
   gap: 10px;
 }
 
+/* Names the single workspace a console opened from the workspace list is limited
+   to, and offers the way back to the full tree. Sticky so the way back stays
+   reachable while a long session list scrolls. */
+.workspace-scope-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  font-size: 11px;
+}
+
+.workspace-scope-label {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.workspace-scope-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.workspace-scope-clear {
+  border: none;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 11px;
+  padding: 0;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.workspace-scope-clear:hover {
+  text-decoration: underline;
+}
+
 .session-group {
   display: grid;
   gap: 4px;

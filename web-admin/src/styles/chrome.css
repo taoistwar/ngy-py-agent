@@ -119,6 +119,16 @@
   background: var(--surface-hover);
 }
 
+/* A row that navigates: the workspace list opens a workspace's task console. */
+.model-table tbody tr.model-row-link {
+  cursor: pointer;
+}
+
+.model-table tbody tr.model-row-link:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+}
+
 /* Keep the bar compact on narrower screens: the icons alone still name the skin. */
 @media (max-width: 1180px) {
   .theme-toggle-label {
