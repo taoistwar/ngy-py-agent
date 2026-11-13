@@ -226,7 +226,7 @@
   flex: 0 0 auto;
   width: 28px;
   height: 28px;
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid var(--accent-border);
   background: var(--btn-primary-gradient);
   color: var(--accent-contrast);
