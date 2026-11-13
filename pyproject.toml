@@ -27,6 +27,7 @@ dependencies = [
     "opentelemetry-sdk>=1.45.1",
     "opentelemetry-instrumentation-fastapi>=0.66b1",
     "regex>=2026.7.19",
+    "matplotlib>=3.11.2",
 ]
 
 [tool.uv.sources]
