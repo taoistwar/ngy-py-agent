@@ -14,7 +14,7 @@
 | **行号前缀** | `read_file` 输出中每行开头的 `N<分隔符>`，分隔符是**制表符**。模型看不到真实行号，因此永远带前缀、不提供关闭开关。 | `agent/tools/read_file/lines.py` |
 | **provider** | 一个请求去处：协议（openai / anthropic / anthropic_compatible / gemini）+ `base_url` + `api_key` + `rpm_limit`。Web Admin「Provider 管理」页维护，`/api/providers` 读写。删除前必须先清空它下面的模型。 | [ADR 0014](decisions/0014-provider-model-split.md) |
 | **model** | 一个模型名（发给 provider 的 `model` 字段）加能力开关（工具调用 / 图片输入 / 思考 / token 上限），只通过 `provider_id` 关联到端点。地址、Key 与 RPM 不在这里。 | [ADR 0014](decisions/0014-provider-model-split.md) |
-| **RPM 限流（`ProviderThrottle`）** | 按 **provider + base_url**（`bucket_key()`，地址经 `normalize_base_url` 规范化）分桶的每分钟请求上限，进程级单例、滑动窗口。超限的请求阻塞到有配额为止；等待超过 60 秒即抛 `RpmLimitError`（可见的失败，不是假死）。钩子在四个 `chat_completion` 的 `_throttle()` 上，因此任务命名等旁路调用一并受限。配置只有数据库一层：provider 记录的 `rpm_limit`，启动时与每次 provider 写入后推给限流器。 | [ADR 0013](decisions/0013-llm-rpm-limit.md)、[ADR 0014](decisions/0014-provider-model-split.md) |
+| **RPM 限流（`ProviderThrottle`）** | 按 **provider + base_url**（`bucket_key()`，地址经 `normalize_base_url` 规范化）分桶的每分钟请求上限，进程级单例、滑动窗口。超限的请求阻塞到有配额为止；等待超过 60 秒即抛 `RpmLimitError`（可见的失败，不是假死）。钩子在每个适配器的 `chat_completion` / `stream_chat_completion` 的 `_throttle()` 上，因此任务命名等旁路调用一并受限。配置只有数据库一层：provider 记录的 `rpm_limit`，启动时与每次 provider 写入后推给限流器。 | [ADR 0013](decisions/0013-llm-rpm-limit.md)、[ADR 0014](decisions/0014-provider-model-split.md) |
 | **`llm.rpm.wait_ms`** | span 属性（同时有一条 `debug` 事件），记录这次请求为配额等待了多久。把"模型慢"与"自己被限流"分开，排障时才不会查错方向。 | [ADR 0013](decisions/0013-llm-rpm-limit.md) |
 
 ## 工具与结果

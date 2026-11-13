@@ -41,9 +41,15 @@ def _to_dict(message: Any) -> Dict[str, Any]:
             function_args = arguments
         else:
             function_args = _to_content_text(arguments)
+        # The id has to be the one the provider issued: it is what the tool result
+        # message refers back to, and a message history whose ids disagree makes the
+        # next request invalid. A dict-shaped tool call carries it under a key.
+        call_id = getattr(tool_call, "id", None)
+        if call_id is None and isinstance(tool_call, dict):
+            call_id = tool_call.get("id")
         tool_calls.append(
             {
-                "id": getattr(tool_call, "id", None) or str(_new_id()),
+                "id": str(call_id or _new_id()),
                 "type": "function",
                 "function": {
                     "name": str(name),

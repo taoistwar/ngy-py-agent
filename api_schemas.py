@@ -48,7 +48,14 @@ class RunTaskRequest(BaseModel):
             "omit to use the global config."
         ),
     )
-    stream: bool = False
+    stream: bool = Field(
+        default=True,
+        description=(
+            "Read the model's answer as it is produced instead of waiting for the "
+            "whole turn. On by default: it is what surfaces the reasoning trace on "
+            "gateways that only send it incrementally."
+        ),
+    )
 
 
 class RunTaskResponse(BaseModel):

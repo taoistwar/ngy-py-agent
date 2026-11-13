@@ -315,7 +315,7 @@ npm run i18n:check
 - 桶按 **provider + base_url** 分（`agent/rate_limit.py` 的 `bucket_key()`），进程级单例：provider 实例每个任务重建，挂在实例上的计数器等于每任务清零（[ADR 0013](decisions/0013-llm-rpm-limit.md)、[ADR 0014](decisions/0014-provider-model-split.md)）。
 - 键要经 `agent.provider.normalize_base_url()` 规范化：适配器会给 OpenAI 兼容地址补 `/v1`，两端不一致的话限流会静默失效（`test/rate_limit_test.py` 有对应用例）。
 - 滑动窗口而不是固定窗口：第 N+1 个请求等"最老的那个请求满 60 秒"，因此任意 60 秒跨度内都不超限，也没有窗口边界突刺。
-- **钩子在 wire 层**（四个 `chat_completion` 的第一行 `self._throttle()`），不在 `steps.py`：任务命名线程也打同一个端点，能绕过的限流不是限流。新增 provider 适配器时必须记得加这一行。
+- **钩子在 wire 层**（每个适配器的 `chat_completion` 与 `stream_chat_completion` 第一行 `self._throttle()`），不在循环里：任务命名线程也打同一个端点，能绕过的限流不是限流。新增 provider 适配器时必须记得加这一行。
 - 等待有上限（60 秒），超过就抛 `RpmLimitError`。循环会把它转成 `LLMCallError` 并给出"调高限制或稍后重试"的文案；**不要**改成无限等待，那会让"配错成 1 RPM"表现为任务假死。
 - 等待时长经 `provider_throttle.take_last_wait()` 回读（线程局部，取一次即清零），落成 `debug` 事件（含 `base_url`）+ span 属性 `llm.rpm.wait_ms`：模型慢和自己在配额里打转是两件事，排障时要分得开。
 - 配置只有数据库一层：`rpm_limit` 是 provider 字段，启动时与每次 provider 写入后由 `llm_api.sync_provider_throttle()` 重建限流表。**没有** `LLM_RPM` 环境变量，也没有 `settings.llm_rpm_limits`（0013 的旧方案，见 0014 D6）。
@@ -428,6 +428,17 @@ npm run i18n:check
 
 拆分本身是**纯搬运**：路由路径、字段、状态码、事件顺序都没动；验证方式是"全量测试 + 与拆分前的 OpenAPI 路径清单逐一比对"（29 条对 29 条）。
 
+### provider 包与流式请求
+
+`agent/provider.py` 涨过行数上限后按职责拆成包：`naming.py`（名称与地址规范化）、`config.py`（`ProviderConfig`）、`wire.py`（OpenAI 形状的消息 / 响应 / `StreamDelta`，以及 usage 归一）、`base.py`（`BaseProvider` 与非流式回落）、每个 wire 格式一个模块、`factory.py`（`build_provider`）。对外仍是 `from agent.provider import ...`，不要越过包去 import 内部模块。
+
+模型请求默认走流式（`RunTaskRequest.stream` 默认 `true`）：
+
+- 适配器实现 `stream_chat_completion()` 并置 `supports_streaming = True`；没有流模式的适配器继承 `BaseProvider` 的回落，把一次性响应包装成单个 `StreamDelta`，循环只认一种形状。
+- `agent/streaming.py` 负责把分片折回一条完整消息：content、reasoning、分片的 `tool_calls`（按 `index` 拼，`id` 变了视为新调用）、usage、首 token 与总耗时。
+- 思考内容以 `reasoning_content` 挂在 assistant 消息上，**只用于展示**：写回 `messages` 前必须剥掉（网关会拒绝或按它计费）。事件里另有顶层 `reasoning` 字段，连同 `stream` / `first_token_ms` / `duration_ms` / `chunk_count` 一起记录，Web Admin 的「深度思考」区块读的就是它。
+- `agent/agent_loop/model_turn.py` 是模型半步（请求 + 解析 + 事件），`steps.py` 只剩工具半步；`_report_throttle_wait` 也随之搬走。
+
 ## 14. 决策记录与术语
 
 - 设计决策（ADR）：`docs/decisions/`，命名 `NNNN-<topic>.md`。新增需要"解释为什么"的取舍时，先写 ADR 再改代码。
@@ -467,7 +478,7 @@ npm run i18n:check
 | `agent/telemetry/usage.py` | 兼容 OpenAI 的 `prompt_tokens`/`completion_tokens` 与 Anthropic 的 `input_tokens`/`output_tokens` |
 | `agent/telemetry/spans.py` | `task_span` / `react_step_span` / `llm_span` / `tool_span`，以及跨线程的 `TaskSpanHandle` |
 
-埋点调用点只有四处：`agent/agent_loop/runtime.py` 的 `_traced_run`（任务根）、`agent/agent_loop/loop.py`（步骤）、`agent/agent_loop/steps.py`（模型请求与工具调用）、`task_api.create_task` + `task_runtime.run_task`（任务生命周期）。
+埋点调用点只有四处：`agent/agent_loop/runtime.py` 的 `_traced_run`（任务根）、`agent/agent_loop/loop.py`（步骤）、`agent/agent_loop/model_turn.py` 与 `agent/agent_loop/steps.py`（模型请求与工具调用）、`task_api.create_task` + `task_runtime.run_task`（任务生命周期）。
 
 ### 三条必须守住的约定
 

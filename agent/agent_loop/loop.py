@@ -6,6 +6,7 @@ from agent.agent_loop.compact_history import compact_history
 from agent.agent_loop.config import DEFAULT_MAX_STEPS
 from agent.agent_loop.messages import _with_base_dir, _with_history
 from agent.agent_loop.micro_compact import mark_seen, prepare_context
+from agent.agent_loop.model_turn import run_model_turn
 from agent.agent_loop.result_budget import apply_result_budget
 from agent.agent_loop.runtime import (
     _build_runtime,
@@ -14,7 +15,7 @@ from agent.agent_loop.runtime import (
     _traced_run,
 )
 from agent.agent_loop.snip_compact import apply_snip_compact
-from agent.agent_loop.steps import run_model_turn, run_tool
+from agent.agent_loop.steps import run_tool
 from agent.models import (
     EventCategory,
     EventSink,
@@ -48,6 +49,10 @@ def run_react_loop(
     enable_tools: bool = True,
     max_output_tokens: Optional[int] = None,
     thinking_mode: bool = False,
+    # Streaming is the default: it is what surfaces the reasoning trace on gateways
+    # that only send it incrementally, and it fails fast instead of after a minute
+    # of silence. Adapters without a stream mode answer in one piece anyway.
+    stream: bool = True,
     mode: str = "build",
     base_dir: Optional[str] = None,
     agent_config: Optional[Dict[str, Any]] = None,
@@ -128,6 +133,7 @@ def run_react_loop(
                 "mode": mode,
                 "tools_enabled": enable_tools,
                 "thinking_mode": thinking_mode,
+                "stream": stream,
                 "max_output_tokens": max_output_tokens,
                 "base_dir": base_dir,
                 "agent_id": (agent_config or {}).get("agent_id"),
@@ -212,6 +218,7 @@ def run_react_loop(
                 request_kwargs,
                 event_sink,
                 task_id,
+                stream=stream,
             )
             if verbose:
                 print(f"[assistant] {turn.assistant_content or '(no direct content)'}")

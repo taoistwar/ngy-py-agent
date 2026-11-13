@@ -489,6 +489,7 @@ def _execute_task(
             enable_tools=bool((model or {}).get("supports_tool_calls", True)),
             max_output_tokens=int((model or {}).get("max_output_tokens") or 0) or None,
             thinking_mode=bool((model or {}).get("thinking_mode", False)),
+            stream=bool(request.stream),
             max_steps=max_steps,
             verbose=False,
             task_id=task_id,

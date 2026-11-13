@@ -238,7 +238,7 @@ class ThrottleReportTest(unittest.TestCase):
     """The loop has to say when it rationed itself, or it looks like a slow model."""
 
     def _report(self, waited, limit=6):
-        from agent.agent_loop.steps import _report_throttle_wait
+        from agent.agent_loop.model_turn import _report_throttle_wait
 
         events = []
         provider = SimpleNamespace(

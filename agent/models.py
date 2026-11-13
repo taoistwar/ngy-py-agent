@@ -78,7 +78,12 @@ class LLMRequestData(BaseModel):
 
 
 class LLMResponseData(BaseModel):
-    """LLM response payload."""
+    """LLM response payload.
+
+    The reasoning trace is recorded next to the answer rather than merged into it:
+    the UI shows it under its own heading, and a long deliberation must never look
+    like part of what the model said.
+    """
 
     step: int
     provider: str | None = None
@@ -86,6 +91,13 @@ class LLMResponseData(BaseModel):
     finish_reason: str | None = None
     tool_call_count: int = 0
     content: str | None = None
+    reasoning: str | None = None
+    # How the answer arrived. ``stream`` is the request mode; the three timing
+    # figures are what makes "the model is slow" separable from "we waited".
+    stream: bool = False
+    chunk_count: int = 0
+    first_token_ms: int | None = None
+    duration_ms: int | None = None
 
 
 class ToolCallData(BaseModel):
