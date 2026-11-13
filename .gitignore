@@ -28,3 +28,4 @@ data/checkpoints/
 output/
 /llm/
 /test/llm/
+/learn-claude-code/
