@@ -88,6 +88,11 @@ import AgentPicker from "./components/AgentPicker"
 import { AgentIcon, agentIconName } from "./components/agentIcons"
 import { PROVIDER_OPTIONS, agentDisplayName } from "./components/admin/shared"
 import { useTheme } from "./theme"
+import {
+  loadRememberedModel,
+  resolveModelId,
+  saveRememberedModel,
+} from "./utils/composerModelMemory"
 import { formatTime, safeStringify } from "./utils/format"
 
 const EVENT_PAGE_SIZE = 30
@@ -429,6 +434,7 @@ function TaskComposer({
   agents,
   skills,
   sessionId,
+  workspaceId,
   composerRunning,
   onCreate,
   onStop,
@@ -438,7 +444,7 @@ function TaskComposer({
   translate,
 }) {
   const [query, setQuery] = useState(() => loadComposerDraft(sessionId))
-  const [modelId, setModelId] = useState("")
+  const [modelId, setModelId] = useState(() => loadRememberedModel(sessionId, workspaceId))
   const [provider, setProvider] = useState("openai-compatible")
   const [agentId, setAgentId] = useState("")
   const [busy, setBusy] = useState(false)
@@ -449,7 +455,9 @@ function TaskComposer({
   const pickerRef = useRef(null)
   const textareaRef = useRef(null)
 
-  const effectiveModelId = modelId || (models && models.length ? models[0].model_id : "")
+  // The remembered model may no longer be in the list, in which case the picker
+  // shows the first model instead of an empty selection.
+  const effectiveModelId = useMemo(() => resolveModelId(models, modelId), [modelId, models])
   const effectiveAgentId = agentId || (agents && agents.length ? agents[0].agent_id : "")
 
   // Writing the draft from the edit handlers (not from an effect) keeps every
@@ -464,6 +472,18 @@ function TaskComposer({
   useEffect(() => {
     setQuery(loadComposerDraft(sessionId))
   }, [sessionId])
+
+  // Same rule for the model: a session restores its own last pick, and a session
+  // that never picked one starts from what the workspace used last. Re-reading on
+  // a workspace switch keeps the picker describing the conversation on screen.
+  useEffect(() => {
+    setModelId(loadRememberedModel(sessionId, workspaceId))
+  }, [sessionId, workspaceId])
+
+  const selectModel = (nextModelId) => {
+    setModelId(nextModelId)
+    saveRememberedModel(sessionId, workspaceId, nextModelId)
+  }
 
   // The overview "new task" shortcut jumps here; focusing the textarea makes the
   // shortcut complete one visible action instead of only switching pages.
@@ -553,7 +573,7 @@ function TaskComposer({
               <select
                 className="composer-select"
                 value={effectiveModelId}
-                onChange={(event) => setModelId(event.target.value)}
+                onChange={(event) => selectModel(event.target.value)}
                 title={translate("taskFormModel")}
               >
                 {models.map((item) => (
@@ -847,6 +867,16 @@ export default function App() {
   // Empty means "not scoped": the console lists every workspace. A scope is set
   // only by opening one workspace from the workspace list.
   const [workspaceScopeId, setWorkspaceScopeId] = useState("")
+  // The model the composer remembers per workspace is keyed by the workspace the
+  // open session belongs to, not by the sidebar highlight: clicking a workspace
+  // node only focuses it and must not change the model of the session on screen.
+  const activeSessionWorkspaceId = useMemo(
+    () =>
+      sessions.find((item) => item.session_id === activeSessionId)?.workspace_id ||
+      activeWorkspaceId ||
+      "",
+    [activeSessionId, activeWorkspaceId, sessions]
+  )
   const [tasks, setTasks] = useState([])
   const [selectedId, setSelectedId] = useState("")
   const [selectedTask, setSelectedTask] = useState(null)
@@ -2186,6 +2216,7 @@ export default function App() {
                 agents={agents}
                 skills={skills}
                 sessionId={activeSessionId}
+                workspaceId={activeSessionWorkspaceId}
                 composerRunning={Boolean(composerTaskId)}
                 onCreate={createNewTask}
                 onStop={stopComposerTask}
