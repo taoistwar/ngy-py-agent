@@ -327,6 +327,30 @@ export async function revertTask(taskId, { paths = null, force = false } = {}) {
   })
 }
 
+// Prepare a re-run: undo everything this task changed, then delete it. The order
+// matters - deleting the task forgets its checkpoint refs, so an undo after that
+// would have no history left to restore from.
+//
+// ``available: false`` means there is no checkpoint history at all (no git, an old
+// run, a missing workspace). There is nothing the undo could restore in that case, so
+// the re-run still goes ahead rather than losing its main action.
+//
+// A file edited after the task wrote it is a conflict: the revert leaves it alone.
+// Deleting the task then would throw away the only history that can still undo it, so
+// report the blocked paths and let the caller keep the task for the undo dialog.
+export async function revertAndDeleteTask(taskId) {
+  const changes = await fetchTaskChanges(taskId)
+  if (changes.available && changes.files?.length > 0) {
+    const result = await revertTask(taskId)
+    const blocked = [...(result.conflicts || []), ...(result.skipped || [])]
+    if (!result.clean || blocked.length > 0) {
+      return { deleted: false, blocked }
+    }
+  }
+  await deleteTask(taskId)
+  return { deleted: true, blocked: [] }
+}
+
 export async function fetchPermissionModeConfig() {
   return requestJson(`${API_BASE}/api/admin/permission-mode`)
 }

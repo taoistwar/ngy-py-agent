@@ -39,6 +39,7 @@ import {
   fetchWorkspaces,
   importSkill,
   renameSession,
+  revertAndDeleteTask,
   stopTask,
   updateAgent,
   updateMcpServer,
@@ -1754,19 +1755,42 @@ export default function App() {
   )
 
   // Re-running replays the original request; a model that no longer exists falls
-  // back to the provider recorded on the task.
+  // back to the provider recorded on the task. Undo and delete the old task first,
+  // so the replay starts from a clean workspace and leaves no duplicate behind.
   const rerunTaskHandler = useCallback(
-    (task) => {
-      if (!task) return
+    async (task) => {
+      if (!task?.task_id) return
       const payload = { query: task.query, agent_id: task.mode || "build", stream: false }
       if (task.model_id && models.some((item) => item.model_id === task.model_id)) {
         payload.model_id = task.model_id
       } else if (task.provider) {
         payload.provider = task.provider
       }
-      createNewTask(payload).catch(() => {})
+      try {
+        setError("")
+        const result = await revertAndDeleteTask(task.task_id)
+        if (!result.deleted) {
+          // Keep the task: its undo dialog is the only place to resolve these files.
+          setError(
+            result.blocked.length > 0
+              ? `${translate("revertFailed")} ${translate("revertConflictNote")} ${result.blocked.join(", ")}`
+              : translate("revertFailed")
+          )
+          refreshTasks().catch(() => {})
+          return
+        }
+        setSelectedTaskIds((prev) => {
+          const next = new Set(prev)
+          next.delete(task.task_id)
+          return next
+        })
+        await createNewTask(payload)
+      } catch (rerunError) {
+        setError(rerunError?.message || translate("errorUnknown"))
+        refreshTasks().catch(() => {})
+      }
     },
-    [createNewTask, models]
+    [createNewTask, models, refreshTasks, translate]
   )
 
   const stopComposerTask = useCallback(async () => {
