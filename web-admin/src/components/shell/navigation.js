@@ -8,6 +8,7 @@ import {
   PlugIcon,
   ServerIcon,
   SettingsIcon,
+  ShieldCheckIcon,
   SkillIcon,
   TasksIcon,
   WrenchIcon,
@@ -46,7 +47,10 @@ export const NAV_GROUPS = [
   {
     key: "system",
     labelKey: "navGroupSystem",
-    items: [{ key: "config", labelKey: "menuConfig", icon: "settings" }],
+    items: [
+      { key: "config", labelKey: "menuConfig", icon: "settings" },
+      { key: "permissions", labelKey: "menuPermissionRules", icon: "shield" },
+    ],
   },
 ]
 
@@ -61,6 +65,7 @@ export const NAV_ICONS = {
   cpu: CpuIcon,
   server: ServerIcon,
   settings: SettingsIcon,
+  shield: ShieldCheckIcon,
 }
 
 export const NAV_GROUP_KEYS = NAV_GROUPS.map((group) => group.key)

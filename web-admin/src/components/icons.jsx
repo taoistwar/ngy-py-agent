@@ -215,6 +215,15 @@ export function ServerIcon() {
   )
 }
 
+export function ShieldCheckIcon() {
+  return (
+    <Icon>
+      <path d="M12 21s7.5-3.6 7.5-9.4V5.6L12 3 4.5 5.6v6c0 5.8 7.5 9.4 7.5 9.4z" />
+      <path d="M9 11.8l2 2 4-4.2" />
+    </Icon>
+  )
+}
+
 export function SettingsIcon() {
   return (
     <Icon>

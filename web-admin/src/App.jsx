@@ -68,11 +68,11 @@ import { SearchIcon, SkillIcon } from "./components/icons"
 import AgentManager from "./components/admin/AgentManager"
 import McpServerManager from "./components/admin/McpServerManager"
 import ModelManager from "./components/admin/ModelManager"
+import PermissionRulesManager from "./components/admin/PermissionRulesManager"
 import ProviderManager from "./components/admin/ProviderManager"
 import {
   MaxStepsManager,
   PermissionModeManager,
-  PermissionRulesManager,
   RetentionManager,
 } from "./components/admin/SettingsPanels"
 import SkillManager from "./components/admin/SkillManager"
@@ -2221,6 +2221,8 @@ export default function App() {
       if (activeMenu === "config") {
         refreshMaxSteps().catch(() => {})
         refreshPermissionMode().catch(() => {})
+      }
+      if (activeMenu === "permissions") {
         refreshPermissionRules().catch(() => {})
       }
     }, 5000)
@@ -2531,16 +2533,6 @@ export default function App() {
               }
               translate={translate}
             />
-            <PermissionRulesManager
-              rules={permissionRules}
-              onDelete={deletePermissionRuleHandler}
-              onRefresh={() =>
-                refreshPermissionRules().catch((refreshError) =>
-                  setError(refreshError?.message || translate("errorLoadFailed"))
-                )
-              }
-              translate={translate}
-            />
             <RetentionManager
               retentionConfig={retentionConfig}
               onSave={updateRetention}
@@ -2552,6 +2544,17 @@ export default function App() {
               translate={translate}
             />
           </div>
+        ) : activeMenu === "permissions" ? (
+          <PermissionRulesManager
+            rules={permissionRules}
+            onDelete={deletePermissionRuleHandler}
+            onRefresh={() =>
+              refreshPermissionRules().catch((refreshError) =>
+                setError(refreshError?.message || translate("errorLoadFailed"))
+              )
+            }
+            translate={translate}
+          />
         ) : (
           <RetentionManager
             retentionConfig={retentionConfig}
