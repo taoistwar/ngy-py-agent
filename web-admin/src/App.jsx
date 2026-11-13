@@ -785,7 +785,15 @@ function TaskDetailPage({ task, taskResult, agents, taskTab, setTaskTab, events,
       </div>
       <div className="panel-body">
         {taskTab === "detail" ? (
-          <TaskDetail task={task} result={taskResult} agents={agents} translate={translate} />
+          // Remounted per task: the Monaco editors only read ``defaultValue`` once,
+          // so without a key the previous task's prompt and result stayed on screen.
+          <TaskDetail
+            key={task?.task_id || "none"}
+            task={task}
+            result={taskResult}
+            agents={agents}
+            translate={translate}
+          />
         ) : (
           <EventTimeline
             task={task}
@@ -875,7 +883,18 @@ export default function App() {
   activeSessionRef.current = activeSessionId
   selectedIdRef.current = selectedId
   const nextOffsetRef = useRef(0)
-  const isRunningRef = useRef(false)
+  // Which task owns the event request currently in flight. One request per task: a
+  // request started for a task the user has already left must neither block the new
+  // one nor write its events into the pane.
+  const inFlightEventsRef = useRef("")
+
+  // Selection goes through here so the ref already names the new task when the fetch
+  // it triggers resolves. The plain state setter only updates the ref on the next
+  // render, which is exactly what makes a stale response win the race.
+  const applySelection = useCallback((taskId) => {
+    selectedIdRef.current = taskId
+    setSelectedId(taskId)
+  }, [])
 
   const taskResult = useMemo(() => getTaskResult(selectedTask, events), [selectedTask, events])
 
@@ -954,17 +973,19 @@ export default function App() {
     setTasks(list)
     const current = selectedIdRef.current
     if (list.length === 0) {
-      setSelectedId("")
+      applySelection("")
     } else if (!current || !list.some((item) => item.task_id === current)) {
-      setSelectedId(latestTaskId(list))
+      applySelection(latestTaskId(list))
     }
-  }, [])
+  }, [applySelection])
 
   const refreshTask = useCallback(async (taskId) => {
     const target = taskId || selectedIdRef.current
     if (!target) return null
     const task = await fetchTask(target)
-    setSelectedTask(task)
+    // A click or a poll may have moved the selection while this was in flight: the
+    // pane shows whatever is selected now, not whichever request landed last.
+    if (selectedIdRef.current === target) setSelectedTask(task)
     return task
   }, [])
 
@@ -1044,14 +1065,19 @@ export default function App() {
     if (!force && status && !isTaskRunningStatus(status)) {
       return
     }
-    if (!target || isRunningRef.current) return
+    // Only a second request for the same task is redundant; one that is still in
+    // flight for a task the user left must not swallow the new task's first page.
+    if (!target || inFlightEventsRef.current === target) return
 
+    inFlightEventsRef.current = target
     setIsLoadingEvents(true)
-    isRunningRef.current = true
 
     try {
       const offset = reset ? 0 : nextOffsetRef.current
       const result = await fetchTaskEvents(target, { offset, limit: EVENT_PAGE_SIZE })
+      // Selected another task mid-request: appending this page would mix one task's
+      // events into another's log.
+      if (selectedIdRef.current !== target) return
       const items = result?.items || []
 
       if (reset) {
@@ -1068,14 +1094,16 @@ export default function App() {
     } catch (loadError) {
       setError(loadError?.message || translate("errorUnknown"))
     } finally {
-      setIsLoadingEvents(false)
-      isRunningRef.current = false
+      if (inFlightEventsRef.current === target) {
+        inFlightEventsRef.current = ""
+        setIsLoadingEvents(false)
+      }
     }
   }, [selectedTask?.status, translate])
 
   const selectTask = useCallback(
     (taskId) => {
-      setSelectedId(taskId)
+      applySelection(taskId)
       setSelectedTask(null)
       setEvents([])
       nextOffsetRef.current = 0
@@ -1085,13 +1113,13 @@ export default function App() {
       refreshTask(taskId)
       loadEvents(taskId, true, null, true)
     },
-    [loadEvents, refreshTask]
+    [applySelection, loadEvents, refreshTask]
   )
 
   const selectSession = useCallback(
     async (sessionId) => {
       setActiveSessionId(sessionId)
-      setSelectedId("")
+      applySelection("")
       setSelectedTask(null)
       setEvents([])
       nextOffsetRef.current = 0
@@ -1102,15 +1130,15 @@ export default function App() {
         const list = await fetchTasks(sessionId)
         setTasks(list)
         if (list.length > 0) {
-          setSelectedId(latestTaskId(list))
+          applySelection(latestTaskId(list))
         } else {
-          setSelectedId("")
+          applySelection("")
         }
       } catch (sessionError) {
         setError(sessionError?.message || translate("errorLoadFailed"))
       }
     },
-    [translate]
+    [applySelection, translate]
   )
 
   const changeTaskPage = useCallback(
@@ -1430,7 +1458,7 @@ export default function App() {
           } else {
             setActiveSessionId("")
             setTasks([])
-            setSelectedId("")
+            applySelection("")
             setSelectedTask(null)
           }
         }
@@ -1438,7 +1466,7 @@ export default function App() {
         setError(sessionError?.message || translate("errorLoadFailed"))
       }
     },
-    [selectSession, translate, workspaceScopeId]
+    [applySelection, selectSession, translate, workspaceScopeId]
   )
 
   const createNewTask = useCallback(
@@ -1447,12 +1475,16 @@ export default function App() {
         setError("")
         const result = await createTask({ ...payload, session_id: activeSessionRef.current })
         if (result?.task_id) {
-          setSelectedId(result.task_id)
+          // Select and clear together: leaving the previous task in place meant the
+          // highlighted row and the pane disagreed until this task's fetch landed.
+          applySelection(result.task_id)
+          setSelectedTask(null)
           setComposerTaskId(result.task_id)
           setEvents([])
           nextOffsetRef.current = 0
           setHasMoreEvents(false)
-          setTaskTab("detail")
+          // A task that just started is watched, not read: open its log.
+          setTaskTab("events")
           const task = await refreshTask(result.task_id)
           await loadEvents(result.task_id, true, task?.status, true)
           await refreshTasks()
@@ -1464,7 +1496,7 @@ export default function App() {
         throw createError
       }
     },
-    [loadEvents, refreshTask, refreshTasks, refreshSessions, translate]
+    [applySelection, loadEvents, refreshTask, refreshTasks, refreshSessions, translate]
   )
 
   // Re-running replays the original request; a model that no longer exists falls
@@ -1565,11 +1597,11 @@ export default function App() {
           setHasMoreEvents(false)
           if (nextTasks.length > 0) {
             const nextId = latestTaskId(nextTasks)
-            setSelectedId(nextId)
+            applySelection(nextId)
             const task = await refreshTask(nextId)
             await loadEvents(nextId, true, task?.status, true)
           } else {
-            setSelectedId("")
+            applySelection("")
           }
         }
 
@@ -1578,7 +1610,7 @@ export default function App() {
         setError(deleteError?.message || translate("errorUnknown"))
       }
     },
-    [loadEvents, refreshTask, refreshTasks, tasks, translate]
+    [applySelection, loadEvents, refreshTask, refreshTasks, tasks, translate]
   )
 
   const deleteTaskSelection = useCallback(async () => {
@@ -1599,11 +1631,11 @@ export default function App() {
         setHasMoreEvents(false)
         if (remaining.length > 0) {
           const nextId = latestTaskId(remaining)
-          setSelectedId(nextId)
-          const task = await fetchTask(nextId)
+          applySelection(nextId)
+          const task = await refreshTask(nextId)
           await loadEvents(nextId, true, task?.status, true)
         } else {
-          setSelectedId("")
+          applySelection("")
         }
       }
 
@@ -1611,7 +1643,7 @@ export default function App() {
     } catch (deleteError) {
       setError(deleteError?.message || translate("errorUnknown"))
     }
-  }, [loadEvents, refreshTasks, selectedTaskIds, tasks, translate])
+  }, [applySelection, loadEvents, refreshTask, refreshTasks, selectedTaskIds, tasks, translate])
 
   const createProviderHandler = useCallback(
     async (payload) => {
@@ -1860,10 +1892,10 @@ export default function App() {
           if (taskList.length > 0) {
             const current = selectedIdRef.current
             if (!current || !taskList.some((item) => item.task_id === current)) {
-              setSelectedId(latestTaskId(taskList))
+              applySelection(latestTaskId(taskList))
             }
           } else {
-            setSelectedId("")
+            applySelection("")
           }
         }
       } catch (loadError) {
@@ -1944,7 +1976,7 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [activeMenu, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWorkspaces, translate])
+  }, [activeMenu, applySelection, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWorkspaces, translate])
 
   useEffect(() => {
     if (!selectedId || activeMenu !== "tasks") return
