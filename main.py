@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -58,9 +59,29 @@ OTEL_EXCLUDED_URLS = (
     "/favicon.*"
 )
 
+def _load_runtime_config() -> None:
+    """Resolve ``.env`` plus the database into ``app_state`` for the serving process.
+
+    This cannot live in :func:`main`: with ``--reload`` uvicorn imports this module in a
+    child process that never runs ``main``, so the persisted settings were silently
+    dropped back to their env/default values after every code change. Hooking the app's
+    lifespan loads them wherever the app is actually served (the same trap
+    ``_configure_telemetry`` documents below).
+    """
+    admin_api.load_env_file()
+    admin_api.load_startup_config()
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    _load_runtime_config()
+    yield
+
+
 app = FastAPI(
     title="NGY Agent Web Admin",
     description="A lightweight ReAct task API plus management frontend for creating and tracking long-running tasks.",
+    lifespan=_lifespan,
 )
 app.add_middleware(
     CORSMiddleware,
@@ -179,8 +200,7 @@ def _run_web_server(host: str, port: int, reload: bool) -> None:
 
 
 def main() -> None:
-    admin_api.load_env_file()
-    admin_api.load_startup_config()
+    _load_runtime_config()
     _configure_telemetry()
     parser = argparse.ArgumentParser(
         description="Run ReAct tasks with optional Web Admin mode.",

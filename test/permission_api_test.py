@@ -52,6 +52,8 @@ class PermissionApiTest(unittest.TestCase):
         self._previous_rules = app_state.permission_rule_store
         self._previous_mode = app_state.permission_mode
         self._previous_source = app_state.permission_mode_source
+        self._previous_steps = app_state.agent_max_steps
+        self._previous_steps_source = app_state.agent_max_steps_source
         self.store = _SqliteTaskStore(root / "tasks.db")
         self.rules = PermissionRuleStore(root / "permission_rules.json")
         app_state.monitor_store = self.store
@@ -67,6 +69,8 @@ class PermissionApiTest(unittest.TestCase):
         app_state.permission_rule_store = self._previous_rules
         app_state.permission_mode = self._previous_mode
         app_state.permission_mode_source = self._previous_source
+        app_state.agent_max_steps = self._previous_steps
+        app_state.agent_max_steps_source = self._previous_steps_source
         self.store.close()
         self._tmp.cleanup()
 
@@ -213,6 +217,22 @@ class PermissionApiTest(unittest.TestCase):
         self.assertEqual(
             self.client.get("/api/admin/permission-mode").json()["mode"], "auto_approve"
         )
+
+    def test_startup_load_takes_the_database_over_the_env_defaults(self):
+        """Regression: ``--reload`` serves from a child process that never runs ``main``.
+
+        The persisted settings were reloaded as ``ask``/8 (env defaults) after every code
+        change because the load hung off ``main`` instead of the app's lifespan.
+        """
+        self.store.set_permission_mode("auto_approve")
+        self.store.set_agent_max_steps(42)
+
+        main._load_runtime_config()
+
+        self.assertEqual(app_state.permission_mode, PermissionMode.AUTO_APPROVE)
+        self.assertEqual(app_state.permission_mode_source, "database")
+        self.assertEqual(app_state.agent_max_steps, 42)
+        self.assertEqual(app_state.agent_max_steps_source, "database")
 
     def test_an_unknown_permission_mode_is_rejected_rather_than_coerced(self):
         response = self.client.put("/api/admin/permission-mode", json={"mode": "whatever"})
