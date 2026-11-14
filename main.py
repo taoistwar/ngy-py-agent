@@ -39,6 +39,7 @@ from agent.telemetry import (
     shutdown_telemetry,
 )
 from mcp_api import router as mcp_router
+from task_recovery import resume_interrupted_tasks
 from task_runtime import purge_expired_tasks_with_log
 
 ROOT_DIR = app_state.ROOT_DIR
@@ -72,9 +73,24 @@ def _load_runtime_config() -> None:
     admin_api.load_startup_config()
 
 
+def _resume_interrupted_tasks() -> None:
+    """Pick up the tasks a previous process left running.
+
+    Startup is the only moment at which every stored "running" row is known to have
+    no thread: the ones this process would start are not registered yet, and nothing
+    else can be mid-run. A recovery failure is logged rather than raised - a task
+    that cannot be continued must not stop the server from booting.
+    """
+    try:
+        resume_interrupted_tasks()
+    except Exception as exc:  # noqa: BLE001 - recovery is best effort by definition
+        print(f"[Task recovery] startup scan failed: {exc.__class__.__name__}: {exc}")
+
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     _load_runtime_config()
+    _resume_interrupted_tasks()
     yield
 
 

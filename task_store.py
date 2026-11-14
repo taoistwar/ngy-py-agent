@@ -111,7 +111,8 @@ class _SqliteTaskStore:
                     updated_at TEXT NOT NULL,
                     session_id TEXT,
                     model_id TEXT,
-                    mode TEXT NOT NULL DEFAULT 'build'
+                    mode TEXT NOT NULL DEFAULT 'build',
+                    resume_count INTEGER NOT NULL DEFAULT 0
                 )
                 """
             )
@@ -172,6 +173,13 @@ class _SqliteTaskStore:
             self._conn.execute("ALTER TABLE tasks ADD COLUMN result TEXT")
         if "name" not in existing:
             self._conn.execute("ALTER TABLE tasks ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+        if "resume_count" not in existing:
+            # How many times a restarted process has picked this task up. It is what
+            # stops a task that kills the process on every attempt from being resumed
+            # forever (see ``task_recovery``).
+            self._conn.execute(
+                "ALTER TABLE tasks ADD COLUMN resume_count INTEGER NOT NULL DEFAULT 0"
+            )
 
     def _ensure_session_columns(self) -> None:
         rows = self._conn.execute("PRAGMA table_info(sessions)").fetchall()
@@ -808,6 +816,74 @@ class _SqliteTaskStore:
                 }
                 for row in rows
             ]
+
+    def list_unfinished_tasks(self) -> list[dict[str, Any]]:
+        """Tasks still marked in flight by whatever process last wrote them.
+
+        ``running`` and ``waiting`` both mean "a thread owns this row" to the writer
+        (a task parked on a confirmation is still in flight, ADR 0006 D10). After a
+        restart no thread owns them any more, which is exactly what the startup
+        recovery scan looks for.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT task_id, query, name, status, provider, created_at, updated_at,
+                       session_id, model_id, mode, result, resume_count
+                FROM tasks
+                WHERE status IN (?, ?)
+                ORDER BY created_at ASC, task_id ASC
+                """,
+                (TaskStatus.RUNNING.value, TaskStatus.WAITING.value),
+            ).fetchall()
+            return [
+                {
+                    "task_id": row["task_id"],
+                    "query": row["query"],
+                    "name": row["name"] or "",
+                    "status": row["status"],
+                    "provider": row["provider"],
+                    "created_at": self._parse_datetime(row["created_at"]),
+                    "updated_at": self._parse_datetime(row["updated_at"]),
+                    "session_id": row["session_id"],
+                    "model_id": row["model_id"],
+                    "mode": row["mode"],
+                    "result": row["result"] or "",
+                    "resume_count": int(row["resume_count"] or 0),
+                }
+                for row in rows
+            ]
+
+    def increase_resume_count(self, task_id: str) -> int:
+        """Count one recovery attempt for a task and return the running total."""
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE tasks
+                SET resume_count = COALESCE(resume_count, 0) + 1, updated_at = ?
+                WHERE task_id = ?
+                """,
+                (datetime.now(UTC).isoformat(), task_id),
+            )
+            self._conn.commit()
+            row = self._conn.execute(
+                "SELECT resume_count FROM tasks WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+            return int(row["resume_count"] or 0) if row is not None else 0
+
+    def reset_resume_count(self, task_id: str) -> None:
+        """Clear a task's retry budget after a resume that got somewhere.
+
+        The budget exists for tasks that are stuck, not for tasks that keep being
+        interrupted while doing real work (see ``task_recovery``).
+        """
+        with self._lock:
+            self._conn.execute(
+                "UPDATE tasks SET resume_count = 0 WHERE task_id = ?",
+                (task_id,),
+            )
+            self._conn.commit()
 
     def get_events(self, task_id: str) -> list[dict[str, Any]]:
         with self._lock:

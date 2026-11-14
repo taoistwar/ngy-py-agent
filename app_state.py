@@ -85,6 +85,17 @@ def signal_task_stop(task_id: str) -> bool:
     return True
 
 
+def is_task_active(task_id: str) -> bool:
+    """Whether this process still has a live thread for the task.
+
+    A stored ``running`` row only means a thread owned it when it was written; after
+    a restart no flag exists. Startup recovery reads this before adopting a row, so a
+    task that is genuinely running is never resumed a second time.
+    """
+    with _task_stop_lock:
+        return task_id in _task_stop_events
+
+
 def clear_task_stop(task_id: str) -> None:
     with _task_stop_lock:
         _task_stop_events.pop(task_id, None)

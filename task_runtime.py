@@ -361,6 +361,8 @@ def run_task(
     stop_event: threading.Event | None = None,
     otel_handle: TaskSpanHandle | None = None,
     history_messages: list[dict[str, Any]] | None = None,
+    resume_messages: list[dict[str, Any]] | None = None,
+    resume_step: int = 1,
 ) -> None:
     """Run one task to completion under its brokers; called on the task's own thread.
 
@@ -374,6 +376,11 @@ def run_task(
 
     ``history_messages`` is the conversation the session had before this task, read
     by the caller so this thread never guesses at it (see ``session_history``).
+
+    ``resume_messages`` is the conversation a previous process rebuilt from the
+    event log after a crash (see ``task_recovery``). When it is given, that transcript
+    replaces both the system prompt and the history: it is the exact list the last
+    request sent, and ``resume_step`` is the step that request belonged to.
     """
     token = attach_task_span(otel_handle)
     try:
@@ -386,6 +393,8 @@ def run_task(
             agent_config,
             stop_event,
             history_messages=history_messages,
+            resume_messages=resume_messages,
+            resume_step=resume_step,
         )
     finally:
         detach_task_span(token)
@@ -401,6 +410,8 @@ def _execute_task(
     agent_config: dict[str, Any] | None,
     stop_event: threading.Event | None,
     history_messages: list[dict[str, Any]] | None = None,
+    resume_messages: list[dict[str, Any]] | None = None,
+    resume_step: int = 1,
 ) -> None:
     provider = str(
         (provider_record or {}).get("protocol")
@@ -426,10 +437,16 @@ def _execute_task(
         """
         _sink(task_id, build_event(task_id, EventCategory(category), title, data))
 
+    if resume_messages is not None:
+        # The rebuilt transcript already carries the earlier conversation, so the
+        # session history would insert it a second time. The task also already has
+        # a name: asking a model to name it again is work with no reader.
+        history_messages = None
+
     emit_debug(
         _sink,
         task_id,
-        "Start task execution",
+        "Resume task execution" if resume_messages is not None else "Start task execution",
         {
             "provider": provider,
             "provider_id": (provider_record or {}).get("provider_id"),
@@ -451,15 +468,21 @@ def _execute_task(
             # How much of the session's earlier conversation this task continues
             # from: zero means it started a fresh conversation.
             "history_messages": len(history_messages or []),
+            # A resumed run says so in its own event: the log then reads as "the
+            # process restarted here and continued from step N".
+            "resumed": resume_messages is not None,
+            "first_step": resume_step,
+            "resume_messages": len(resume_messages or []),
             **current_trace_ids(),
         },
     )
 
-    threading.Thread(
-        target=name_task_and_session,
-        args=(task_id, request.session_id, provider, provider_config, request.query),
-        daemon=True,
-    ).start()
+    if resume_messages is None:
+        threading.Thread(
+            target=name_task_and_session,
+            args=(task_id, request.session_id, provider, provider_config, request.query),
+            daemon=True,
+        ).start()
 
     try:
         permission_broker = PermissionBroker(
@@ -484,6 +507,11 @@ def _execute_task(
         result = run_react_loop(
             user_query=request.query,
             history_messages=history_messages,
+            initial_messages=resume_messages,
+            # A rebuilt transcript already ends with this task's query, and its step
+            # numbering continues the run that died.
+            append_user_query=resume_messages is None,
+            first_step=resume_step if resume_messages is not None else 1,
             provider_name=provider,
             provider_config=provider_config,
             enable_tools=bool((model or {}).get("supports_tool_calls", True)),

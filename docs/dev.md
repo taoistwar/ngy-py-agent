@@ -500,3 +500,43 @@ npm run i18n:check
 - `agent_loop_tracing_test.py`：假 provider 跑完整循环，断言 span 层级与事件里的 `trace_id`；
 - `task_tracing_test.py`：跨线程句柄的 attach/结束，失败任务也要关 span；
 - `http_tracing_test.py`：`TestClient` 打一次 `/api/healthz`，确认 HTTP span 与被排除路径。
+
+## 16. 任务断点续跑（`task_recovery/`）
+
+任务的线程不跨进程，行会留在 `running`；唯一的终态写手是线程本身，所以崩溃后没人再改它。`task_recovery` 在服务启动（`main._lifespan`）时补上这一环：认出这种行，从事件日志重建对话，然后**接着跑**。
+
+### 代码位置
+
+| 位置 | 职责 |
+| --- | --- |
+| `task_recovery/transcript.py` | 纯函数：`build_resume_plan(events, query, ...)` → `ResumePlan`。不碰数据库、不起线程 |
+| `task_recovery/launch.py` | 认领任务、查模型、起线程；放弃/收尾时写事件 |
+| `task_store.list_unfinished_tasks()` | `running` / `waiting` 的行（`waiting` 也是"在飞"，ADR 0006 D10） |
+| `task_store.increase_resume_count()` / `reset_resume_count()` | 无进展重试预算 |
+| `agent/agent_loop/loop.py` | `first_step`（续跑接着编号）、`append_user_query`（重建的对话已含 query）、`Starting ReAct loop` 事件里的 `initial_messages` |
+| `task_runtime._execute_task()` | `resume_messages` / `resume_step` 透传；续跑时跳过会话命名 |
+
+### 三条必须守住的约定
+
+1. **已记录的结果绝不重算。** 恢复时 `tool_result` 里的 `result` 直接拼回 `messages`，工具不执行；没有结果事件的调用也**不重放**，而是合成一条 `INTERRUPTED_TOOL_NOTE` 的 tool 消息，让模型自己确认现状。这条是"不重复执行"的全部依据——工具的副作用在日志之外，猜不得。
+2. **用过期的 row 不如不续跑。** 没有可用基线（请求形态被改写的 provider 且没有 `initial_messages`）、绑定的模型已删除、对话无法重建时，一律 `failed` + 一条说明事件，而不是拿错误的上下文继续跑。
+3. **重试预算只惩罚"卡住"。** `resume_count` 在每次认领时 +1，但上一次续跑若产生过 `llm_response` / `tool_result`（从日志判断，跨进程有效）就清零。所以"每次都往前挪一步、但服务总被重启"的任务不会被放弃，只有"一续跑就死"的任务会在第 4 次被 `Task recovery gave up` 结束。
+
+### 为什么基线取最后一个 `LLM request`
+
+`raw_request.messages` 是那一轮真正发给模型的列表，压缩（ADR 0015–0017）、会话历史、截图消息都已经在里面，重放窗口只有"这一步之后"那么短。`anthropic*` / `gemini` 会把 messages 改写成自己的 wire 格式，所以这两类 provider 走 `Starting ReAct loop` 事件里的 `initial_messages`（loop 在组好消息后记一份脱敏副本），代价是从第 1 步重放，正确性一致。
+
+### 事件与状态
+
+- 续跑起点：`debug` / `Task resumed after restart`（含 `mode` / `next_step` / `reused_tool_results` / `unresolved_tool_calls`）；
+- 线程启动：`debug` / `Resume task execution`（`resumed: true`，`first_step` 为续跑起始 step）；
+- 放弃：`error` / `Task recovery failed` 或 `Task recovery gave up`，任务置 `failed`；
+- 已收尾的残留行：只补 `finish_task`，不重跑。
+
+### 测试
+
+`test/task_recovery/` 镜像源码：
+
+- `transcript_test.py`：纯决策——复用结果、未知调用、最后一条回答直接收尾、步数耗尽、provider 改写回退、缺基线返回 `None`；
+- `launch_test.py`：认领只一次、进程内在跑的任务不动、模型消失/无基线转 `failed`、有进展不计入预算；
+- `startup_test.py`：真的走 `TestClient(main.app)` 的 lifespan，确认钩子接上且两次启动只起一个线程。

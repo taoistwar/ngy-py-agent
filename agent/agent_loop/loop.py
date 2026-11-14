@@ -31,7 +31,7 @@ from agent.provider import ProviderConfig
 from agent.telemetry import current_trace_ids, react_step_span
 from agent.tools.permissions import PermissionBroker
 from agent.tools.user_question import UserQuestionBroker
-from agent.vision import build_image_message, supports_images
+from agent.vision import build_image_message, redact_image_payload, supports_images
 
 
 @_reaps_task_sessions
@@ -42,6 +42,12 @@ def run_react_loop(
     max_steps: int = DEFAULT_MAX_STEPS,
     verbose: bool = True,
     initial_messages: Optional[List[Dict[str, Any]]] = None,
+    # A resumed run starts from a conversation that already ends with the query, so
+    # appending it again would ask the model the same thing twice.
+    append_user_query: bool = True,
+    # Where the step counter starts: a resumed run continues the numbering of the one
+    # that died, which is what keeps ``max_steps`` meaning one budget per task.
+    first_step: int = 1,
     history_messages: Optional[List[Dict[str, Any]]] = None,
     task_id: str | None = None,
     event_sink: EventSink | None = None,
@@ -116,7 +122,8 @@ def run_react_loop(
         # from the session's finished tasks (see ``session_history``).
         messages = _with_history(messages, history_messages)
 
-    messages.append({"role": "user", "content": user_query})
+    if append_user_query:
+        messages.append({"role": "user", "content": user_query})
 
     _emit(
         event_sink,
@@ -139,6 +146,12 @@ def run_react_loop(
                 "agent_id": (agent_config or {}).get("agent_id"),
                 "mcp_servers": (agent_config or {}).get("mcp_servers"),
                 "history_messages": len(history_messages or []),
+                "first_step": first_step,
+                # The conversation this run started from. Everything that happens next
+                # is already in the response and tool events, so this one snapshot is
+                # what lets a restarted process rebuild the transcript and continue
+                # instead of replaying the task (see ``task_recovery``).
+                "initial_messages": redact_image_payload(messages),
                 **current_trace_ids(),
             },
             collapsed=True,
@@ -152,7 +165,7 @@ def run_react_loop(
     # "read" is only meaningful for requests this loop made (ADR 0016).
     seen_results: Set[str] = set()
 
-    for step in range(1, max_steps + 1):
+    for step in range(first_step, max_steps + 1):
         if should_stop is not None and should_stop():
             stopped = True
             break
