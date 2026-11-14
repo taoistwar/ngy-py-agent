@@ -258,6 +258,12 @@ MCP 市场维护可复用的 MCP 服务预设（传输方式 + 命令/URL），�
   - `name` 可选，缺省时按当前时间自动生成。
   - `workspace_id` 可选，缺省或为空表示该会话不属于任何工作空间。
 - `GET /api/sessions`：返回的会话项包含 `workspace_id`（可能为 `null`）。
+- `GET /api/sessions/{session_id}/context`：这个会话已经占用了多少上下文（任务窗口右下角的 `0.0% · 0 / 256.0K 上下文已使用`）。
+  - 可选 `model_id`：任务窗口当前选中的模型，它决定分母（该模型的 `max_input_tokens`）。
+  - `used_tokens` 不是估算值，而是会话最近一次模型请求的 `usage`（输入 + 输出 token）；最近一个任务还没拿到回答时，会往回看前几个任务，取最近一次真实读数。
+  - 模型没配 `max_input_tokens` 时，分母回退到 ReAct 循环自己的上下文预算（`CONTEXT_CHAR_LIMIT`，默认 200000 字符 ÷ 4 = 50000 token），`limit_source` 会说明是 `model` 还是 `loop`。
+
+取舍与已知限制见 [ADR 0021](decisions/0021-context-usage-meter.md)。
 
 左侧列表展示顺序为：先列出工作空间（可展开显示其下会话），再列出任务（即没有工作空间的会话）。
 

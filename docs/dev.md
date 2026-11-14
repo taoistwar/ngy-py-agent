@@ -59,6 +59,7 @@ uv run python main.py --interactive
   - 如果 `dist` 不存在则读取 `web-admin/index.html`
 - 全局配置（最大步数、任务保留天数）存于 `settings` 表（`agent_max_steps`、`task_retention_days` 两键），可在 Web Admin「全局配置」页修改；DB 值优先于同名环境变量。
 - 任务详情的结果区：`src/components/TaskResultPanel.jsx` 负责「渲染 / 源码」切换与全屏阅读（portal 覆盖层，Esc 关闭）；Markdown 由 `src/components/MarkdownView.jsx` 渲染，解析在 `src/utils/markdown.js`（块级）与 `src/utils/markdownInline.js`（行内），排版样式在 `src/styles/markdown.css`。渲染产出 React 元素而非 HTML 字符串，模型输出里的标签只会显示成文本。
+- 任务窗口的上下文占用：`src/components/ContextMeter.jsx` 渲染 `0.0% · 0 / 256.0K 上下文已使用`，数字格式化在 `src/utils/contextUsage.js`（1024 进制、一位小数，≥80% 变黄、≥95% 变红）。它随发送按钮一起右对齐，跟随会话与所选模型，每 5 秒读一次 `GET /api/sessions/{id}/context`，任务开始/结束时立即再读一次。
 
 ### 构建前端
 
@@ -90,6 +91,7 @@ npm run dev
 - `GET /api/tasks/{task_id}/events/stream`
 - `GET /api/tasks/{task_id}/events/ws`
 - `POST /api/tasks/{task_id}/permission/{request_id}`（回答待确认的工具调用）
+- `GET /api/sessions/{session_id}/context?model_id=`（任务窗口的上下文占用）
 - `GET /api/healthz`
 - `GET /api/admin/retention`
 - `PUT /api/admin/retention`
@@ -413,6 +415,7 @@ npm run i18n:check
 | `api_schemas.py` | 所有请求/响应 pydantic 模型 | 任何行为 |
 | `app_state.py` | 进程内的**活状态**：`monitor_store`、`permission_rule_store`、三项全局配置（保留天数 / 步数上限 / 确认模式）及其 `source`、三类任务注册表（停止事件、权限 broker、提问 broker）、`status_for_event`、`ROOT_DIR` | 任何判断逻辑 |
 | `session_history.py` | 会话上下文：把同一会话中**已完成**任务的 `query` / `result` 重建成 `user` / `assistant` messages，并按消息数 / 字符预算裁剪（只留最近的轮次） | 不注入、不运行任务 |
+| `context_usage.py` | 任务窗口的上下文占用读数：会话最近一次模型请求的 `usage`（回溯最多 5 个任务 / 5 条响应）+ 分母（模型 `max_input_tokens`，缺失时回退到循环自己的字符预算 ÷ 4） | 不估算文本、不改上下文 |
 | `task_runtime.py` | "一个任务是什么"：provider / 工作目录 / 步数 / 确认模式的解析、会话标题、保留期清理、`run_task`（跑 ReAct 循环并把两个 broker 注册进 `app_state`） | HTTP 细节 |
 | `task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
 | `task_store.py` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁 | provider 与模型（在 `llm_store.py`） |
