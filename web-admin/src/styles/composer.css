@@ -3,6 +3,26 @@
   gap: 8px;
 }
 
+/* The splitter above the composer owns the panel height, so the body, the form
+   and the textarea all stretch into the room it was dragged to. */
+.task-composer-panel .panel-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.task-composer-panel .task-composer {
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+.task-composer-panel .composer-textarea {
+  height: 100%;
+  min-height: 0;
+}
+
 .composer-field {
   display: grid;
   gap: 6px;
@@ -47,10 +67,9 @@
   padding: 7px 9px;
   font-size: 13px;
   min-height: 64px;
-  /* Dragging it taller must not push the composer off the screen: the task list
-     above it keeps the rest of the column. */
-  max-height: 30vh;
-  resize: vertical;
+  /* The composer splitter decides how tall the input gets, so the textarea does
+     not offer a second, conflicting resize handle. */
+  resize: none;
   font-family: inherit;
   box-sizing: border-box;
   width: 100%;

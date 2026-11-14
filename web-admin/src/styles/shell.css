@@ -480,10 +480,12 @@
   min-height: 0;
 }
 
+/* Rows: task list, composer splitter, composer. The row template is set inline
+   because the composer height is dragged and persisted. */
 .task-column-main {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-rows: minmax(0, 1fr) 10px 176px;
+  gap: 0;
   min-width: 0;
   min-height: 0;
 }
@@ -536,6 +538,43 @@
 
 .task-resizer.disabled::before {
   opacity: 0.4;
+}
+
+/* Horizontal counterpart: splits the middle column between the task list and
+   the composer, so the handle shows a line plus a centered grip. */
+.task-composer-resizer {
+  position: relative;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.task-composer-resizer::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  transform: translateY(-50%);
+  background: var(--line);
+}
+
+.task-composer-resizer::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 38px;
+  height: 3px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.task-composer-resizer:hover::after,
+.task-composer-resizer.active::after {
+  background: var(--accent);
 }
 
 .session-collapse-btn {

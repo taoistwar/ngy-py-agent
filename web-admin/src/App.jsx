@@ -117,6 +117,12 @@ const TASK_COLUMN_COLLAPSED_WIDTH = 44
 const TASK_COLUMN_WIDTHS_KEY = "web-admin.taskColumnWidths"
 const TASK_COLUMN_COLLAPSED_KEY = "web-admin.leftColumnCollapsed"
 const TASK_COLUMN_DEFAULT_WIDTHS = { left: 260, mid: 360 }
+// The composer split: the handle row plus the smallest task list it may leave.
+const TASK_COMPOSER_HEIGHT_KEY = "web-admin.taskComposerHeight"
+const TASK_COMPOSER_DEFAULT_HEIGHT = 176
+const TASK_COMPOSER_MIN_HEIGHT = 168
+const TASK_COMPOSER_RESIZER_HEIGHT = 10
+const TASK_LIST_MIN_HEIGHT = 140
 // One draft per session, so a refresh restores what was being typed and two
 // sessions never show each other's text.
 const COMPOSER_DRAFT_KEY_PREFIX = "web-admin.composerDraft."
@@ -173,6 +179,24 @@ function loadTaskColumnWidths() {
   } catch {
     return fallback
   }
+}
+
+function loadComposerHeight() {
+  if (typeof window === "undefined") return TASK_COMPOSER_DEFAULT_HEIGHT
+  try {
+    const stored = Number(window.localStorage.getItem(TASK_COMPOSER_HEIGHT_KEY))
+    if (!Number.isFinite(stored) || stored <= 0) return TASK_COMPOSER_DEFAULT_HEIGHT
+    return Math.max(TASK_COMPOSER_MIN_HEIGHT, Math.round(stored))
+  } catch {
+    return TASK_COMPOSER_DEFAULT_HEIGHT
+  }
+}
+
+// The composer may not eat the task list, so its ceiling follows the space the
+// middle column actually has instead of a fixed pixel value.
+function maxComposerHeight(containerHeight) {
+  const available = containerHeight - TASK_COMPOSER_RESIZER_HEIGHT - TASK_LIST_MIN_HEIGHT
+  return Math.max(TASK_COMPOSER_MIN_HEIGHT, Math.round(available))
 }
 
 const MODE_LABEL_KEYS = {
@@ -837,7 +861,10 @@ export default function App() {
   const [taskColumnWidths, setTaskColumnWidths] = useState(loadTaskColumnWidths)
   const [leftColumnCollapsed, setLeftColumnCollapsed] = useState(loadLeftColumnCollapsed)
   const [resizingColumn, setResizingColumn] = useState("")
+  const [composerHeight, setComposerHeight] = useState(loadComposerHeight)
+  const [resizingComposer, setResizingComposer] = useState(false)
   const taskWorkspaceRef = useRef(null)
+  const taskColumnMainRef = useRef(null)
   const [activeSessionId, setActiveSessionId] = useState("")
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("")
   // Empty means "not scoped": the console lists every workspace. A scope is set
@@ -1402,6 +1429,27 @@ export default function App() {
     }
   }, [leftColumnCollapsed])
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TASK_COMPOSER_HEIGHT_KEY, String(Math.round(composerHeight)))
+    } catch {
+      // ignore persistence errors
+    }
+  }, [composerHeight])
+
+  // Shrinking the window must not leave the composer taller than the middle
+  // column has room for, or the task list above it collapses to nothing.
+  useEffect(() => {
+    const clampComposer = () => {
+      const containerHeight = taskColumnMainRef.current?.clientHeight
+      if (!containerHeight) return
+      const ceiling = maxComposerHeight(containerHeight)
+      setComposerHeight((prev) => Math.min(prev, ceiling))
+    }
+    window.addEventListener("resize", clampComposer)
+    return () => window.removeEventListener("resize", clampComposer)
+  }, [])
+
   const startColumnResize = (event, which) => {
     event.preventDefault()
     const startX = event.clientX
@@ -1438,6 +1486,37 @@ export default function App() {
       document.body.style.userSelect = previousUserSelect
       document.body.style.cursor = previousCursor
       setResizingColumn("")
+    }
+
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+  }
+
+  const startComposerResize = (event) => {
+    event.preventDefault()
+    const startY = event.clientY
+    const containerHeight = taskColumnMainRef.current?.clientHeight || window.innerHeight
+    const ceiling = maxComposerHeight(containerHeight)
+    const startHeight = composerHeight
+
+    setResizingComposer(true)
+    const previousUserSelect = document.body.style.userSelect
+    const previousCursor = document.body.style.cursor
+    document.body.style.userSelect = "none"
+    document.body.style.cursor = "row-resize"
+
+    const onMove = (moveEvent) => {
+      // Dragging up gives the composer more room, following the handle.
+      const next = startHeight + (startY - moveEvent.clientY)
+      setComposerHeight(Math.round(Math.min(Math.max(next, TASK_COMPOSER_MIN_HEIGHT), ceiling)))
+    }
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      document.body.style.userSelect = previousUserSelect
+      document.body.style.cursor = previousCursor
+      setResizingComposer(false)
     }
 
     window.addEventListener("pointermove", onMove)
@@ -2165,7 +2244,13 @@ export default function App() {
               title={translate("taskColumnResize")}
               onPointerDown={(event) => startColumnResize(event, "left")}
             />
-            <section className="task-column-main">
+            <section
+              className="task-column-main"
+              ref={taskColumnMainRef}
+              style={{
+                gridTemplateRows: `minmax(0, 1fr) ${TASK_COMPOSER_RESIZER_HEIGHT}px ${composerHeight}px`,
+              }}
+            >
               <TaskList
                 tasks={pagedTasks}
                 selectedId={selectedId}
@@ -2186,6 +2271,13 @@ export default function App() {
                 onPageChange={changeTaskPage}
                 agents={agents}
                 translate={translate}
+              />
+              <div
+                className={`task-composer-resizer ${resizingComposer ? "active" : ""}`}
+                role="separator"
+                aria-orientation="horizontal"
+                title={translate("taskComposerResize")}
+                onPointerDown={startComposerResize}
               />
               <TaskComposer
                 models={models}
