@@ -219,12 +219,7 @@ def main() -> None:
     _load_runtime_config()
     _configure_telemetry()
     parser = argparse.ArgumentParser(
-        description="Run ReAct tasks with optional Web Admin mode.",
-    )
-    parser.add_argument(
-        "--query",
-        default=None,
-        help="Input query for a single run; required unless --web or --interactive is used.",
+        description="Run the Web Admin server or the interactive ReAct CLI.",
     )
     parser.add_argument(
         "--provider",
@@ -240,7 +235,7 @@ def main() -> None:
     parser.add_argument(
         "--quiet",
         action="store_true",
-        help="Only output the final answer.",
+        help="In interactive mode, hide the assistant's answers.",
     )
     parser.add_argument(
         "--interactive",
@@ -321,26 +316,10 @@ def main() -> None:
             shutdown_telemetry()
         return
 
-    query = (args.query or "").strip()
-    if not query:
-        parser.error("--query is required unless --web or --interactive is used.")
-
-    try:
-        run_react_loop(
-            user_query=query,
-            provider_name=args.provider,
-            max_steps=args.steps,
-            verbose=not args.quiet,
-            base_dir=str(ROOT_DIR),
-        )
-    except ProviderError as exc:
-        # One query, one answer: there is nothing left to do, but a failed model
-        # call is still a configuration problem, so report it as one line instead
-        # of an SDK traceback.
-        print(f"[model error] {exc}", file=sys.stderr)
-        raise SystemExit(1) from None
-    finally:
-        shutdown_telemetry()
+    # A single-shot run is gone: one query is what the Web Admin's task API does,
+    # with the endpoints and models configured in the database rather than in the
+    # environment.
+    parser.error("one of --web or --interactive is required.")
 
 
 # Import-time setup serves ``uvicorn --reload``: the child process imports this

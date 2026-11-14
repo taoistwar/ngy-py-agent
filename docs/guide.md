@@ -4,25 +4,7 @@
 
 ## 运行方式
 
-### 单次运行
-
-```bash
-uv run python main.py --query "What's the weather in Tokyo?"
-```
-
-`--query` 为必填参数，缺失时会打印用法错误并退出（`--web` / `--interactive` 除外）。
-
-### 指定 Provider
-
-```bash
-uv run python main.py --provider openai-compatible --query "What's the weather in Tokyo?"
-uv run python main.py --provider openai --query "What's the weather in Tokyo?"
-uv run python main.py --provider anthropic --query "What's the weather in Tokyo?"
-uv run python main.py --provider anthropic-compatible --query "What's the weather in Tokyo?"
-uv run python main.py --provider openai-compatible --steps 4 --query "What's the weather in Tokyo?"
-```
-
-说明：`openai-compatible` 会走 OpenAI 兼容接口。
+只剩两个入口：`--web`（管理界面 + API）和 `--interactive`（命令行多轮对话）。单次运行（`--query`）已移除——一次性任务走 Web Admin 的 `POST /api/tasks` 或在界面里提交。
 
 ### 交互模式
 
@@ -31,11 +13,17 @@ uv run python main.py --interactive
 uv run python main.py --interactive --trace
 ```
 
-### 仅输出最终结果
+### 交互模式指定 Provider 与步数
 
 ```bash
-uv run python main.py --quiet --query "What's the weather in Vancouver?"
+uv run python main.py --provider openai-compatible --interactive
+uv run python main.py --provider openai --interactive
+uv run python main.py --provider anthropic --interactive
+uv run python main.py --provider anthropic-compatible --interactive
+uv run python main.py --provider openai-compatible --steps 4 --interactive
 ```
+
+说明：`openai-compatible` 会走 OpenAI 兼容接口；不带 `--provider` 时使用环境变量里的默认值。Web Admin 里的 provider / model 来自数据库，与这几个命令行参数无关。
 
 ## 可观测（Tracing）
 
@@ -43,7 +31,7 @@ uv run python main.py --quiet --query "What's the weather in Vancouver?"
 
 ```bash
 # 临时开一次，输出到控制台
-OTEL_TRACING_ENABLED=true OTEL_TRACES_EXPORTER=console uv run python main.py --query "hello"
+OTEL_TRACING_ENABLED=true OTEL_TRACES_EXPORTER=console uv run python main.py --interactive
 ```
 
 长期开启就写进 `.env`（字段见 `.env.example`）：
@@ -126,11 +114,15 @@ http://127.0.0.1:8001
 ### 参数说明（关键）
 
 ```text
---query QUERY        单次运行的问题（--web / --interactive 除外时必填）
 --web
 --host HOST          监听地址（默认 127.0.0.1）
 --port PORT          监听端口（默认 8001）
 --reload             运行时热重载
+--interactive        命令行多轮模式
+--provider PROVIDER  交互模式使用的 provider
+--steps N            交互模式的 ReAct 步数上限
+--quiet              交互模式不打印模型回答
+--trace              交互模式打印思考与工具调用细节
 ```
 
 ## API 说明

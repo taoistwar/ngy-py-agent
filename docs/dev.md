@@ -21,7 +21,6 @@ cd ..
 常用配置：
 
 - `NGY_PY_AGENT_MODE=dev`
-- `NGY_PY_AGNET_QUERY=...`
 - `REACT_MAX_STEPS=8`（ReAct 全局最大步数的环境变量默认值；Web Admin「全局配置」页可在前端修改并落库到 `settings` 表，`agent_max_steps` 优先于环境变量）
 - `WEB_MONITOR_HOST=127.0.0.1`
 - `WEB_MONITOR_PORT=8001`
@@ -46,10 +45,11 @@ cd ..
 ## 4. 启动方式
 
 ```bash
-uv run python main.py --query "What's the weather in Tokyo?"
-uv run python main.py --interactive
 uv run python main.py --web --reload
+uv run python main.py --interactive
 ```
+
+单次运行（`--query`）已移除：一次性问题就是 Web Admin 的 `POST /api/tasks`，模型与 provider 在数据库里配置，不再依赖 `.env`。
 
 ## 5. Web Admin 前端目录与构建
 
