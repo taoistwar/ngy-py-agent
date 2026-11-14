@@ -38,6 +38,19 @@ function emptyPreview() {
 }
 
 /**
+ * Open the diff on its first change rather than on the top of the file.
+ *
+ * A real file usually starts with a screen of untouched lines, so scrolling down
+ * manually is what a reviewer would otherwise do every single time. The diff is
+ * computed asynchronously, hence the update subscription; the frame covers the
+ * small file that finishes computing before the subscription exists.
+ */
+function revealFirstDiffOnMount(editor) {
+  editor.onDidUpdateDiff(() => editor.revealFirstDiff())
+  requestAnimationFrame(() => editor.revealFirstDiff())
+}
+
+/**
  * One file's change, as a read-only Monaco diff.
  *
  * ``before``/``after`` are the full texts; when the server has none to give - a
@@ -75,6 +88,7 @@ function ChangePreview({ preview, path, translate }) {
         modified={preview.after}
         options={DIFF_OPTIONS}
         theme={monacoTheme}
+        onMount={revealFirstDiffOnMount}
       />
     </div>
   )
