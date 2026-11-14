@@ -1,8 +1,9 @@
-"""How a task gets the short name the task list shows.
+"""How a task and its session get the short labels the lists show.
 
 A query that already fits in the name length is its own name; anything longer is
 summarized by the model, and the fallback keeps the name on one line when the
-model is unavailable.
+model is unavailable. The session is named by its first task only: a follow-up
+continues that thread, so it must not relabel the session.
 
 Run from the repository root::
 
@@ -102,6 +103,72 @@ class TaskNamingTest(unittest.TestCase):
         task_runtime.update_task_name(self.task_id, "openai", None, "   ")
 
         self.assertEqual("", self._name())
+
+
+class SessionNamingTest(unittest.TestCase):
+    """The session is named once, by the task that opened it."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.store = _SqliteTaskStore(Path(self._tmp.name) / "tasks.db")
+        self._previous_store = app_state.monitor_store
+        app_state.monitor_store = self.store
+
+    def tearDown(self):
+        app_state.monitor_store = self._previous_store
+        self._tmp.cleanup()
+
+    def _session_name(self, session_id):
+        return self.store.get_session(session_id)["name"]
+
+    def test_the_first_task_names_the_session(self):
+        session_id = self.store.create_session(task_runtime.default_session_name())
+        task_id = self.store.create_task("placeholder", "openai", session_id=session_id)
+        query = "创建一个 test.py 里面添加一个函数 add，用于计算两个整数的和"
+
+        with mock.patch.object(
+            task_runtime,
+            "build_provider",
+            side_effect=[_FakeProvider("加法函数"), _FakeProvider("加法需求")],
+        ):
+            task_runtime.name_task_and_session(task_id, session_id, "openai", None, query)
+
+        self.assertEqual("加法函数", self.store.get_task(task_id)["name"])
+        self.assertEqual("加法需求", self._session_name(session_id))
+
+    def test_a_follow_up_task_does_not_rename_the_session(self):
+        session_id = self.store.create_session("登录页改造")
+        self.store.create_task("第一个任务", "openai", session_id=session_id)
+        task_id = self.store.create_task("第二个任务", "openai", session_id=session_id)
+
+        with mock.patch.object(task_runtime, "build_provider") as build_provider:
+            task_runtime.name_task_and_session(task_id, session_id, "openai", None, "第二个任务")
+
+        build_provider.assert_not_called()
+        self.assertEqual("登录页改造", self._session_name(session_id))
+        self.assertEqual("第二个任务", self.store.get_task(task_id)["name"])
+
+    def test_a_follow_up_task_is_named_without_asking_for_a_session_title(self):
+        session_id = self.store.create_session("登录页改造")
+        self.store.create_task("第一个任务", "openai", session_id=session_id)
+        task_id = self.store.create_task("第二个任务", "openai", session_id=session_id)
+        query = "把登录页的按钮改成主色并且给表单加上回车提交"
+
+        with mock.patch.object(
+            task_runtime, "build_provider", return_value=_FakeProvider("登录按钮")
+        ) as build_provider:
+            task_runtime.name_task_and_session(task_id, session_id, "openai", None, query)
+
+        self.assertEqual(1, build_provider.call_count)
+        self.assertEqual("登录页改造", self._session_name(session_id))
+        self.assertEqual("登录按钮", self.store.get_task(task_id)["name"])
+
+    def test_a_task_without_a_session_is_only_named(self):
+        task_id = self.store.create_task("placeholder", "openai")
+
+        task_runtime.name_task_and_session(task_id, None, "openai", None, "统计一下日志")
+
+        self.assertEqual("统计一下日志", self.store.get_task(task_id)["name"])
 
 
 if __name__ == "__main__":

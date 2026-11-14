@@ -314,6 +314,20 @@ def update_task_name(
     app_state.monitor_store.set_task_name(task_id, name)
 
 
+def is_first_task_in_session(session_id: str | None) -> bool:
+    """Whether the task being named is the one that opened its session.
+
+    The current task is already stored when this runs, so a session holding only
+    that task is a session started by it.
+    """
+    if not session_id:
+        return True
+    session = app_state.monitor_store.get_session(session_id)
+    if session is None:
+        return True
+    return int(session.get("task_count") or 0) <= 1
+
+
 def name_task_and_session(
     task_id: str,
     session_id: str | None,
@@ -325,9 +339,13 @@ def name_task_and_session(
 
     Each one calls the model, so running them one after the other keeps a local
     model from being asked twice at the same time while the task itself is running.
+
+    Only the session's first task renames it: a follow-up continues the thread the
+    earlier task opened, so it names itself and leaves the session label alone.
     """
     update_task_name(task_id, provider_name, provider_config, query)
-    update_session_title(session_id, provider_name, provider_config, query)
+    if is_first_task_in_session(session_id):
+        update_session_title(session_id, provider_name, provider_config, query)
 
 
 # ------------------------------------------------------------ retention purge
