@@ -279,29 +279,108 @@
   margin-left: 0;
 }
 
+/* The meter is a ring, not a sentence: at 18px it reads as a gauge at a glance and
+   leaves the toolbar to the controls that actually do something. */
 .composer-context {
+  position: relative;
   display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  cursor: default;
+  outline: none;
+}
+
+.composer-context-ring {
+  width: 18px;
+  height: 18px;
+  display: block;
+  overflow: visible;
+}
+
+.composer-context-track {
+  stroke: var(--line);
+}
+
+.composer-context-fill {
+  stroke: var(--muted);
+  /* A rising reading moves the arc instead of jumping: one turn's jump is small
+     enough that a transition reads as "filling up". */
+  transition: stroke-dasharray 240ms ease;
+}
+
+.composer-context:hover .composer-context-fill,
+.composer-context:focus-visible .composer-context-fill {
+  stroke: var(--text-soft);
+}
+
+.composer-context.is-warn .composer-context-fill {
+  stroke: var(--warning);
+}
+
+.composer-context.is-danger .composer-context-fill {
+  stroke: var(--danger);
+}
+
+/* The panel opens upward into the composer body: the toolbar is the last row of the
+   panel, so there is room above it and nothing to clip (the panel itself is
+   ``overflow: hidden``). */
+.composer-context-tip {
+  position: absolute;
+  right: -6px;
+  bottom: calc(100% + 8px);
+  z-index: 40;
+  min-width: 168px;
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--surface-3);
+  box-shadow: var(--shadow-lg);
   font-size: 11px;
-  line-height: 1.2;
+  line-height: 1.4;
   color: var(--muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  cursor: default;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms;
+  pointer-events: none;
 }
 
-.composer-context.is-warn {
-  color: var(--warning);
+.composer-context:hover .composer-context-tip,
+.composer-context:focus-visible .composer-context-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
-.composer-context.is-danger {
-  color: var(--danger);
+.composer-context-tip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-soft);
 }
 
-.composer-context-label {
-  color: inherit;
-  opacity: 0.85;
+.composer-context-tip-head strong {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.composer-context-tip-number {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.composer-context-tip-detail {
+  color: var(--muted);
 }
 
 .composer-icon-btn.stop {

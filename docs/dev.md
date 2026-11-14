@@ -59,7 +59,7 @@ uv run python main.py --interactive
   - 如果 `dist` 不存在则读取 `web-admin/index.html`
 - 全局配置（最大步数、任务保留天数）存于 `settings` 表（`agent_max_steps`、`task_retention_days` 两键），可在 Web Admin「全局配置」页修改；DB 值优先于同名环境变量。
 - 任务详情的结果区：`src/components/TaskResultPanel.jsx` 负责「渲染 / 源码」切换与全屏阅读（portal 覆盖层，Esc 关闭）；Markdown 由 `src/components/MarkdownView.jsx` 渲染，解析在 `src/utils/markdown.js`（块级）与 `src/utils/markdownInline.js`（行内），排版样式在 `src/styles/markdown.css`。渲染产出 React 元素而非 HTML 字符串，模型输出里的标签只会显示成文本。
-- 任务窗口的上下文占用：`src/components/ContextMeter.jsx` 渲染 `0.0% · 0 / 256.0K 上下文已使用`，数字格式化在 `src/utils/contextUsage.js`（1024 进制、一位小数，≥80% 变黄、≥95% 变红）。它随发送按钮一起右对齐，跟随会话与所选模型，每 5 秒读一次 `GET /api/sessions/{id}/context`，任务开始/结束时立即再读一次。
+- 任务窗口的上下文占用：`src/components/ContextMeter.jsx` 渲染一个 18px 的环形进度（SVG `stroke-dasharray`，-90° 起点、圆头端点），悬停/聚焦时向上弹出面板给出百分比、`已用 / 上限`、输入输出明细与上限来源。数字格式化在 `src/utils/contextUsage.js`（1024 进制、一位小数，≥80% 变黄、≥95% 变红）。它随发送按钮一起右对齐，跟随会话与所选模型，每 5 秒读一次 `GET /api/sessions/{id}/context`，任务开始/结束时立即再读一次。
 
 ### 构建前端
 
