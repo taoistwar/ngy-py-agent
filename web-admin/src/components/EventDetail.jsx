@@ -105,15 +105,8 @@ export function EventDetailBody({ event, locale, translate, actions = null, heig
     <div className="event-detail">
       <div className="event-view-bar">
         <div className="event-view-tabs" role="tablist" aria-label={translate("eventViewSwitchAria")}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={viewMode === "friendly"}
-            className={`event-view-tab ${viewMode === "friendly" ? "active" : ""}`}
-            onClick={() => setViewMode("friendly")}
-          >
-            {translate("eventViewFriendly")}
-          </button>
+          {/* The reasoning tab leads: on a streamed turn the trace is what explains
+              the step, and it is the view this detail opens on when it exists. */}
           {reasoning && (
             <button
               type="button"
@@ -125,6 +118,15 @@ export function EventDetailBody({ event, locale, translate, actions = null, heig
               {translate("eventViewReasoning")}
             </button>
           )}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewMode === "friendly"}
+            className={`event-view-tab ${viewMode === "friendly" ? "active" : ""}`}
+            onClick={() => setViewMode("friendly")}
+          >
+            {translate("eventViewFriendly")}
+          </button>
           <button
             type="button"
             role="tab"
