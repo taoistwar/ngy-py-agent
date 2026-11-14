@@ -99,6 +99,15 @@ class CheckpointApiTest(unittest.TestCase):
         self.assertIn("-v0", response.json()["diff"])
         self.assertIn("+v1", response.json()["diff"])
 
+    def test_diff_carries_the_texts_the_editor_renders(self):
+        response = self.client.get(
+            f"/api/tasks/{self.task_id}/changes/diff", params={"path": "app.py"}
+        )
+
+        payload = response.json()
+        self.assertEqual(payload["before"].splitlines(), ["v0"])
+        self.assertEqual(payload["after"].splitlines(), ["v1"])
+
     def test_unknown_task_is_a_404(self):
         response = self.client.get("/api/tasks/not-a-task/changes")
 

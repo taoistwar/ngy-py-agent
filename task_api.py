@@ -236,9 +236,20 @@ async def task_changes(task_id: str) -> dict[str, Any]:
 
 @router.get("/api/tasks/{task_id}/changes/diff")
 async def task_change_diff(task_id: str, path: str = Query(..., min_length=1)) -> dict[str, Any]:
-    """One file's diff. Fetched on demand: a task can touch enough files to matter."""
+    """One file's diff. Fetched on demand: a task can touch enough files to matter.
+
+    ``before``/``after`` are the full texts the UI renders side by side; ``diff`` is
+    the patch, kept for the fallback and for callers that only want the hunks.
+    """
     store = _undo_store(task_id, _stored_task(task_id))
-    return {"task_id": task_id, "path": path, "diff": store.diff(task_id, path)}
+    sides = store.sides(task_id, path)
+    return {
+        "task_id": task_id,
+        "path": path,
+        "diff": store.diff(task_id, path),
+        "before": sides["before"],
+        "after": sides["after"],
+    }
 
 
 @router.post("/api/tasks/{task_id}/revert")

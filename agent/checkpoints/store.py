@@ -266,6 +266,33 @@ class CheckpointStore:
             return ""
         return completed.stdout.decode("utf-8", "replace")
 
+    def sides(self, task_id: str, path: str) -> Dict[str, Optional[str]]:
+        """The file before and after this task, for a side-by-side diff.
+
+        The editor needs both full texts, not the patch: a hunk list alone cannot
+        tell it which line is which, so it would number lines from the hunk instead
+        of from the file.
+
+        ``None`` on either side means "no text to show" - a binary file, a file too
+        large to be worth rendering - and the caller falls back to the patch. A file
+        that did not exist on one side is ``""``, because that is what the editor
+        should render for an addition or a deletion.
+        """
+        base = self._base_ref(task_id)
+        tip = self._tip_ref(task_id)
+        if base is None or tip is None:
+            return {"before": None, "after": None}
+        try:
+            with self._lock:
+                before = _side_text(self._blob(base, path))
+                after = _side_text(self._blob(tip, path))
+        except (git.GitError, OSError) as exc:
+            self._error = str(exc)
+            return {"before": None, "after": None}
+        if before is None or after is None:
+            return {"before": None, "after": None}
+        return {"before": before, "after": after}
+
     # ----------------------------------------------------------------- reverting
 
     def revert(
@@ -541,6 +568,24 @@ class CheckpointStore:
             marker.write_text(str(self.workspace), encoding="utf-8")
         except OSError:
             pass
+
+
+#: Past this size a side-by-side view stops helping: the editor would stall on a file
+#: nobody reads line by line, and the patch is the honest summary of it.
+MAX_SIDE_BYTES = 512 * 1024
+
+
+def _side_text(data: Optional[bytes]) -> Optional[str]:
+    """One side of a textual diff, or ``None`` when it cannot be shown as text.
+
+    ``data is None`` is "the file did not exist here", which renders as an empty
+    side rather than as a failure.
+    """
+    if data is None:
+        return ""
+    if len(data) > MAX_SIDE_BYTES or b"\0" in data:
+        return None
+    return data.decode("utf-8", "replace")
 
 
 def _read_bytes(path: Path) -> Optional[bytes]:

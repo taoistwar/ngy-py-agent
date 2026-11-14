@@ -440,15 +440,26 @@
   font-size: 11px;
 }
 
+/* Container for the Monaco diff, and for the raw patch when a file has no text
+   to render (binary, oversized). */
 .change-diff {
   grid-column: 1 / -1;
-  margin: 0;
-  max-height: 260px;
-  overflow: auto;
-  padding: 8px 10px;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-code);
+}
+
+.change-diff-note {
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.change-diff-patch {
+  margin: 0;
+  max-height: 280px;
+  overflow: auto;
+  padding: 8px 10px;
   color: var(--text);
   font-size: 12px;
   line-height: 1.5;

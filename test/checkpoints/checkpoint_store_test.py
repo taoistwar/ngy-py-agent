@@ -227,6 +227,38 @@ class CheckpointStoreTest(unittest.TestCase):
         self.assertIn("-v0", diff)
         self.assertIn("+v1", diff)
 
+    def test_the_two_sides_are_the_full_texts_for_the_editor(self):
+        """A side-by-side view needs the file, not only the hunks around them."""
+        self.write(self.path, "v1\n")
+
+        sides = self.store.sides(TASK, "app.py")
+
+        # Line endings stay as they are on disk: Windows writes CRLF, and the
+        # editor renders either.
+        self.assertEqual(sides["before"].splitlines(), ["v0"])
+        self.assertEqual(sides["after"].splitlines(), ["v1"])
+
+    def test_a_created_file_has_an_empty_before_side(self):
+        created = self.workspace / "new.py"
+        self.write(created, "print(1)\n")
+
+        sides = self.store.sides(TASK, "new.py")
+
+        self.assertEqual(sides["before"], "")
+        self.assertEqual(sides["after"].splitlines(), ["print(1)"])
+
+    def test_a_binary_file_has_no_sides(self):
+        """No text to render: the caller falls back to the patch."""
+        tool, arguments = "write_file", {"file_path": "blob.bin"}
+        self.store.begin(TASK, tool, arguments)
+        (self.workspace / "blob.bin").write_bytes(b"\0\x01\x02")
+        self.store.end(TASK, tool, arguments)
+
+        sides = self.store.sides(TASK, "blob.bin")
+
+        self.assertIsNone(sides["before"])
+        self.assertIsNone(sides["after"])
+
     # --- conflicts --------------------------------------------------------
 
     def test_a_file_edited_after_the_task_is_flagged_as_a_conflict(self):

@@ -1,12 +1,79 @@
 import { useCallback, useEffect, useState } from "react"
+import { DiffEditor } from "@monaco-editor/react"
 
 import { fetchTaskChangeDiff, fetchTaskChanges, revertTask } from "../api"
+import { useTheme } from "../theme"
+import { languageForPath } from "../utils/language"
 import Modal from "./admin/Modal"
 
 const STATUS_LABEL_KEYS = {
   added: "changeStatusAdded",
   modified: "changeStatusModified",
   deleted: "changeStatusDeleted",
+}
+
+// Tall enough to read a hunk in context, short enough to leave the file list
+// visible underneath: the dialog is about choosing a file, not about reading it.
+const DIFF_EDITOR_HEIGHT = "280px"
+
+const DIFF_OPTIONS = {
+  readOnly: true,
+  originalEditable: false,
+  renderSideBySide: true,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  fontSize: 12,
+  lineNumbers: "on",
+  renderLineHighlight: "none",
+  wordWrap: "on",
+  automaticLayout: true,
+}
+
+function emptyPreview() {
+  return { path: "", diff: "", before: null, after: null, loading: false }
+}
+
+/**
+ * One file's change, as a read-only Monaco diff.
+ *
+ * ``before``/``after`` are the full texts; when the server has none to give - a
+ * binary file, one too large to render - the raw patch is shown instead, since
+ * hiding the change entirely would be worse than showing it plainly.
+ */
+function ChangePreview({ preview, path, translate }) {
+  const { monacoTheme } = useTheme()
+  const sideBySide = typeof preview.before === "string" && typeof preview.after === "string"
+
+  if (preview.loading) {
+    return (
+      <div className="change-diff">
+        <p className="hint change-diff-note">{translate("revertLoading")}</p>
+      </div>
+    )
+  }
+
+  if (!sideBySide) {
+    return (
+      <div className="change-diff">
+        <pre className="change-diff-patch">
+          {preview.diff || translate("revertPreviewEmpty")}
+        </pre>
+      </div>
+    )
+  }
+
+  return (
+    <div className="change-diff">
+      <DiffEditor
+        height={DIFF_EDITOR_HEIGHT}
+        language={languageForPath(path)}
+        original={preview.before}
+        modified={preview.after}
+        options={DIFF_OPTIONS}
+        theme={monacoTheme}
+      />
+    </div>
+  )
 }
 
 /**
@@ -24,7 +91,7 @@ export default function TaskChangesDialog({ taskId, translate, onClose, onRevert
   const [state, setState] = useState({ available: false, reason: "", files: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [preview, setPreview] = useState({ path: "", diff: "", loading: false })
+  const [preview, setPreview] = useState(emptyPreview)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState(null)
 
@@ -46,15 +113,22 @@ export default function TaskChangesDialog({ taskId, translate, onClose, onRevert
 
   const showDiff = async (path) => {
     if (preview.path === path) {
-      setPreview({ path: "", diff: "", loading: false })
+      setPreview(emptyPreview())
       return
     }
-    setPreview({ path, diff: "", loading: true })
+    setPreview({ ...emptyPreview(), path, loading: true })
     try {
       const payload = await fetchTaskChangeDiff(taskId, path)
-      setPreview({ path, diff: payload.diff || "", loading: false })
+      setPreview({
+        path,
+        diff: payload.diff || "",
+        // ``null`` means "not text": that file falls back to the patch below.
+        before: typeof payload.before === "string" ? payload.before : null,
+        after: typeof payload.after === "string" ? payload.after : null,
+        loading: false,
+      })
     } catch (diffError) {
-      setPreview({ path: "", diff: "", loading: false })
+      setPreview(emptyPreview())
       setError(diffError?.message || translate("revertFailed"))
     }
   }
@@ -66,7 +140,7 @@ export default function TaskChangesDialog({ taskId, translate, onClose, onRevert
     try {
       setResult(await revertTask(taskId, { paths }))
       // The patch of an undone file no longer describes anything on disk.
-      setPreview({ path: "", diff: "", loading: false })
+      setPreview(emptyPreview())
       await load()
       onReverted?.()
     } catch (revertError) {
@@ -152,11 +226,7 @@ export default function TaskChangesDialog({ taskId, translate, onClose, onRevert
                     {translate("taskChangesUndo")}
                   </button>
                   {preview.path === file.path ? (
-                    <pre className="change-diff">
-                      {preview.loading
-                        ? translate("revertLoading")
-                        : preview.diff || translate("revertPreviewEmpty")}
-                    </pre>
+                    <ChangePreview preview={preview} path={file.path} translate={translate} />
                   ) : null}
                 </div>
               ))}
