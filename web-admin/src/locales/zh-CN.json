@@ -195,6 +195,8 @@
   "detailResultSource": "源码",
   "detailResultFullscreen": "全屏查看",
   "detailResultExitFullscreen": "退出全屏",
+  "detailSectionExpand": "展开",
+  "detailSectionCollapse": "折叠",
   "category_llm_request": "LLM 请求",
   "category_llm_response": "LLM 响应",
   "category_tool_call": "工具调用",

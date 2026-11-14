@@ -195,6 +195,8 @@
   "detailResultSource": "原始碼",
   "detailResultFullscreen": "全螢幕檢視",
   "detailResultExitFullscreen": "結束全螢幕",
+  "detailSectionExpand": "展開",
+  "detailSectionCollapse": "收合",
   "category_llm_request": "模型請求",
   "category_llm_response": "模型回覆",
   "category_tool_call": "工具呼叫",

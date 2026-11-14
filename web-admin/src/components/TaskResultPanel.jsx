@@ -3,21 +3,57 @@
 //
 // The pane used to be a JSON editor only, which showed ``**bold**`` and list markers
 // as literal characters - the answer is Markdown, so it reads as Markdown by default.
+//
+// The body is not a scroll box: the detail pane is the only scroll container, and
+// the title bar folds the result away when a long answer takes over the screen.
 
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { default as MonacoEditor } from "@monaco-editor/react"
 import { useTheme } from "../theme"
 import { safeStringify } from "../utils/format"
+import AutoHeightMonaco from "./AutoHeightMonaco"
+import CollapsibleSectionTitle from "./CollapsibleSectionTitle"
 import MarkdownView from "./MarkdownView"
 import { CloseIcon, ExpandIcon } from "./icons"
 
-const INLINE_EDITOR_HEIGHT = "180px"
 // The overlay body is a flex column, so the editor can claim whatever is left.
 const FULLSCREEN_EDITOR_HEIGHT = "100%"
 
 const VIEW_RENDERED = "rendered"
 const VIEW_SOURCE = "source"
+
+const SOURCE_EDITOR_OPTIONS = {
+  readOnly: true,
+  minimap: {
+    enabled: false,
+  },
+  scrollBeyondLastLine: false,
+  wordWrap: "on",
+  fontSize: 14,
+  folding: true,
+  lineNumbers: "on",
+  renderLineHighlight: "none",
+  automaticLayout: true,
+}
+
+function SourceView({ text, theme, fullscreen }) {
+  if (fullscreen) {
+    return (
+      <MonacoEditor
+        height={FULLSCREEN_EDITOR_HEIGHT}
+        language="markdown"
+        value={text}
+        options={SOURCE_EDITOR_OPTIONS}
+        theme={theme}
+      />
+    )
+  }
+
+  return (
+    <AutoHeightMonaco value={text} language="markdown" theme={theme} options={SOURCE_EDITOR_OPTIONS} />
+  )
+}
 
 function ResultTabs({ view, onChange, translate }) {
   return (
@@ -46,7 +82,7 @@ function ResultTabs({ view, onChange, translate }) {
   )
 }
 
-function ResultBody({ text, markdown, view, height, fullscreen }) {
+function ResultBody({ text, markdown, view, fullscreen }) {
   const { monacoTheme } = useTheme()
 
   if (markdown && view === VIEW_RENDERED) {
@@ -59,25 +95,7 @@ function ResultBody({ text, markdown, view, height, fullscreen }) {
 
   return (
     <div className="detail-json-editor">
-      <MonacoEditor
-        height={height}
-        defaultLanguage="markdown"
-        value={text}
-        options={{
-          readOnly: true,
-          minimap: {
-            enabled: false,
-          },
-          scrollBeyondLastLine: false,
-          wordWrap: "on",
-          fontSize: 14,
-          folding: true,
-          lineNumbers: "on",
-          renderLineHighlight: "none",
-          automaticLayout: true,
-        }}
-        theme={monacoTheme}
-      />
+      <SourceView text={text} theme={monacoTheme} fullscreen={fullscreen} />
     </div>
   )
 }
@@ -131,42 +149,55 @@ export default function TaskResultPanel({ result, translate, onOpenChanges }) {
   const empty = !hasResult || !text.trim()
   const [view, setView] = useState(markdown ? VIEW_RENDERED : VIEW_SOURCE)
   const [fullscreen, setFullscreen] = useState(false)
+  const [open, setOpen] = useState(true)
 
   const renderBody = (isFullscreen) => (
     <ResultBody
       text={text}
       markdown={markdown}
       view={view}
-      height={isFullscreen ? FULLSCREEN_EDITOR_HEIGHT : INLINE_EDITOR_HEIGHT}
       fullscreen={isFullscreen}
     />
   )
 
+  const showTabs = open && !empty && markdown
+
   return (
     <>
-      <section className="detail-section detail-section-result">
+      <section className={`detail-section detail-section-result${open ? "" : " is-collapsed"}`}>
         <div className="detail-section-header">
-          <p className="detail-section-title">{translate("detailResult")}</p>
+          <CollapsibleSectionTitle
+            title={translate("detailResult")}
+            open={open}
+            onToggle={() => setOpen((previous) => !previous)}
+            translate={translate}
+          />
           <div className="task-result-actions">
-            {empty || !markdown ? null : (
-              <ResultTabs view={view} onChange={setView} translate={translate} />
-            )}
-            <button
-              type="button"
-              className="icon-btn"
-              title={translate("detailResultFullscreen")}
-              aria-label={translate("detailResultFullscreen")}
-              disabled={empty}
-              onClick={() => setFullscreen(true)}
-            >
-              <ExpandIcon />
-            </button>
+            {showTabs ? <ResultTabs view={view} onChange={setView} translate={translate} /> : null}
+            {open ? (
+              <button
+                type="button"
+                className="icon-btn"
+                title={translate("detailResultFullscreen")}
+                aria-label={translate("detailResultFullscreen")}
+                disabled={empty}
+                onClick={() => setFullscreen(true)}
+              >
+                <ExpandIcon />
+              </button>
+            ) : null}
             <button type="button" className="btn btn-compact" onClick={onOpenChanges}>
               {translate("taskChangesView")}
             </button>
           </div>
         </div>
-        {empty ? <p className="hint">{translate("detailNoResult")}</p> : fullscreen ? null : renderBody(false)}
+        {open ? (
+          empty ? (
+            <p className="hint">{translate("detailNoResult")}</p>
+          ) : fullscreen ? null : (
+            renderBody(false)
+          )
+        ) : null}
       </section>
       {fullscreen && !empty ? (
         <ResultOverlay

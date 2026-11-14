@@ -195,6 +195,8 @@
   "detailResultSource": "Source",
   "detailResultFullscreen": "Plein écran",
   "detailResultExitFullscreen": "Quitter le plein écran",
+  "detailSectionExpand": "Développer",
+  "detailSectionCollapse": "Replier",
   "category_llm_request": "Requête au modèle",
   "category_llm_response": "Réponse du modèle",
   "category_tool_call": "Appel d'outil",

@@ -195,6 +195,8 @@
   "detailResultSource": "Source",
   "detailResultFullscreen": "View fullscreen",
   "detailResultExitFullscreen": "Exit fullscreen",
+  "detailSectionExpand": "Expand",
+  "detailSectionCollapse": "Collapse",
   "category_llm_request": "LLM request",
   "category_llm_response": "LLM response",
   "category_tool_call": "Tool call",

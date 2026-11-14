@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { default as MonacoEditor } from "@monaco-editor/react"
 import {
   createAgent,
   createMcpServer,
@@ -64,6 +63,7 @@ import QuestionPrompt from "./components/QuestionPrompt"
 import RevertChangesDialog from "./components/RevertChangesDialog"
 import SessionTabs from "./components/SessionTabs"
 import TaskChangesDialog from "./components/TaskChangesDialog"
+import TaskPromptPanel from "./components/TaskPromptPanel"
 import TaskResultPanel from "./components/TaskResultPanel"
 import TaskRowActions from "./components/TaskRowActions"
 import TaskToolbarActions from "./components/TaskToolbarActions"
@@ -88,7 +88,6 @@ import WorkspaceManager from "./components/admin/WorkspaceManager"
 import AgentPicker from "./components/AgentPicker"
 import { AgentIcon, agentIconName } from "./components/agentIcons"
 import { PROVIDER_OPTIONS, agentDisplayName } from "./components/admin/shared"
-import { useTheme } from "./theme"
 import {
   loadRememberedModel,
   resolveModelId,
@@ -699,14 +698,11 @@ function TaskComposer({
 }
 
 function TaskDetail({ task, result, agents, translate, onChangesReverted }) {
-  const { monacoTheme } = useTheme()
   const [changesOpen, setChangesOpen] = useState(false)
 
   if (!task) {
     return <div className="empty">{translate("taskSelectHint")}</div>
   }
-
-  const queryText = task.query || ""
 
   return (
     <div className="detail-grid">
@@ -757,29 +753,7 @@ function TaskDetail({ task, result, agents, translate, onChangesReverted }) {
           <strong>{task.event_count || task.events?.length || 0}</strong>
         </div>
       </section>
-      <section className="detail-section detail-section-query">
-        <p className="detail-section-title">{translate("taskDetailPrompt")}</p>
-        <div className="detail-json-editor">
-          <MonacoEditor
-            height="180px"
-            defaultLanguage="plaintext"
-            defaultValue={queryText}
-            options={{
-              readOnly: true,
-              minimap: {
-                enabled: false,
-              },
-              scrollBeyondLastLine: false,
-              wordWrap: "on",
-              fontSize: 14,
-              lineNumbers: "on",
-              renderLineHighlight: "none",
-              automaticLayout: true,
-            }}
-            theme={monacoTheme}
-          />
-        </div>
-      </section>
+      <TaskPromptPanel query={task.query || ""} translate={translate} />
       <TaskResultPanel
         result={result}
         translate={translate}
