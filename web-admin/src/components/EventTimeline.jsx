@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { buildEventSearchIndex, collectEventCategories, filterEvents } from "../events/eventFilter"
 import { getEventCategoryText, isTaskRunningStatus } from "../i18n"
 import { formatTime } from "../utils/format"
 import { EventDetailBody, EventDetailOverlay, eventDetailUrl, getTagClass } from "./EventDetail"
+import EventFilterBar from "./EventFilterBar"
 import { ChevronsDownIcon, ChevronsUpIcon, ExpandIcon, ExternalLinkIcon } from "./icons"
 
 // While a task is in flight the log is a progress feed: the model's answers are what
@@ -93,8 +95,19 @@ function EventItem({ event, taskId, collapsed, onToggle, translate, locale }) {
 
 export default function EventTimeline({ task, events, hasMore, loadingMore, onLoadMore, translate, locale }) {
   const [collapsedMap, setCollapsedMap] = useState({})
+  // Selected event types; an empty set means "every type", so the default view is
+  // the whole log with no filter bookkeeping in the way.
+  const [selectedCategories, setSelectedCategories] = useState(() => new Set())
+  const [query, setQuery] = useState("")
   const taskId = task?.task_id || ""
   const running = isTaskRunningStatus(task?.status)
+
+  // Filters belong to the task being read: carrying them across a task switch
+  // would hide the new task's events behind a selection made for the old one.
+  useEffect(() => {
+    setSelectedCategories(new Set())
+    setQuery("")
+  }, [taskId])
 
   useEffect(() => {
     const next = {}
@@ -108,39 +121,88 @@ export default function EventTimeline({ task, events, hasMore, loadingMore, onLo
     }
   }, [events, running])
 
+  // Indexed once per page, not once per keystroke: LLM payloads are large enough
+  // that re-serializing them on every character would lag the search box.
+  const searchIndex = useMemo(() => buildEventSearchIndex(events), [events])
+  const categoryOptions = useMemo(() => collectEventCategories(events), [events])
+  const visibleEvents = useMemo(
+    () => filterEvents(events, { categories: selectedCategories, query }, searchIndex),
+    [events, selectedCategories, query, searchIndex],
+  )
+
   if (!task) {
     return <div className="timeline-empty">{translate("taskEventsNoTask")}</div>
   }
 
   // Keep creation order so the earliest event appears first.
-  const ordered = events
+  const ordered = visibleEvents
 
   // A whole task log can be 100+ events; one click should be enough to see them all
-  // (or to get back to the compact list).
+  // (or to get back to the compact list) — for what the filters kept, so a narrowed
+  // log is not expanded event by event.
   const setAllCollapsed = (collapsed) => {
     const next = {}
-    events.forEach((event) => {
+    visibleEvents.forEach((event) => {
       next[event.event_id] = collapsed
     })
     setCollapsedMap(next)
   }
 
+  const toggleCategory = (category) => {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(category)) {
+        next.delete(category)
+      } else {
+        next.add(category)
+      }
+      return next
+    })
+  }
+
+  const selectAllCategories = () => {
+    setSelectedCategories(new Set(categoryOptions.map((option) => option.category)))
+  }
+
+  const clearCategories = () => setSelectedCategories(new Set())
+
+  const filtersActive = selectedCategories.size > 0 || query.trim() !== ""
+  const emptyText = events.length === 0
+    ? translate("taskEventsNoRecords")
+    : filtersActive
+      ? translate("eventFilterNoMatch")
+      : translate("taskEventsNoRecords")
+
   return (
     <div>
-      {ordered.length > 0 && (
+      {events.length > 0 && (
         <div className="event-timeline-toolbar">
-          <button type="button" className="event-bulk-btn" onClick={() => setAllCollapsed(true)}>
-            <ChevronsUpIcon />
-            {translate("eventsCollapseAll")}
-          </button>
-          <button type="button" className="event-bulk-btn" onClick={() => setAllCollapsed(false)}>
-            <ChevronsDownIcon />
-            {translate("eventsExpandAll")}
-          </button>
+          <EventFilterBar
+            options={categoryOptions}
+            selected={selectedCategories}
+            onToggleCategory={toggleCategory}
+            onSelectAllCategories={selectAllCategories}
+            onClearCategories={clearCategories}
+            query={query}
+            onQueryChange={setQuery}
+            matchedCount={visibleEvents.length}
+            totalCount={events.length}
+            translate={translate}
+          />
+          <div className="event-toolbar-bulk">
+            <button type="button" className="event-bulk-btn" onClick={() => setAllCollapsed(true)}>
+              <ChevronsUpIcon />
+              {translate("eventsCollapseAll")}
+            </button>
+            <button type="button" className="event-bulk-btn" onClick={() => setAllCollapsed(false)}>
+              <ChevronsDownIcon />
+              {translate("eventsExpandAll")}
+            </button>
+          </div>
         </div>
       )}
       {ordered.length === 0 ? (
-        <div className="timeline-empty">{translate("taskEventsNoRecords")}</div>
+        <div className="timeline-empty">{emptyText}</div>
       ) : (
         <div className="timeline">
           {ordered.map((event) => (
