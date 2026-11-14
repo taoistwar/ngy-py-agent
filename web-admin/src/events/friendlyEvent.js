@@ -701,3 +701,18 @@ export function buildFriendlyEvent(event, locale) {
     emptyText: dict.text.noDetails,
   }
 }
+
+/**
+ * The reasoning trace on its own, for the tab that shows nothing else.
+ *
+ * Returning ``null`` when a turn has no trace is what lets the caller hide the tab
+ * instead of opening it onto an empty panel.
+ *
+ * @param {{category?: string, title?: string, data?: object}} event
+ * @param {string} locale
+ * @returns {{kind: string, title: string, text: string, meta?: string} | null}
+ */
+export function buildReasoningView(event, locale) {
+  const view = buildFriendlyEvent(event, locale)
+  return view.sections.find((section) => section.kind === "thinking") || null
+}

@@ -499,49 +499,11 @@
   color: var(--muted);
 }
 
-/* Reasoning trace: a labelled block, expanded by default. The trace is what explains
-   a slow or surprising step, so it should be readable without a click. */
-.event-thinking-chip {
-  padding: 1px 8px;
-  border: 1px solid var(--accent-border);
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-
-.event-thinking-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 5px 9px;
-  border: 1px dashed var(--accent-border);
-  border-radius: 6px;
-  background: var(--surface-hover);
-  color: var(--text-soft);
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.event-thinking-toggle:hover {
-  border-color: var(--focus);
-  background: var(--surface-hover);
-}
-
-.event-thinking-meta {
-  color: var(--muted);
-  font-size: 11.5px;
-}
-
-.event-thinking-action {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 11.5px;
+/* The reasoning tab: one trace can run to thousands of characters, so it scrolls
+   inside the card instead of pushing the timeline around. Taller than the section
+   previews because this tab shows nothing but the trace. */
+.event-reasoning-text {
+  max-height: 420px;
 }
 
 .event-friendly-text-wrap {

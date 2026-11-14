@@ -1,9 +1,10 @@
 // One event, rendered three ways: inline in the timeline card, as a fullscreen
 // overlay, and as a standalone page opened in a new browser tab (?task=..&event=..).
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { default as MonacoEditor } from "@monaco-editor/react"
 import { fetchTask, fetchTaskEvents } from "../api"
+import { buildReasoningView } from "../events/friendlyEvent"
 import { getEventCategoryText } from "../i18n"
 import { useTheme } from "../theme"
 import { formatTime, safeStringify } from "../utils/format"
@@ -94,9 +95,11 @@ function RawEventView({ event, height }) {
  * ``actions`` sits at the end of the tab row (new tab / fullscreen buttons).
  */
 export function EventDetailBody({ event, locale, translate, actions = null, height }) {
-  // Friendly by default: the raw JSON stays one click away for whoever debugs the agent.
-  const [viewMode, setViewMode] = useState("friendly")
-  const friendly = viewMode === "friendly"
+  const reasoning = useMemo(() => buildReasoningView(event, locale), [event, locale])
+  // A turn with a trace opens on it: the reasoning is what explains the step, and the
+  // answer is one click away. Without a trace the panel belongs to the answer, and
+  // the raw JSON stays one click away for whoever debugs the agent.
+  const [viewMode, setViewMode] = useState(() => (reasoning ? "reasoning" : "friendly"))
 
   return (
     <div className="event-detail">
@@ -105,17 +108,28 @@ export function EventDetailBody({ event, locale, translate, actions = null, heig
           <button
             type="button"
             role="tab"
-            aria-selected={friendly}
-            className={`event-view-tab ${friendly ? "active" : ""}`}
+            aria-selected={viewMode === "friendly"}
+            className={`event-view-tab ${viewMode === "friendly" ? "active" : ""}`}
             onClick={() => setViewMode("friendly")}
           >
             {translate("eventViewFriendly")}
           </button>
+          {reasoning && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "reasoning"}
+              className={`event-view-tab ${viewMode === "reasoning" ? "active" : ""}`}
+              onClick={() => setViewMode("reasoning")}
+            >
+              {translate("eventViewReasoning")}
+            </button>
+          )}
           <button
             type="button"
             role="tab"
-            aria-selected={!friendly}
-            className={`event-view-tab ${friendly ? "" : "active"}`}
+            aria-selected={viewMode === "raw"}
+            className={`event-view-tab ${viewMode === "raw" ? "active" : ""}`}
             onClick={() => setViewMode("raw")}
           >
             {translate("eventViewRaw")}
@@ -123,11 +137,13 @@ export function EventDetailBody({ event, locale, translate, actions = null, heig
         </div>
         {actions && <div className="event-view-actions">{actions}</div>}
       </div>
-      {friendly ? (
+      {viewMode === "friendly" && (
         <EventFriendlyView event={event} locale={locale} translate={translate} />
-      ) : (
-        <RawEventView event={event} height={height} />
       )}
+      {viewMode === "reasoning" && reasoning && (
+        <pre className="event-friendly-text mono event-reasoning-text">{reasoning.text}</pre>
+      )}
+      {viewMode === "raw" && <RawEventView event={event} height={height} />}
     </div>
   )
 }

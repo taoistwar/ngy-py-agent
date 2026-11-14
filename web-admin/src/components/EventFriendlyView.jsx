@@ -44,35 +44,7 @@ function KeyValueTable({ rows }) {
   )
 }
 
-function ThinkingBlock({ section, translate }) {
-  // Open by default: when a step was slow or surprising, the reasoning is the first
-  // thing a reader looks for, and making them click for it hides the answer.
-  const [open, setOpen] = useState(true)
-
-  return (
-    <div className="event-friendly-section">
-      <button
-        type="button"
-        className="event-thinking-toggle"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        <span className="event-thinking-chip">{section.title}</span>
-        <span className="event-thinking-meta">{section.meta}</span>
-        <span className="event-thinking-action">
-          {open ? translate("eventShowLess") : translate("eventShowMore")}
-        </span>
-      </button>
-      {open && <pre className="event-friendly-text mono">{section.text}</pre>}
-    </div>
-  )
-}
-
 function Section({ section, translate }) {
-  if (section.kind === "thinking") {
-    return <ThinkingBlock section={section} translate={translate} />
-  }
-
   return (
     <div className="event-friendly-section">
       <p className="event-friendly-section-title">{section.title}</p>
@@ -100,25 +72,21 @@ function Section({ section, translate }) {
 /**
  * Readable rendering of one task event, aimed at people who do not read raw JSON.
  *
+ * The reasoning trace is deliberately absent: it has its own tab next to this one,
+ * because folding it in here buried the answer under it.
+ *
  * @param {{event: object, locale: string, translate: (key: string) => string}} props
  */
 export default function EventFriendlyView({ event, locale, translate }) {
   const view = useMemo(() => buildFriendlyEvent(event, locale), [event, locale])
-  const isEmpty = view.fields.length === 0 && view.sections.length === 0
-
-  // The reasoning trace leads the panel: it is what explains the step, and the field
-  // table below it is reference material read after the fact.
-  const thinking = view.sections.filter((section) => section.kind === "thinking")
-  const rest = view.sections.filter((section) => section.kind !== "thinking")
+  const sections = view.sections.filter((section) => section.kind !== "thinking")
+  const isEmpty = view.fields.length === 0 && sections.length === 0
 
   return (
     <div className={`event-friendly tone-${view.tone}`}>
       <p className="event-friendly-headline">{view.headline}</p>
-      {thinking.map((section, index) => (
-        <Section section={section} translate={translate} key={`thinking-${index}`} />
-      ))}
       {view.fields.length > 0 && <KeyValueTable rows={view.fields} />}
-      {rest.map((section, index) => (
+      {sections.map((section, index) => (
         <Section section={section} translate={translate} key={`${section.title}-${index}`} />
       ))}
       {isEmpty && <p className="hint">{view.emptyText}</p>}
