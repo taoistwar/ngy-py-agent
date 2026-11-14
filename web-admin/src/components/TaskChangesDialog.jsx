@@ -20,6 +20,10 @@ const DIFF_OPTIONS = {
   readOnly: true,
   originalEditable: false,
   renderSideBySide: true,
+  // Below ~900px Monaco silently switches to a one-column inline diff, which is
+  // narrower than this dialog and hides the two-file comparison the dialog exists
+  // for. The two panes are what the reviewer came to see.
+  useInlineViewWhenSpaceIsLimited: false,
   minimap: { enabled: false },
   scrollBeyondLastLine: false,
   fontSize: 12,
