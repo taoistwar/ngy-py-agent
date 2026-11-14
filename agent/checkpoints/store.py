@@ -77,6 +77,11 @@ FILE_TOOLS: Mapping[str, str] = {"write_file": "file_path", "edit_file": "file_p
 # session's command does next, not because it writes files itself.
 TREE_TOOLS = frozenset({"exec_command", "write_stdin", "code_interpreter"})
 
+# Build products: running Python writes them, nobody reviews them, and an undo entry
+# for one is noise in a list that is about what the task actually did.
+EXCLUDED_DIRS = ("__pycache__",)
+EXCLUDED_SUFFIXES = (".pyc", ".pyo")
+
 # Sentinels for "this tool touches no files" and "this tool can touch any file".
 _NOTHING = object()
 _WHOLE_TREE = object()
@@ -149,6 +154,7 @@ class CheckpointStore:
                 raise git.GitError("git was not found on this machine")
             git.init(self.git_dir)
             self._write_workspace_marker()
+            self._write_excludes()
             self._ready = True
         except (git.GitError, OSError) as exc:
             self._error = str(exc)
@@ -224,7 +230,9 @@ class CheckpointStore:
         reverted = self._reverted_paths(task_id)
         changes: List[Change] = []
         for status_code, path in entries:
-            if path in reverted:
+            # The ignore file keeps new bytecode out of the history; this also hides
+            # what an earlier checkpoint recorded before that file existed.
+            if path in reverted or _excluded(path):
                 continue
             added, removed = counts.get(path, (0, 0))
             changes.append(
@@ -559,6 +567,24 @@ class CheckpointStore:
         except OSError:
             pass
 
+    def _write_excludes(self) -> None:
+        """Keep build products out of the history this store keeps.
+
+        The snapshot is a ``git add -A`` in the workspace, so running Python would
+        otherwise record every ``__pycache__`` file as something the task changed.
+        ``info/exclude`` is this repository's own ignore list, so the rule never
+        reaches the user's ``.gitignore`` and never affects their own git.
+        """
+        target = self.git_dir / "info" / "exclude"
+        lines = ["# ngy-py-agent: build products are not task changes"]
+        lines.extend(f"{name}/" for name in EXCLUDED_DIRS)
+        lines.extend(f"*{suffix}" for suffix in EXCLUDED_SUFFIXES)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        except OSError:
+            pass
+
     def _write_workspace_marker(self) -> None:
         """Record which directory this repository belongs to, for humans debugging it."""
         marker = self.repo_dir / "workspace.txt"
@@ -568,6 +594,18 @@ class CheckpointStore:
             marker.write_text(str(self.workspace), encoding="utf-8")
         except OSError:
             pass
+
+
+def _excluded(path: str) -> bool:
+    """Whether ``path`` is a build product the change list should hide.
+
+    Matches the directories anywhere in the path and the suffixes at the end, the
+    same way the ignore file this store writes does.
+    """
+    parts = path.split("/")
+    if any(part in EXCLUDED_DIRS for part in parts[:-1]):
+        return True
+    return path.endswith(EXCLUDED_SUFFIXES)
 
 
 #: Past this size a side-by-side view stops helping: the editor would stall on a file

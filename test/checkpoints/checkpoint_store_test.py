@@ -143,6 +143,18 @@ class CheckpointStoreTest(unittest.TestCase):
         self.assertEqual(list(self.changes(TASK)), ["app.py"])
         self.assertEqual(list(self.changes(OTHER_TASK)), ["other.txt"])
 
+    def test_bytecode_written_by_a_tool_is_not_a_task_change(self):
+        """Running Python is not a change: an undo entry for a ``.pyc`` is noise."""
+        self.store.begin(TASK, *SHELL_CALL)
+        cache = self.workspace / "__pycache__" / "app.cpython-312.pyc"
+        cache.parent.mkdir()
+        cache.write_bytes(b"\x00\x01\x02")
+        self.store.end(TASK, *SHELL_CALL)
+
+        self.assertEqual(list(self.changes()), [])
+        # Not only hidden from the list: the history never recorded it either.
+        self.assertEqual(self.store.diff(TASK, "__pycache__/app.cpython-312.pyc"), "")
+
     # --- reverting --------------------------------------------------------
 
     def test_revert_restores_the_previous_content(self):
