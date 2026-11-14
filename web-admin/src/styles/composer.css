@@ -265,6 +265,45 @@
   cursor: not-allowed;
 }
 
+/* The meter travels with the send button: it describes the request that button
+   is about to send, so the two share one right-aligned group. */
+.composer-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.composer-actions .composer-icon-btn {
+  margin-left: 0;
+}
+
+.composer-context {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+.composer-context.is-warn {
+  color: var(--warning);
+}
+
+.composer-context.is-danger {
+  color: var(--danger);
+}
+
+.composer-context-label {
+  color: inherit;
+  opacity: 0.85;
+}
+
 .composer-icon-btn.stop {
   border-color: var(--danger-border);
   background: var(--btn-stop-gradient);

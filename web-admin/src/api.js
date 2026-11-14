@@ -56,6 +56,14 @@ export async function createSession(name, workspaceId) {
   })
 }
 
+// How full the session's context window already is, for the composer's meter.
+// ``modelId`` is the model the composer has selected: its input window is the
+// denominator, even when the last turn ran on another model.
+export async function fetchContextUsage(sessionId, modelId) {
+  const query = modelId ? `?${new URLSearchParams({ model_id: modelId }).toString()}` : ""
+  return requestJson(`${API_BASE}/api/sessions/${sessionId}/context${query}`)
+}
+
 export async function fetchWorkspaces() {
   const data = await requestJson(`${API_BASE}/api/workspaces`)
   return data.workspaces ?? []

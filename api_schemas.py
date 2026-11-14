@@ -347,6 +347,26 @@ class SessionListResponse(BaseModel):
     sessions: list[SessionItemResponse]
 
 
+class ContextUsageResponse(BaseModel):
+    """How full the model's context window already is, for the composer's meter.
+
+    ``used_tokens`` is the provider's own count for the session's newest answered
+    turn; ``max_tokens`` is the selected model's input window, or the loop's own
+    budget when the model declares none. ``limit_source`` says which one it was, so
+    the number is never presented as a window it is not.
+    """
+
+    session_id: str
+    model_id: str | None = None
+    model_name: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    used_tokens: int = 0
+    max_tokens: int = 0
+    limit_source: str = "none"
+    percent: float = 0.0
+
+
 class WorkspaceCreateRequest(BaseModel):
     """Create workspace request."""
 

@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 import app_state
 from api_schemas import (
+    ContextUsageResponse,
     SessionCreateRequest,
     SessionItemResponse,
     SessionListResponse,
@@ -23,6 +24,7 @@ from api_schemas import (
     WorkspaceListResponse,
     WorkspaceUpdateRequest,
 )
+from context_usage import session_context_usage
 from task_runtime import default_session_name
 
 router = APIRouter()
@@ -72,6 +74,25 @@ async def rename_session(session_id: str, payload: SessionUpdateRequest) -> Sess
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found.")
     return SessionItemResponse(**session)
+
+
+@router.get("/api/sessions/{session_id}/context", response_model=ContextUsageResponse)
+async def session_context(
+    session_id: str,
+    model_id: str | None = Query(
+        None, description="Model the composer has selected; its window is the denominator."
+    ),
+) -> ContextUsageResponse:
+    """How full the context window of this session already is.
+
+    Read back after every turn, so the composer can say how much room is left before
+    a task is started rather than after the provider refuses one.
+    """
+    if app_state.monitor_store.get_session(session_id) is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    if model_id and app_state.monitor_store.llm.get_model(model_id) is None:
+        raise HTTPException(status_code=404, detail="Model not found.")
+    return ContextUsageResponse(**session_context_usage(session_id, model_id))
 
 
 @router.delete("/api/sessions/{session_id}")

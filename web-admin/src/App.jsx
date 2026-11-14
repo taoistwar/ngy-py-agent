@@ -18,6 +18,7 @@ import {
   deleteWorkspace,
   fetchAgentMeta,
   fetchAgents,
+  fetchContextUsage,
   fetchSkills,
   fetchHealth,
   fetchMcpServers,
@@ -57,6 +58,7 @@ import {
   LOCALE_KEY,
   t,
 } from "./i18n"
+import ContextMeter from "./components/ContextMeter"
 import EventTimeline from "./components/EventTimeline"
 import PermissionPrompt from "./components/PermissionPrompt"
 import QuestionPrompt from "./components/QuestionPrompt"
@@ -125,6 +127,9 @@ const TASK_LIST_MIN_HEIGHT = 140
 // One draft per session, so a refresh restores what was being typed and two
 // sessions never show each other's text.
 const COMPOSER_DRAFT_KEY_PREFIX = "web-admin.composerDraft."
+// The context meter only moves when a turn completes, so it is read on a slow tick
+// instead of alongside the 1s task poll (which also refreshes it on its own).
+const CONTEXT_USAGE_POLL_MS = 5000
 
 function composerDraftKey(sessionId) {
   return `${COMPOSER_DRAFT_KEY_PREFIX}${sessionId}`
@@ -475,6 +480,7 @@ function TaskComposer({
   const [skillsOpen, setSkillsOpen] = useState(false)
   const [pickerAnchor, setPickerAnchor] = useState(null)
   const [pickedSkills, setPickedSkills] = useState([])
+  const [contextUsage, setContextUsage] = useState(null)
   const skillsButtonRef = useRef(null)
   const pickerRef = useRef(null)
   const textareaRef = useRef(null)
@@ -508,6 +514,31 @@ function TaskComposer({
     setModelId(nextModelId)
     saveRememberedModel(sessionId, workspaceId, nextModelId)
   }
+
+  // The meter answers "how much room is left before the next task", so it follows the
+  // session and the selected model, and is re-read when a task starts or settles.
+  useEffect(() => {
+    if (!sessionId) {
+      setContextUsage(null)
+      return undefined
+    }
+    let cancelled = false
+    const load = () => {
+      fetchContextUsage(sessionId, effectiveModelId)
+        .then((usage) => {
+          if (!cancelled) setContextUsage(usage)
+        })
+        .catch(() => {
+          // A reading is a hint: a failed poll must not raise the global error banner.
+        })
+    }
+    load()
+    const timer = setInterval(load, CONTEXT_USAGE_POLL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [sessionId, effectiveModelId, composerRunning])
 
   // The overview "new task" shortcut jumps here; focusing the textarea makes the
   // shortcut complete one visible action instead of only switching pages.
@@ -658,38 +689,43 @@ function TaskComposer({
               )}
             </div>
 
-            {composerRunning ? (
-              <button
-                type="button"
-                className="composer-icon-btn stop"
-                onClick={onStop}
-                title={translate("taskStop")}
-                aria-label={translate("taskStop")}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect
-                    x="6"
-                    y="6"
-                    width="12"
-                    height="12"
-                    rx="2.5"
-                    fill="currentColor"
-                  />
-                </svg>
-              </button>
-            ) : (
-              <button
-                type="submit"
-                className="composer-icon-btn create"
-                disabled={busy || !query.trim()}
-                title={translate("taskFormCreate")}
-                aria-label={translate("taskFormCreate")}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M2 21l21-9L2 3v7l15 2-15 2z" fill="currentColor" />
-                </svg>
-              </button>
-            )}
+            {/* The meter sits with the send button, where CodeBuddy puts it: the
+                reading describes the next request this button will send. */}
+            <div className="composer-actions">
+              <ContextMeter usage={contextUsage} translate={translate} />
+              {composerRunning ? (
+                <button
+                  type="button"
+                  className="composer-icon-btn stop"
+                  onClick={onStop}
+                  title={translate("taskStop")}
+                  aria-label={translate("taskStop")}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect
+                      x="6"
+                      y="6"
+                      width="12"
+                      height="12"
+                      rx="2.5"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className="composer-icon-btn create"
+                  disabled={busy || !query.trim()}
+                  title={translate("taskFormCreate")}
+                  aria-label={translate("taskFormCreate")}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M2 21l21-9L2 3v7l15 2-15 2z" fill="currentColor" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
         </form>
       </div>

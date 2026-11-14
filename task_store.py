@@ -898,6 +898,28 @@ class _SqliteTaskStore:
             ).fetchall()
             return [_SqliteTaskStore._event_to_dict(row) for row in rows]
 
+    def recent_events_of_category(
+        self, task_id: str, category: str, limit: int = 5
+    ) -> list[dict[str, Any]]:
+        """The newest events of one category, newest first.
+
+        For callers that read a single figure out of an event - the context meter
+        reads token usage - replaying the whole log would decode every tool result
+        the task ever produced just to look at the last one.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT event_id, task_id, timestamp, category, title, source, data, collapsed
+                FROM events
+                WHERE task_id = ? AND category = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (task_id, category, max(1, int(limit))),
+            ).fetchall()
+            return [_SqliteTaskStore._event_to_dict(row) for row in rows]
+
     def get_events_since(
         self,
         task_id: str,
