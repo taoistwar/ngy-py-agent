@@ -41,13 +41,33 @@ function emptyPreview() {
  * Open the diff on its first change rather than on the top of the file.
  *
  * A real file usually starts with a screen of untouched lines, so scrolling down
- * manually is what a reviewer would otherwise do every single time. The diff is
- * computed asynchronously, hence the update subscription; the frame covers the
- * small file that finishes computing before the subscription exists.
+ * manually is what a reviewer would otherwise do every single time. Monaco's own
+ * ``revealFirstDiff`` centres the change, which in this short viewport leaves it
+ * near the bottom; one line above the change lands it at the top with its context.
+ *
+ * The diff is computed asynchronously, hence the update subscription; the frame
+ * covers the small file that finishes computing before the subscription exists.
  */
-function revealFirstDiffOnMount(editor) {
-  editor.onDidUpdateDiff(() => editor.revealFirstDiff())
-  requestAnimationFrame(() => editor.revealFirstDiff())
+function revealFirstChange(editor, monaco) {
+  const changes = editor.getLineChanges()
+  if (!changes || changes.length === 0) return
+  const first = changes[0]
+  const scrollType = monaco.editor.ScrollType.Immediate
+  if (first.modifiedStartLineNumber > 0) {
+    editor
+      .getModifiedEditor()
+      .revealLineNearTop(Math.max(1, first.modifiedStartLineNumber - 1), scrollType)
+    return
+  }
+  editor
+    .getOriginalEditor()
+    .revealLineNearTop(Math.max(1, first.originalStartLineNumber - 1), scrollType)
+}
+
+function revealFirstChangeOnMount(editor, monaco) {
+  const reveal = () => revealFirstChange(editor, monaco)
+  editor.onDidUpdateDiff(reveal)
+  requestAnimationFrame(reveal)
 }
 
 /**
@@ -88,7 +108,7 @@ function ChangePreview({ preview, path, translate }) {
         modified={preview.after}
         options={DIFF_OPTIONS}
         theme={monacoTheme}
-        onMount={revealFirstDiffOnMount}
+        onMount={revealFirstChangeOnMount}
       />
     </div>
   )
