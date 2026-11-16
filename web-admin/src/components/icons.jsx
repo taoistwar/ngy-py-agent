@@ -68,6 +68,15 @@ export function CopyIcon() {
   )
 }
 
+// The "copied" acknowledgement: a tick in the same slot the copy glyph just filled.
+export function CheckIcon() {
+  return (
+    <Icon>
+      <polyline points="20 6 9 17 4 12" />
+    </Icon>
+  )
+}
+
 export function SkillIcon() {
   return (
     <Icon>
