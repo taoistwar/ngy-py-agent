@@ -46,11 +46,11 @@ class AgentsMdTest(unittest.TestCase):
         self.workspace = _Workspace()
         self.addCleanup(self.workspace.cleanup)
 
-    def load(self):
-        return agents_md.load_instructions(str(self.workspace.root))
+    def load(self, settings=None):
+        return agents_md.load_instructions(str(self.workspace.root), settings)
 
-    def prompt(self, base: str = "base prompt") -> str:
-        return agents_md.with_agents_md(base, str(self.workspace.root))
+    def prompt(self, base: str = "base prompt", settings=None) -> str:
+        return agents_md.with_agents_md(base, str(self.workspace.root), settings)
 
     def test_the_root_file_is_inlined_into_the_system_prompt(self):
         self.workspace.write("AGENTS.md", "Run `uv run pytest` before committing.\n")
@@ -147,32 +147,43 @@ class AgentsMdTest(unittest.TestCase):
         self.assertEqual(3, instructions.skipped)
         self.assertIn("3 more not listed", self.prompt())
 
-    def test_the_read_can_be_switched_off(self):
+    def test_the_setting_can_switch_the_read_off(self):
+        self.workspace.write("AGENTS.md", "Root rule.")
+        disabled = agents_md.AgentsMdSettings(enabled=False)
+
+        self.assertIsNone(self.load(disabled))
+        self.assertEqual("base prompt", self.prompt(settings=disabled))
+
+    def test_the_defaults_are_on_and_32_kib(self):
+        settings = agents_md.AgentsMdSettings()
+
+        self.assertTrue(settings.enabled)
+        self.assertEqual(agents_md.DEFAULT_MAX_BYTES, settings.max_bytes)
+
+    def test_leftover_environment_variables_are_ignored(self):
+        # The setting lives in the database (ADR 0022 D9); an old .env entry must not
+        # quietly turn the read off or shrink the cap.
         self.workspace.write("AGENTS.md", "Root rule.")
 
-        with patch.dict(os.environ, {agents_md.ENABLED_ENV: "0"}):
-            self.assertIsNone(self.load())
-            self.assertEqual("base prompt", self.prompt())
+        with patch.dict(
+            os.environ,
+            {"AGENTS_MD_ENABLED": "0", "AGENTS_MD_MAX_BYTES": "100"},
+        ):
+            instructions = self.load()
 
-    def test_the_switch_defaults_to_on(self):
-        with patch.dict(os.environ, {agents_md.ENABLED_ENV: ""}):
-            self.assertTrue(agents_md.enabled())
+        self.assertIsNotNone(instructions)
+        self.assertFalse(instructions.root.truncated)
 
     def test_a_large_file_is_truncated_without_splitting_a_character(self):
         self.workspace.write("AGENTS.md", "字" * 200)
 
-        with patch.dict(os.environ, {agents_md.MAX_BYTES_ENV: "100"}):
-            document = self.load().root
+        document = self.load(agents_md.AgentsMdSettings(max_bytes=100)).root
 
         self.assertTrue(document.truncated)
         self.assertIn("Truncated at 100 bytes", document.content)
         kept = document.content.split("\n\n[Truncated")[0]
         self.assertLessEqual(len(kept.encode("utf-8")), 100)
         self.assertEqual("字" * 33, kept)
-
-    def test_an_invalid_size_setting_falls_back_to_the_default(self):
-        with patch.dict(os.environ, {agents_md.MAX_BYTES_ENV: "not-a-number"}):
-            self.assertEqual(agents_md.DEFAULT_MAX_BYTES, agents_md.max_bytes())
 
     def test_empty_files_do_not_produce_an_empty_section(self):
         self.workspace.write("AGENTS.md", "  \n\n")

@@ -166,7 +166,7 @@
   "agentsMdTitle": "Инструкции AGENTS.md",
   "agentsMdCurrentSource": "Текущий источник",
   "agentsMdSourceDb": "база данных",
-  "agentsMdSourceEnv": "окружение",
+  "agentsMdSourceDefault": "по умолчанию",
   "agentsMdEnabled": "Читать AGENTS.md рабочей области",
   "agentsMdEnabledOn": "вкл",
   "agentsMdEnabledOff": "выкл",

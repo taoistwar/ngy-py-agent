@@ -166,7 +166,7 @@
   "agentsMdTitle": "AGENTS.md 專案指令",
   "agentsMdCurrentSource": "目前來源",
   "agentsMdSourceDb": "資料庫",
-  "agentsMdSourceEnv": "環境變數",
+  "agentsMdSourceDefault": "預設值",
   "agentsMdEnabled": "讀取工作區 AGENTS.md",
   "agentsMdEnabledOn": "開啟",
   "agentsMdEnabledOff": "關閉",

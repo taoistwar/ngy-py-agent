@@ -34,8 +34,8 @@ AGENTS_FILENAME = "AGENTS.md"
 # old name; reading it directly covers the repositories that never renamed.
 LEGACY_FILENAME = "AGENT.md"
 
-ENABLED_ENV = "AGENTS_MD_ENABLED"
-MAX_BYTES_ENV = "AGENTS_MD_MAX_BYTES"
+# There is no environment variable behind these: the values are one global setting in
+# the settings table (ADR 0022 D9), and these are what "not configured" means.
 # Same ceiling Codex uses for its project document: large enough for real instructions,
 # small enough that a runaway file cannot eat the context on its own.
 DEFAULT_MAX_BYTES = 32 * 1024
@@ -70,8 +70,8 @@ SKIPPED_DIRS = frozenset(
 class AgentsMdSettings:
     """How much of the workspace's instructions to read.
 
-    The web layer resolves these from env + database and hands the result to the loop;
-    passing ``None`` anywhere means "ask the environment" (:func:`settings_from_env`).
+    The web layer resolves these from the database and hands the result to the loop;
+    passing ``None`` anywhere means the built-in defaults below.
     """
 
     enabled: bool = True
@@ -110,29 +110,6 @@ class AgentsMdInstructions:
         }
 
 
-def enabled() -> bool:
-    """Whether ``AGENTS.md`` is read at all; ``AGENTS_MD_ENABLED=0`` turns it off."""
-    raw = (os.getenv(ENABLED_ENV) or "1").strip().lower()
-    return raw not in {"0", "false", "no", "off"}
-
-
-def max_bytes() -> int:
-    """Byte ceiling for one instruction file, overridable per deployment."""
-    raw = (os.getenv(MAX_BYTES_ENV) or "").strip()
-    if not raw:
-        return DEFAULT_MAX_BYTES
-    try:
-        value = int(raw)
-    except ValueError:
-        return DEFAULT_MAX_BYTES
-    return value if value > 0 else DEFAULT_MAX_BYTES
-
-
-def settings_from_env() -> AgentsMdSettings:
-    """The environment's defaults; the admin API layers database values on top."""
-    return AgentsMdSettings(enabled=enabled(), max_bytes=max_bytes())
-
-
 def load_instructions(
     base_dir: Optional[str],
     settings: Optional[AgentsMdSettings] = None,
@@ -144,7 +121,7 @@ def load_instructions(
     treated as absent rather than as an error - a broken ``AGENTS.md`` must not stop a
     task from running.
     """
-    settings = settings or settings_from_env()
+    settings = settings or AgentsMdSettings()
     if not settings.enabled:
         return None
     text = (base_dir or "").strip()
@@ -266,8 +243,8 @@ def _read_document(path: Path, root: Path, limit: int) -> Optional[AgentsMdDocum
     content, truncated = _truncate(body, limit)
     if truncated:
         content += (
-            f"\n\n[Truncated at {limit} bytes ({MAX_BYTES_ENV}={limit}). Ask the user, or "
-            "read the rest with read_file.]"
+            f"\n\n[Truncated at {limit} bytes: the byte cap set in the global config. "
+            "Ask the user, or read the rest with read_file.]"
         )
     try:
         relative = path.relative_to(root).as_posix()

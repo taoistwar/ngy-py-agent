@@ -19,9 +19,10 @@ from fastapi import APIRouter, HTTPException, Query
 import app_state
 import llm_api
 from agent.agent_loop import DEFAULT_MAX_STEPS
+from agent.agents_md import DEFAULT_MAX_BYTES as AGENTS_MD_DEFAULT_MAX_BYTES
 from agent.agents_md import MAX_BYTES_LIMIT as AGENTS_MD_MAX_BYTES_LIMIT
 from agent.agents_md import MIN_MAX_BYTES as AGENTS_MD_MIN_BYTES
-from agent.agents_md import AgentsMdSettings, settings_from_env
+from agent.agents_md import AgentsMdSettings
 from agent.tools.permissions import PermissionMode, normalize_mode
 from api_schemas import (
     MAX_STEPS_LIMIT,
@@ -72,21 +73,17 @@ def _clamp_agents_md_bytes(value: int) -> int:
 
 
 def _load_agents_md_config() -> tuple[AgentsMdSettings, str]:
-    """AGENTS.md on/off and byte cap: environment defaults, database wins."""
-    env_settings = settings_from_env()
+    """AGENTS.md on/off and byte cap: the database value, else the code defaults."""
     stored = app_state.monitor_store.get_agents_md_config()
     if not stored:
-        return env_settings, "env"
-    raw_bytes = stored.get("max_bytes", env_settings.max_bytes)
+        return AgentsMdSettings(), "default"
+    raw_bytes = stored.get("max_bytes", AGENTS_MD_DEFAULT_MAX_BYTES)
     try:
         max_bytes = _clamp_agents_md_bytes(int(raw_bytes))
     except (TypeError, ValueError):
-        max_bytes = env_settings.max_bytes
+        max_bytes = AGENTS_MD_DEFAULT_MAX_BYTES
     return (
-        AgentsMdSettings(
-            enabled=bool(stored.get("enabled", env_settings.enabled)),
-            max_bytes=max_bytes,
-        ),
+        AgentsMdSettings(enabled=bool(stored.get("enabled", True)), max_bytes=max_bytes),
         "database",
     )
 

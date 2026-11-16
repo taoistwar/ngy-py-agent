@@ -166,7 +166,7 @@
   "agentsMdTitle": "Instructions AGENTS.md",
   "agentsMdCurrentSource": "Source actuelle",
   "agentsMdSourceDb": "base de données",
-  "agentsMdSourceEnv": "environnement",
+  "agentsMdSourceDefault": "valeur par défaut",
   "agentsMdEnabled": "Lire les AGENTS.md de l'espace de travail",
   "agentsMdEnabledOn": "activé",
   "agentsMdEnabledOff": "désactivé",

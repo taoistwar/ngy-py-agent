@@ -27,8 +27,6 @@ cd ..
 - `TRANSCRIPT_MAX_MESSAGES=50`（对话窗口条数上限，超出后旧消息归档到 `<workspace>/.transcripts/`，`<= 0` 关闭，见 [ADR 0015](decisions/0015-snip-compact.md)）
 - `CONTEXT_CHAR_LIMIT`（整段上下文的字符上限，超出后缩短模型已读过的旧工具结果；未配置时取模型 `max_input_tokens × 4`，再退回 200,000，`<= 0` 关闭，见 [ADR 0016](decisions/0016-micro-compact.md)）
 - `CONTEXT_SUMMARY_ENABLED=0`（关闭压缩管线的第四步——历史摘要。该步是唯一会额外发起模型调用的压缩步骤，见 [ADR 0017](decisions/0017-compact-history.md)）
-- `AGENTS_MD_ENABLED`（工作区 `AGENTS.md`（[agents.md](https://agents.md/) 格式）读取开关的默认值，默认开启。Web Admin「全局配置 → AGENTS.md 项目指令」存进数据库后以数据库为准，见 [ADR 0022](decisions/0022-agents-md.md)）
-- `AGENTS_MD_MAX_BYTES`（单个 `AGENTS.md` 进入系统提示词的字节上限的默认值，默认 `32768`；同页可改，库值优先，允许范围 1024–1048576，超出部分按 UTF-8 字节截断并留提示）
 - 供应商相关：
   - `TOOL_SCHEMA_PROVIDER=openai`
   - `OLLAMA_BASE_URL`
@@ -57,7 +55,7 @@ uv run python main.py --web --reload
 - 后端优先读取：
   - `web-admin/dist/index.html`
   - 如果 `dist` 不存在则读取 `web-admin/index.html`
-- 全局配置（最大步数、工具确认模式、AGENTS.md 项目指令、任务保留天数）存于 `settings` 表（`agent_max_steps`、`permission_mode`、`agents_md_config`、`task_retention_days` 四键），可在 Web Admin「全局配置」页修改。确认模式、AGENTS.md、保留天数有同名环境变量作默认值且库值优先；**最大步数没有环境变量**，库值缺失时取代码里的 `DEFAULT_MAX_STEPS = 9`（`agent/agent_loop/config.py`），因此 `.env` 里再写 `REACT_MAX_STEPS` 不会生效。`agents_md_config` 是一行 JSON（`{"enabled": ..., "max_bytes": ...}`），两个字段共享一个来源标签。
+- 全局配置（最大步数、工具确认模式、AGENTS.md 项目指令、任务保留天数）存于 `settings` 表（`agent_max_steps`、`permission_mode`、`agents_md_config`、`task_retention_days` 四键），可在 Web Admin「全局配置」页修改。确认模式与保留天数有同名环境变量作默认值且库值优先；**最大步数与 AGENTS.md 没有环境变量**，库值缺失时取代码默认（`DEFAULT_MAX_STEPS = 9`，见 `agent/agent_loop/config.py`；AGENTS.md 为开启、单文件 32768 字节，见 `agent/agents_md.py`），因此 `.env` 里再写 `REACT_MAX_STEPS`、`AGENTS_MD_ENABLED`、`AGENTS_MD_MAX_BYTES` 都不会生效。`agents_md_config` 是一行 JSON（`{"enabled": ..., "max_bytes": ...}`），两个字段共享一个来源标签。
 - 任务详情的结果区：`src/components/TaskResultPanel.jsx` 负责「渲染 / 源码」切换与全屏阅读（portal 覆盖层，Esc 关闭）；Markdown 由 `src/components/MarkdownView.jsx` 渲染，解析在 `src/utils/markdown.js`（块级）与 `src/utils/markdownInline.js`（行内），排版样式在 `src/styles/markdown.css`。渲染产出 React 元素而非 HTML 字符串，模型输出里的标签只会显示成文本。
 - 任务窗口的上下文占用：`src/components/ContextMeter.jsx` 渲染一个 18px 的环形进度（SVG `stroke-dasharray`，-90° 起点、圆头端点），悬停/聚焦时向上弹出面板给出百分比、`已用 / 上限`、输入输出明细与上限来源。数字格式化在 `src/utils/contextUsage.js`（1024 进制、一位小数，≥80% 变黄、≥95% 变红）。它随发送按钮一起右对齐，跟随会话与所选模型，每 5 秒读一次 `GET /api/sessions/{id}/context`，任务开始/结束时立即再读一次。
 

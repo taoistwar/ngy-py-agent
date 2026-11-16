@@ -46,7 +46,7 @@ permission_mode_source: str = "env"
 # one file may enter the system prompt. Both are one setting, so they share a source.
 agents_md_enabled: bool = True
 agents_md_max_bytes: int = AGENTS_MD_DEFAULT_MAX_BYTES
-agents_md_source: str = "env"
+agents_md_source: str = "default"
 
 # Requests-per-minute budgets are not stored here: they belong to the provider endpoint
 # records in the database and are pushed to ``agent.rate_limit.provider_throttle`` on

@@ -111,7 +111,7 @@ export function AgentsMdManager({ agentsMdConfig, onSave, onRefresh, translate }
             {translate("agentsMdCurrentSource")}:{" "}
             {agentsMdConfig?.source === "database"
               ? translate("agentsMdSourceDb")
-              : translate("agentsMdSourceEnv")}
+              : translate("agentsMdSourceDefault")}
           </span>
         </div>
         <button type="button" className="btn btn-compact" onClick={onRefresh}>

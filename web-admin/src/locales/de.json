@@ -166,7 +166,7 @@
   "agentsMdTitle": "AGENTS.md-Anweisungen",
   "agentsMdCurrentSource": "Aktuelle Quelle",
   "agentsMdSourceDb": "Datenbank",
-  "agentsMdSourceEnv": "Umgebung",
+  "agentsMdSourceDefault": "Standard",
   "agentsMdEnabled": "AGENTS.md im Arbeitsbereich lesen",
   "agentsMdEnabledOn": "an",
   "agentsMdEnabledOff": "aus",

@@ -166,7 +166,7 @@
   "agentsMdTitle": "AGENTS.md instructions",
   "agentsMdCurrentSource": "Current source",
   "agentsMdSourceDb": "database",
-  "agentsMdSourceEnv": "environment",
+  "agentsMdSourceDefault": "default",
   "agentsMdEnabled": "Read workspace AGENTS.md",
   "agentsMdEnabledOn": "on",
   "agentsMdEnabledOff": "off",

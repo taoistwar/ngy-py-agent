@@ -1,9 +1,8 @@
 """The global AGENTS.md setting: the loop's view, the database row, and the API.
 
-``AGENTS_MD_ENABLED`` / ``AGENTS_MD_MAX_BYTES`` used to be read straight from the
-environment, which meant changing them cost a restart and an operator with shell access.
-They are one setting now (ADR 0022 D9): the environment supplies the default, the
-database wins, and the admin API is how the Web Admin「全局配置」page writes it.
+On/off and the byte cap are one setting in the settings table (ADR 0022 D9). There is no
+environment variable behind them: without a stored row the code defaults apply (on,
+32 KiB), and the admin API is how the Web Admin「全局配置」page writes them.
 
 Run from the repository root::
 
@@ -56,9 +55,12 @@ class AgentsMdSettingsTest(unittest.TestCase):
         )
         self.assertTrue(instructions.root.truncated)
 
-    def test_without_a_setting_object_the_environment_decides(self):
-        with patch.dict(os.environ, {agents_md.ENABLED_ENV: "0"}):
-            self.assertIsNone(agents_md.load_instructions(str(self.workspace)))
+    def test_without_a_setting_object_the_code_defaults_decide(self):
+        # A leftover .env entry must not turn the read off; the default is on.
+        with patch.dict(os.environ, {"AGENTS_MD_ENABLED": "0"}):
+            instructions = agents_md.load_instructions(str(self.workspace))
+        self.assertIsNotNone(instructions)
+        self.assertFalse(instructions.root.truncated)
 
 
 class AgentsMdConfigApiTest(unittest.TestCase):
@@ -108,25 +110,28 @@ class AgentsMdConfigApiTest(unittest.TestCase):
     def load(self):
         return admin_api._load_agents_md_config()
 
-    def test_the_environment_supplies_the_default(self):
+    def test_the_code_defaults_apply_without_a_stored_value(self):
+        self.assertEqual(
+            (agents_md.AgentsMdSettings(), "default"),
+            self.load(),
+        )
+
+    def test_leftover_environment_variables_are_ignored(self):
+        # Regression pin: the setting used to be read from the environment, so a
+        # leftover .env entry must not override (or appear as) the source.
         with patch.dict(
             os.environ,
-            {agents_md.ENABLED_ENV: "0", agents_md.MAX_BYTES_ENV: "2048"},
+            {"AGENTS_MD_ENABLED": "0", "AGENTS_MD_MAX_BYTES": "2048"},
         ):
             settings, source = self.load()
 
-        self.assertFalse(settings.enabled)
-        self.assertEqual(2048, settings.max_bytes)
-        self.assertEqual("env", source)
+        self.assertEqual(agents_md.AgentsMdSettings(), settings)
+        self.assertEqual("default", source)
 
-    def test_a_stored_value_wins_over_the_environment(self):
+    def test_a_stored_value_wins(self):
         self.store.set_agents_md_config(False, 4096)
 
-        with patch.dict(
-            os.environ,
-            {agents_md.ENABLED_ENV: "1", agents_md.MAX_BYTES_ENV: "2048"},
-        ):
-            settings, source = self.load()
+        settings, source = self.load()
 
         self.assertFalse(settings.enabled)
         self.assertEqual(4096, settings.max_bytes)
@@ -172,10 +177,10 @@ class AgentsMdConfigApiTest(unittest.TestCase):
 
     def test_a_restart_reads_the_saved_value_back(self):
         self.client.put("/api/admin/agents-md", json={"enabled": True, "max_bytes": 8192})
-        # A fresh process starts from env defaults and then loads the database.
+        # A fresh process starts from the code defaults and then loads the database.
         app_state.agents_md_enabled = True
         app_state.agents_md_max_bytes = agents_md.DEFAULT_MAX_BYTES
-        app_state.agents_md_source = "env"
+        app_state.agents_md_source = "default"
 
         admin_api.load_startup_config()
 

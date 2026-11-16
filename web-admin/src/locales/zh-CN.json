@@ -166,7 +166,7 @@
   "agentsMdTitle": "AGENTS.md 项目指令",
   "agentsMdCurrentSource": "当前来源",
   "agentsMdSourceDb": "数据库",
-  "agentsMdSourceEnv": "环境变量",
+  "agentsMdSourceDefault": "默认值",
   "agentsMdEnabled": "读取工作区 AGENTS.md",
   "agentsMdEnabledOn": "开启",
   "agentsMdEnabledOff": "关闭",

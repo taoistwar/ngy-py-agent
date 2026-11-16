@@ -253,7 +253,7 @@ MCP 市场维护可复用的 MCP 服务预设（传输方式 + 命令/URL），�
 
 工作空间根目录下的 `AGENTS.md`（[agents.md](https://agents.md/) 格式：纯 Markdown、无 schema、无必填字段）会在该工作区的任务里自动进入系统提示词，不用每次在问题里重复交代构建与测试命令：
 
-- 根目录的 `AGENTS.md` **全文注入**，默认上限 32 KiB；上限与开关在 Web Admin「全局配置 → AGENTS.md 项目指令」里改（数据库优先，`AGENTS_MD_MAX_BYTES` / `AGENTS_MD_ENABLED` 只提供默认值，范围 1024–1048576 字节），下一次任务生效。超出部分截断，并提示模型用 `read_file` 读原文。
+- 根目录的 `AGENTS.md` **全文注入**，未配置时默认开启、单文件上限 32 KiB；开关与上限在 Web Admin「全局配置 → AGENTS.md 项目指令」里改（范围 1024–1048576 字节，无环境变量），下一次任务生效。超出部分截断，并提示模型用 `read_file` 读原文。
 - 子目录里的 `AGENTS.md`（monorepo 每个包一份）只列成**索引**，并说明"改到那个目录前先读它，最近的那份优先"。不在索引里的用 `glob`（`**/AGENTS.md`）找。
 - 旧名 `AGENT.md` 仍可读；同一目录同时存在两份时只用 `AGENTS.md`。
 - 扫描到第三层为止，跳过 `.git`、`.venv`、`node_modules`、`venv`、`dist`、`build`、`target`、`vendor`、`__pycache__`；索引最多列 20 个。
