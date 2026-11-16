@@ -60,9 +60,9 @@ def apply_snip_compact(
 ) -> Dict[str, Any]:
     """Rewrite ``messages`` in place so it holds at most about ``max_messages``.
 
-    In place, not by returning a new list: the loop aliases the caller's list
-    (``main.py`` keeps the same object across interactive turns), so rebinding here
-    would leave that copy growing forever.
+    In place, not by returning a new list: the loop works on the very object its caller
+    handed over (``messages = initial_messages`` is an alias), so rebinding here would
+    leave that caller's copy growing forever.
 
     A failed transcript write aborts the compaction. Dropping messages while the
     archive is missing is the one degradation this step must not have: the run would

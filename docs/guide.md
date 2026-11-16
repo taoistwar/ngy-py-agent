@@ -4,26 +4,13 @@
 
 ## 运行方式
 
-只剩两个入口：`--web`（管理界面 + API）和 `--interactive`（命令行多轮对话）。单次运行（`--query`）已移除——一次性任务走 Web Admin 的 `POST /api/tasks` 或在界面里提交。
-
-### 交互模式
+唯一入口是 `--web`（管理界面 + API）：
 
 ```bash
-uv run python main.py --interactive
-uv run python main.py --interactive --trace
+uv run python main.py --web
 ```
 
-### 交互模式指定 Provider 与步数
-
-```bash
-uv run python main.py --provider openai-compatible --interactive
-uv run python main.py --provider openai --interactive
-uv run python main.py --provider anthropic --interactive
-uv run python main.py --provider anthropic-compatible --interactive
-uv run python main.py --provider openai-compatible --steps 4 --interactive
-```
-
-说明：`openai-compatible` 会走 OpenAI 兼容接口；不带 `--provider` 时使用环境变量里的默认值。Web Admin 里的 provider / model 来自数据库，与这几个命令行参数无关。
+单次运行（`--query`）与交互式 CLI（`--interactive`）都已移除：一次性任务走 Web Admin 的 `POST /api/tasks` 或在界面里提交，多轮对话就是 Web Admin 里的会话。provider、模型与步数都在数据库与「全局配置」里，不再有对应的命令行参数。
 
 ## 可观测（Tracing）
 
@@ -31,7 +18,7 @@ uv run python main.py --provider openai-compatible --steps 4 --interactive
 
 ```bash
 # 临时开一次，输出到控制台
-OTEL_TRACING_ENABLED=true OTEL_TRACES_EXPORTER=console uv run python main.py --interactive
+OTEL_TRACING_ENABLED=true OTEL_TRACES_EXPORTER=console uv run python main.py --web
 ```
 
 长期开启就写进 `.env`（字段见 `.env.example`）：
@@ -118,11 +105,6 @@ http://127.0.0.1:8001
 --host HOST          监听地址（默认 127.0.0.1）
 --port PORT          监听端口（默认 8001）
 --reload             运行时热重载
---interactive        命令行多轮模式
---provider PROVIDER  交互模式使用的 provider
---steps N            交互模式的 ReAct 步数上限
---quiet              交互模式不打印模型回答
---trace              交互模式打印思考与工具调用细节
 ```
 
 ## API 说明
@@ -279,7 +261,7 @@ MCP 市场维护可复用的 MCP 服务预设（传输方式 + 命令/URL），�
 - 未绑定工作区的会话不读（它没有"项目"）；`AGENTS_MD_ENABLED=0` 全局关闭。
 - 每次读到文件，任务日志里会有一条 `Loaded AGENTS.md` 事件：文件名、字符数、是否截断、嵌套索引，不含正文。
 
-交互式 CLI（`--interactive`）没有绑定工作区：它的路径基准是本应用源码树，因此不读任何 `AGENTS.md`——包括本仓库自己那份，那是写给维护者的开发约定，不是运行时规则。取舍与已知限制见 [ADR 0022](decisions/0022-agents-md.md)。
+本仓库自己那份 `AGENTS.md` 是写给维护者的开发约定，不会成为运行时规则；只有绑定成工作区的目录才会被读取。取舍与已知限制见 [ADR 0022](decisions/0022-agents-md.md)。
 
 ### Provider 与模型
 

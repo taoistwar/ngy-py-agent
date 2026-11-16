@@ -1,8 +1,8 @@
-"""NGY Agent CLI and Web Admin demo with ReAct task persistence.
+"""NGY Agent Web Admin with ReAct task persistence.
 
-This module is the app assembly and the CLI: it mounts the route modules on the FastAPI
-app, serves the built frontend, and runs the ReAct loop from the command line. What it
-used to carry lives next door now - ``api_schemas`` (request/response models),
+This module is the app assembly and the service entry point: it mounts the route modules
+on the FastAPI app, serves the built frontend, and starts the server. What it used to
+carry lives next door now - ``api_schemas`` (request/response models),
 ``app_state`` (the live state), ``task_runtime`` (what a task is), and one module per
 route group (``task_api``, ``workspace_api``, ``llm_api``, ``agent_api``, ``tool_api``,
 ``admin_api``). A single 1700-line module is neither readable nor safe to edit
@@ -13,10 +13,8 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,8 +28,6 @@ import llm_api
 import task_api
 import tool_api
 import workspace_api
-from agent.agent_loop import run_react_loop
-from agent.provider import ProviderError
 from agent.telemetry import (
     active_provider,
     init_telemetry,
@@ -219,33 +215,7 @@ def main() -> None:
     _load_runtime_config()
     _configure_telemetry()
     parser = argparse.ArgumentParser(
-        description="Run the Web Admin server or the interactive ReAct CLI.",
-    )
-    parser.add_argument(
-        "--provider",
-        default=None,
-        help="Force provider (openai-compatible / openai / anthropic / anthropic-compatible).",
-    )
-    parser.add_argument(
-        "--steps",
-        type=int,
-        default=int(os.getenv("REACT_MAX_STEPS", "8")),
-        help="Maximum number of ReAct steps.",
-    )
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="In interactive mode, hide the assistant's answers.",
-    )
-    parser.add_argument(
-        "--interactive",
-        action="store_true",
-        help="Enable interactive multi-turn mode.",
-    )
-    parser.add_argument(
-        "--trace",
-        action="store_true",
-        help="In interactive mode, print debug/agent reasoning and tool-call details.",
+        description="Run the Web Admin server (API + frontend).",
     )
     parser.add_argument(
         "--web",
@@ -270,59 +240,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.web:
-        _run_web_server(host=args.host, port=args.port, reload=args.reload)
-        return
+    if not args.web:
+        # The CLI entry points are gone. A single query is what ``POST /api/tasks`` does,
+        # and a multi-turn conversation is a session in the Web Admin, with the endpoints
+        # and models configured in the database rather than in the environment.
+        parser.error("--web is required.")
 
-    if args.interactive:
-        print("Type your question, input exit/quit/q or Ctrl+C to leave.")
-        interactive_verbose = (not args.quiet) and args.trace
-        messages: List[Dict[str, Any]] = [
-            {
-                "role": "system",
-                # ``ROOT_DIR`` is this app's own source tree, not a user workspace: its
-                # ``AGENTS.md`` is guidance for assistants editing this repository, so it
-                # must not become the runtime agent's rules (ADR 0022 D1).
-                "content": (
-                    "You are a ReAct agent. Analyze first, call tools if needed, then output a clear and reproducible answer."
-                ),
-            }
-        ]
-        try:
-            while True:
-                user_input = input("you> ").strip()
-                if not user_input:
-                    continue
-                if user_input.lower() in {"exit", "quit", "q"}:
-                    break
-
-                try:
-                    answer = run_react_loop(
-                        user_query=user_input,
-                        provider_name=args.provider,
-                        max_steps=args.steps,
-                        verbose=interactive_verbose,
-                        initial_messages=messages,
-                        base_dir=str(ROOT_DIR),
-                    )
-                except ProviderError as exc:
-                    # The model endpoint is configuration, not app state: an
-                    # unreachable model must not end the session, or fixing the
-                    # configuration would cost the user the whole conversation.
-                    print(f"[model error] {exc}", file=sys.stderr)
-                    continue
-                if not args.quiet:
-                    print(f"assistant> {answer}")
-        except KeyboardInterrupt:
-            print("\nYou have exited interactive mode.")
-        finally:
-            shutdown_telemetry()
-        return
-
-    # A single-shot run is gone: one query is what the Web Admin's task API does,
-    # with the endpoints and models configured in the database rather than in the
-    # environment.
-    parser.error("one of --web or --interactive is required.")
+    _run_web_server(host=args.host, port=args.port, reload=args.reload)
 
 
 # Import-time setup serves ``uvicorn --reload``: the child process imports this

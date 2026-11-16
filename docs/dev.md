@@ -48,10 +48,9 @@ cd ..
 
 ```bash
 uv run python main.py --web --reload
-uv run python main.py --interactive
 ```
 
-单次运行（`--query`）已移除：一次性问题就是 Web Admin 的 `POST /api/tasks`，模型与 provider 在数据库里配置，不再依赖 `.env`。
+单次运行（`--query`）与交互式 CLI（`--interactive`）都已移除：一次性问题就是 Web Admin 的 `POST /api/tasks`，多轮对话就是 Web Admin 的会话；模型与 provider 在数据库里配置，不再依赖 `.env`。
 
 ## 5. Web Admin 前端目录与构建
 
