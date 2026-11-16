@@ -131,7 +131,7 @@ npm run i18n:check
 
 - 仓库默认包含 `.github/workflows/ci.yml`，包含两条线：
   - `web-admin`：安装前端依赖并执行 `npm run build`（内含 i18n 键一致性检查）。
-  - `backend`：安装 `uv` 后执行 `uv sync`，再执行 `uv run python -m compileall -q main.py agent/agent_loop/` 做语法检查，并执行 `uv run python main.py --help` 做入口参数可用性检查。
+  - `backend`：安装 `uv` 后执行 `uv sync`，再执行 `uv run python -m compileall -q main.py agent commons dao routes` 做语法检查，并执行 `uv run python main.py --help` 做入口参数可用性检查。
   - `backend` 测试：逐个执行 `test/**/*_test.py`（`test/` 不是包，所以不用 `unittest discover`；本地等价命令见 `scripts/ci_check.py`）。
   - `backend` 静态检查：`uv run ruff check .`，规则集在根目录 `ruff.toml`（`E4/E7/E9/F/I/BLE/RUF012`）。**同一份规则也被 `scripts/ci_check.py` 与 `.githooks/pre-commit.py` 执行**，所以编辑器里的提示是会拦提交的：`F` 拦未定义名字与未用导入（曾扫出一段调用即 `NameError` 的残留死代码），`BLE` 要求每个宽捕获在代码里写明理由，`I` 让导入顺序不再成为讨论话题。
 - 如果后端 CLI 检查失败，优先排查：
@@ -282,7 +282,7 @@ npm run i18n:check
 
 ### Provider 与模型（两张表，一个端点一份配额）
 
-- **provider** 存协议、`base_url`、`api_key` 与 `rpm_limit`；**model** 只存模型名与能力开关，加一个 `provider_id`（[ADR 0014](decisions/0014-provider-model-split.md)）。表结构在 `llm_store.py`，它复用 `task_store` 的连接与锁。
+- **provider** 存协议、`base_url`、`api_key` 与 `rpm_limit`；**model** 只存模型名与能力开关，加一个 `provider_id`（[ADR 0014](decisions/0014-provider-model-split.md)）。表结构在 `dao/llm.py`，它复用 `dao.store` 的连接与锁。
 - 一个（协议, 规范化地址）只能有一条 provider 记录：桶键由这两项组成，两条记录会互相覆盖，看不出哪条生效。同一个协议配两个地址是合法的——那是两个端点、两份配额。
 - 删 provider 前必须先删/迁走它的模型（409，不级联）。
 - `PUT /api/models/{id}` 只改模型自己；换 provider 就是换端点，等价于换配额。
@@ -377,7 +377,7 @@ npm run i18n:check
 - **写错的规则整条丢弃**，原因记在 `ToolDenyList.problems`：半解析的规则会匹配到写规则的人没看到的调用，所以绝不保留，也就绝不部分生效。
 - **求值异常一律拒绝**（fail closed），和权限门同一原则；`details.reason = "denylist_error"` 与配置写错（`problems`）是两回事。
 - 新增事件字段时别忘了前端：拒绝复用 `permission_decision` 类别，因此 `details` 里的 `rule` / `matched_fields` 会直接显示在事件详情里。
-- **页面写同一份文件**：`GET/POST/DELETE /api/admin/denylist` 由 `app_state.denylist_store` 落到 `ToolDenyList.add/remove`（整文件原子重写、按 `id` 替换）。POST 的扁平请求先组装成文件里的 JSON 形状，再交给**同一个 `parse_rules`** 校验，坏正则直接 400——页面因此写不进一条会被任务静默丢掉的规则。GET 同时返回 `path` 与 `problems`，前端把两者都显示出来。
+- **页面写同一份文件**：`GET/POST/DELETE /api/admin/denylist` 由 `commons.state.denylist_store` 落到 `ToolDenyList.add/remove`（整文件原子重写、按 `id` 替换）。POST 的扁平请求先组装成文件里的 JSON 形状，再交给**同一个 `parse_rules`** 校验，坏正则直接 400——页面因此写不进一条会被任务静默丢掉的规则。GET 同时返回 `path` 与 `problems`，前端把两者都显示出来。
 
 ### ask_user_question：把决策交回用户（它不是权限）
 
@@ -392,7 +392,7 @@ npm run i18n:check
 
 ### 桌面操作：CLI 桥，不是 MCP 客户端
 
-- `computer_observe` / `computer_control` 通过 `subprocess` 调 `cua-driver <tool>`（JSON 从 stdin 进入），**没有**实现 MCP 客户端；`mcp_store.py` 目前仍然只是集市存储。将来换 MCP 只替换 `agent/tools/computer_driver.py` 的 `call_tool`，工具面对模型不变。
+- `computer_observe` / `computer_control` 通过 `subprocess` 调 `cua-driver <tool>`（JSON 从 stdin 进入），**没有**实现 MCP 客户端；`dao/mcp.py` 目前仍然只是集市存储。将来换 MCP 只替换 `agent/tools/computer_driver.py` 的 `call_tool`，工具面对模型不变。
 - **会话标签必须等于 `task_id`**（`make_observe_tool` / `make_control_tool` 的绑定）：driver 用它键控快照缓存，`element_token` 才能跨调用复用；如果每次调用换标签，所有 token 都会 stale。
 - **观察与操作拆成两个包**，因为门禁按工具：观察 `permission=none`，操作 `PERMISSION_COMPUTER` 且只给 `once` / `session`。不要为了少一个工具把两者合并。
 - **driver 的契约写在描述里，不要靠模型试错**：动作前后快照、优先 `element_token`、默认 `background`、`unverifiable` 先重新快照。错误码到指令的映射在 `computer_driver._HINTS` 与 `computer_control/tool.py::_render_result`。
@@ -407,28 +407,30 @@ npm run i18n:check
 | 文件 | 放什么 | 不放什么 |
 | --- | --- | --- |
 | `main.py` | FastAPI app 装配、CORS、静态前端与兜底路由、健康检查、服务入口（`--web` / `--host` / `--port` / `--reload`） | 业务路由、运行期状态 |
-| `api_schemas.py` | 所有请求/响应 pydantic 模型 | 任何行为 |
-| `app_state.py` | 进程内的**活状态**：`monitor_store`、`permission_rule_store`、四项全局配置（保留天数 / 步数上限 / AGENTS.md 指令 / 确认模式）及其 `source`、三类任务注册表（停止事件、权限 broker、提问 broker）、`status_for_event`、`ROOT_DIR` | 任何判断逻辑 |
-| `session_history.py` | 会话上下文：把同一会话中**已完成**任务的 `query` / `result` 重建成 `user` / `assistant` messages，并按消息数 / 字符预算裁剪（只留最近的轮次） | 不注入、不运行任务 |
-| `context_usage.py` | 任务窗口的上下文占用读数：会话最近一次模型请求的 `usage`（回溯最多 5 个任务 / 5 条响应）+ 分母（模型 `max_input_tokens`，缺失时回退到循环自己的字符预算 ÷ 4） | 不估算文本、不改上下文 |
-| `task_runtime.py` | "一个任务是什么"：provider / 工作目录 / 步数 / 确认模式的解析、会话标题、保留期清理、`run_task`（跑 ReAct 循环并把两个 broker 注册进 `app_state`） | HTTP 细节 |
+| `commons/schemas/` | 所有请求/响应 pydantic 模型，按资源一个模块（`tasks` / `config` / `llm` / `permissions` / `sessions` / `workspace` / `agents` / `tools`）；`__init__.py` 全量 re-export，调用方只认一个导入路径 | 任何行为 |
+| `commons/state.py` | 进程内的**活状态**：`monitor_store`、`permission_rule_store`、四项全局配置（保留天数 / 步数上限 / AGENTS.md 指令 / 确认模式）及其 `source`、三类任务注册表（停止事件、权限 broker、提问 broker）、`status_for_event`、`ROOT_DIR` | 任何判断逻辑 |
+| `agent/history.py` | 会话上下文：把同一会话中**已完成**任务的 `query` / `result` 重建成 `user` / `assistant` messages，并按消息数 / 字符预算裁剪（只留最近的轮次） | 不注入、不运行任务 |
+| `agent/usage.py` | 两处读数：任务的 token 总和与墙钟耗时；会话的上下文占用（最近一次模型请求的 `usage`，回溯最多 5 个任务 / 5 条响应，分母取模型 `max_input_tokens`，缺失时回退到循环自己的字符预算 ÷ 4） | 不估算文本、不改上下文 |
+| `agent/runtime/` | "一个任务是什么"：`config`（provider / 工作目录 / 步数 / 确认模式的解析）、`naming`（会话标题与任务名）、`purge`（保留期清理）、`events`（事件构造）、`runner`（`run_task`：跑 ReAct 循环并把两个 broker 注册进 `commons.state`） | HTTP 细节 |
 | `routes/task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
-| `task_store/` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁；按职责拆成 `base`（常量与行工具）/ `schema`（建表与迁移）/ `sessions`（会话、工作空间）/ `forks`（Fork 复制）/ `agents` / `settings` / `tasks`（任务与事件）/ `store`（组合类） | provider 与模型（在 `llm_store.py`） |
-| `llm_store.py` | provider 端点与模型两张表的 SQL、旧 `models` 表的一次性迁移；共用 `task_store` 的连接与锁 | 限流策略 |
+| `dao/` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁；按职责拆成 `base`（常量与行工具）/ `schema`（建表与迁移）/ `sessions`（会话、工作空间）/ `forks`（Fork 复制）/ `agents` / `settings` / `tasks`（任务与事件）/ `store`（组合类） | provider、模型与 MCP（各自独立模块） |
+| `dao/llm.py` | provider 端点与模型两张表的 SQL、旧 `models` 表的一次性迁移；共用 `dao.store` 的连接与锁 | 限流策略 |
+| `dao/mcp.py` | MCP 集市表的 SQL（自管连接，同一个库文件） | |
 | `routes/workspace_api.py` | 会话、工作空间路由 | 模型 / provider 配置 |
 | `routes/llm_api.py` | provider 与模型路由、写入时把 RPM 推给 `provider_throttle`（`sync_provider_throttle`） | 限流的窗口算法 |
 | `routes/agent_api.py` | 模式、智能体、技能库路由 | |
-| `routes/admin_api.py` | 管理配置路由（保留期 / 步数 / 确认模式 / 权限规则）、启动时把 env + 数据库读进 `app_state` 的 loader、`.env` 加载 | 业务路由 |
-| `routes/mcp_api.py` | MCP 集市路由（`/api/mcp-servers`） | 存储实现（在 `mcp_store.py`） |
+| `routes/admin_api.py` | 管理配置路由（保留期 / 步数 / 确认模式 / 权限规则）、启动时把 env + 数据库读进 `commons.state` 的 loader、`.env` 加载 | 业务路由 |
+| `routes/mcp_api.py` | MCP 集市路由（`/api/mcp-servers`） | 存储实现（在 `dao/mcp.py`） |
 
 两条必须守住的规则：
 
-1. **状态只有一份，在 `app_state.py`。** 路由与任务运行都读 `app_state.monitor_store`，而不是 `from task_store import monitor_store` 那种"把名字绑走"的写法：绑名字会让"测试换了存储、路由还在用旧的"变成一次静默失效（`test/permission_api_test.py` 与 `test/question_api_test.py` 因此在 `app_state` 上替换存储）。
-2. **路由模块不得 import `main`。** 需要状态就 import `app_state`，需要任务逻辑就 import `task_runtime`；`main` 只单向 import 它们。这条是拆分成立的前提，否则就是循环依赖。
+1. **状态只有一份，在 `commons/state.py`。** 路由与任务运行都读 `commons.state.monitor_store`，而不是 `from dao import monitor_store` 那种"把名字绑走"的写法：绑名字会让"测试换了存储、路由还在用旧的"变成一次静默失效（`test/permission_api_test.py` 与 `test/question_api_test.py` 因此在 `commons.state` 上替换存储）。
+2. **路由模块不得 import `main`。** 需要状态就 `from commons import state`，需要任务逻辑就 `from agent import runtime`；`main` 只单向 import 它们。这条是拆分成立的前提，否则就是循环依赖。
+3. **`agent` 的下层不 import 上层。** `agent/tools/**` 与 `agent/agent_loop/**` 不许 import `commons` 或 `dao`（工具要能脱离服务端单独测，ADR 0019）；`agent/runtime`、`agent/history`、`agent/usage` 是例外——它们执行和统计任务，必须读活状态（ADR 0025）。
 
 拆分本身是**纯搬运**：路由路径、字段、状态码、事件顺序都没动；验证方式是"全量测试 + 与拆分前的 OpenAPI 路径清单逐一比对"（29 条对 29 条）。
 
-`task_store.py` 后来同样超过行数上限，按职责拆成了包：`__init__.py` 只做导出并创建单例，对外仍是 `from task_store import _SqliteTaskStore, monitor_store, TASK_DB_PATH`；各部分共用 `store.py` 里的连接与锁。新增存储逻辑写进对应职责的模块，不要再往 `store.py` 堆。
+`task_store.py` 后来同样超过行数上限，按职责拆成了包；ADR 0025 又把它改名为 `dao/` 并收编了 provider / model / MCP 三块存储：`__init__.py` 只做导出并创建单例，对外仍是 `from dao import _SqliteTaskStore, monitor_store, TASK_DB_PATH`；各部分共用 `store.py` 里的连接与锁。新增存储逻辑写进对应职责的模块，不要再往 `store.py` 堆。
 
 ### provider 包与流式请求
 
@@ -469,6 +471,8 @@ npm run i18n:check
   - [ADR 0021 任务窗口的上下文占用读数](decisions/0021-context-usage-meter.md)
   - [ADR 0022 AGENTS.md 进入系统提示词](decisions/0022-agents-md.md)
   - [ADR 0023 工作空间里只留一个 `.ngy-agent/`](decisions/0023-workspace-data-dir.md)
+  - [ADR 0024 工具黑名单：命中即拒绝](decisions/0024-tool-denylist.md)
+  - [ADR 0025 根目录只留 `main.py`，应用层拆进 `commons` / `dao` / `agent.runtime`](decisions/0025-root-only-main-py.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 
@@ -485,7 +489,7 @@ npm run i18n:check
 | `agent/telemetry/usage.py` | 兼容 OpenAI 的 `prompt_tokens`/`completion_tokens` 与 Anthropic 的 `input_tokens`/`output_tokens` |
 | `agent/telemetry/spans.py` | `task_span` / `react_step_span` / `llm_span` / `tool_span`，以及跨线程的 `TaskSpanHandle` |
 
-埋点调用点只有四处：`agent/agent_loop/runtime.py` 的 `_traced_run`（任务根）、`agent/agent_loop/loop.py`（步骤）、`agent/agent_loop/model_turn.py` 与 `agent/agent_loop/steps.py`（模型请求与工具调用）、`task_api.create_task` + `task_runtime.run_task`（任务生命周期）。
+埋点调用点只有四处：`agent/agent_loop/runtime.py` 的 `_traced_run`（任务根）、`agent/agent_loop/loop.py`（步骤）、`agent/agent_loop/model_turn.py` 与 `agent/agent_loop/steps.py`（模型请求与工具调用）、`task_api.create_task` + `agent/runtime/runner.py` 的 `run_task`（任务生命周期）。
 
 ### 三条必须守住的约定
 
@@ -517,10 +521,10 @@ npm run i18n:check
 | --- | --- |
 | `task_recovery/transcript.py` | 纯函数：`build_resume_plan(events, query, ...)` → `ResumePlan`。不碰数据库、不起线程 |
 | `task_recovery/launch.py` | 认领任务、查模型、起线程；放弃/收尾时写事件 |
-| `task_store.list_unfinished_tasks()` | `running` / `waiting` 的行（`waiting` 也是"在飞"，ADR 0006 D10） |
-| `task_store.increase_resume_count()` / `reset_resume_count()` | 无进展重试预算 |
+| `dao.list_unfinished_tasks()` | `running` / `waiting` 的行（`waiting` 也是"在飞"，ADR 0006 D10） |
+| `dao.increase_resume_count()` / `reset_resume_count()` | 无进展重试预算 |
 | `agent/agent_loop/loop.py` | `first_step`（续跑接着编号）、`append_user_query`（重建的对话已含 query）、`Starting ReAct loop` 事件里的 `initial_messages` |
-| `task_runtime._execute_task()` | `resume_messages` / `resume_step` 透传；续跑时跳过会话命名 |
+| `agent/runtime/runner.py` 的 `_execute_task()` | `resume_messages` / `resume_step` 透传；续跑时跳过会话命名 |
 
 ### 三条必须守住的约定
 

@@ -33,7 +33,7 @@
 
 用回调而不是事件对象，有两个理由：
 
-1. 工具层不该 import `app_state`——那是应用层，`agent/` 要能脱离服务端单独跑；
+1. 工具层不该 import `app_state`——那是应用层，`agent/` 要能脱离服务端单独跑（[ADR 0025](0025-root-only-main-py.md) D6 把这条收窄成：`agent/tools` 与 `agent/agent_loop` 不 import `commons`/`dao`，而 `agent/runtime` 等任务生命周期模块允许读活状态）；
 2. CLI 没有取消通道，传 `None` 就是"永不停止"，不需要为一个不存在的场景造一个空事件。
 
 ### D2. 阻塞等待改为分片轮询

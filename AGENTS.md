@@ -2,7 +2,7 @@
 
 ## 范围
 
-本仓库是一个基于 ReAct 的 CLI Agent 示例，入口在 `main.py`，`agent/` 目录包含 provider 与工具的适配逻辑。
+本仓库是一个基于 ReAct 的 Agent 服务（Web Admin API + 前端）。入口 `main.py` 只做装配与启动：`routes/` 是 HTTP 层，`commons/` 放进程活状态与请求模型，`dao/` 放全部 SQLite 读写，`agent/` 是引擎（循环、provider、工具，以及任务编排 `agent/runtime/`）。根目录只允许有 `main.py` 一个源码模块（ADR 0025）。
 
 ## 规则
 
@@ -40,7 +40,7 @@
 ## AI 辅助修改建议的快速校验
 
 - 语法检查：
-  - `python -m compileall -q main.py agent/agent_loop/`
+  - `python -m compileall -q main.py agent commons dao routes task_recovery`
 - 冒烟验证：
   - `uv run python main.py --help`（应只列出 `--web` 入口及 `--host` / `--port` / `--reload`）
 

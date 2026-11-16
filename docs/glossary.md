@@ -187,10 +187,10 @@
 | --- | --- | --- |
 | **`ask_user_question`** | 模型向用户提 1–3 个问题并等待回答的工具。**只读且阻塞**：它不能允许、禁止或改变任何东西，`permission = none`（描述里明令禁止拿它当权限闸门）。可用范围：`build`（全部工具）与 `ask`。 | `agent/tools/ask_user_question/` |
 | **提问通道（`UserQuestionBroker`）** | 一个任务一个：把问题作为 `user_question` 事件送出去，阻塞任务线程等答复，由 API 线程 `resolve()` 交付。工具拿不到它——通道以 `ToolBindings.ask_user` 注入，registry 每次调用时读取本任务的 broker。 | `agent/tools/user_question.py` |
-| **`user_question` / `user_answer`** | 提问通道的两个事件类别：前者携带问题原文（每题带 `is_other: true`），后者携带 `status`、`answers` 与 `answered_count`。`_sink` 把前者置 `WAITING`、后者置 `RUNNING`（`app_state.status_for_event`）。**不复用** `permission_*`：审计必须能区分"允许了命令"与"选了方案"。 | `agent/models.py` |
+| **`user_question` / `user_answer`** | 提问通道的两个事件类别：前者携带问题原文（每题带 `is_other: true`），后者携带 `status`、`answers` 与 `answered_count`。`_sink` 把前者置 `WAITING`、后者置 `RUNNING`（`commons.state.status_for_event`）。**不复用** `permission_*`：审计必须能区分"允许了命令"与"选了方案"。 | `agent/models.py` |
 | **答案契约（answers）** | `{"answers": {"<id>": {"answers": [...]}}}`：选项标签一个元素，用户输入的自由文本**另一个**元素，**不加** `user_note:` 之类的前缀。跳过的题为空数组或直接缺席。 | [ADR 0010](decisions/0010-ask-user-question.md) |
 | **"其他"行（Other）** | 自由输入项由**客户端**添加（`QuestionPrompt.jsx`），模型被要求在选项里不要自己加 "Other"。它不产生标签，只把用户输入作为答案。 | `web-admin/src/components/QuestionPrompt.jsx` |
-| **`pending_question`** | 任务详情/列表里的待答问题批（与 `pending_permission` 并列），前端 1 秒轮询它渲染对话框；答复后置空。 | `routes/task_api.py`、`app_state.py` |
+| **`pending_question`** | 任务详情/列表里的待答问题批（与 `pending_permission` 并列），前端 1 秒轮询它渲染对话框；答复后置空。 | `routes/task_api.py`、`commons/state.py` |
 | **`no_client`** | 没有客户端可问（CLI、库调用、未注入 broker）时提问结果的 `status`。**不阻塞、不抛异常、不假装问过**：模型拿到空答案并被告知自行决定。 | `agent/tools/registry.py` |
 | **提问超时（`ASK_USER_TIMEOUT_SECONDS`）** | 默认 120 秒，**独立于** `PERMISSION_TIMEOUT_SECONDS`：两人应答的语义不同（"拒绝这次调用" vs "带着假设继续"），共用一个旋钮会互相误伤。超时返回空答案 + "自行决定并说明假设"，**不是拒绝**。 | `agent/tools/user_question.py` |
 
@@ -205,7 +205,7 @@
 | **快照粒度** | 两档。文件工具只 `add` 那一个 `file_path`（O(1)）；`exec_command` / `write_stdin` / `code_interpreter` 才 `add -A`（O(文件数)）——因为它们不告诉任何人自己动了什么。 | [ADR 0020](decisions/0020-checkpoint-rewind.md) |
 | **`revert`（回退）** | 把文件恢复到任务的基线。逐文件进行，**不是全有全无**：一个冲突不连累其他文件。 | `agent/checkpoints/store.py` |
 | **冲突（conflict）** | 回退判据是"当前内容 == 任务留下的内容"。不等就说明任务之后有人改过，该文件**跳过**并报为冲突；`force=true` 才覆盖。不做 3-way merge：静默合并会毁掉用户手里的内容。 | [ADR 0020](decisions/0020-checkpoint-rewind.md) |
-| **`REVERTED`（任务状态）** | **全部**回退成功才置。部分回退或存在冲突时任务保持原状态——它的改动还在磁盘上，这轮仍然是工作空间的一部分。已回退的任务**不进会话历史**（`session_history` 只回放 `success`）。 | `agent/models.py` |
+| **`REVERTED`（任务状态）** | **全部**回退成功才置。部分回退或存在冲突时任务保持原状态——它的改动还在磁盘上，这轮仍然是工作空间的一部分。已回退的任务**不进会话历史**（`agent.history` 只回放 `success`）。 | `agent/models.py` |
 | **回退不可用（`unavailable`）** | 缺 git、功能关闭、任务早于本功能，都会让回退不可用。**必须显示原因**，不给一个点不动的按钮。 | [ADR 0020](decisions/0020-checkpoint-rewind.md) |
 | **归属重叠（已知限制）** | 多个任务同时跑、共享一个工作树时，A 在 B 的基线之后做的改动会落进 B 的分支，于是 B 的改动列表会把 A 的算进来。冲突判据能挡下"任务提交之后再发生的改动"，挡不住并发窗口内的重叠。 | [ADR 0020](decisions/0020-checkpoint-rewind.md) |
 
