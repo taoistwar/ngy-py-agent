@@ -100,6 +100,13 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* Editing an existing task: sending this composer replaces that turn, so the panel
+   reads as a change to something already on screen rather than a new task. */
+.task-composer-panel.is-editing {
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 .status {
   font-weight: 600;
   letter-spacing: 0.02em;

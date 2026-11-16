@@ -1,13 +1,36 @@
-// Icon-only row actions for the task list: re-run, undo what it changed, and delete.
+// Icon-only row actions for the task list: edit, re-run, undo what it changed,
+// and delete.
 
-import { RerunIcon, TrashIcon, UndoIcon } from "./icons"
+import { EditIcon, RerunIcon, TrashIcon, UndoIcon } from "./icons"
 
-export default function TaskRowActions({ running, onRerun, onRevert, onDelete, translate }) {
+export default function TaskRowActions({
+  running,
+  onEdit,
+  onRerun,
+  onRevert,
+  onDelete,
+  translate,
+}) {
   const rerunLabel = translate("taskRerun")
   const revertLabel = translate("taskRevert")
 
   return (
     <div className="task-row-actions">
+      <button
+        type="button"
+        className="icon-btn"
+        title={translate("taskEdit")}
+        aria-label={translate("taskEdit")}
+        // Editing a running task would fill the composer from a turn that is still
+        // writing; sending it would then delete the task mid-run.
+        disabled={running}
+        onClick={(event) => {
+          event.stopPropagation()
+          onEdit()
+        }}
+      >
+        <EditIcon />
+      </button>
       <button
         type="button"
         className="icon-btn"

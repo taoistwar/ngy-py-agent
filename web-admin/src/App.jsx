@@ -99,6 +99,7 @@ import {
   saveRememberedModel,
 } from "./utils/composerModelMemory"
 import { formatTime } from "./utils/format"
+import { buildTaskEditDraft, replaceTaskWithEdit } from "./utils/taskEditFlow"
 
 const EVENT_PAGE_SIZE = 30
 const TASK_PAGE_SIZE = 12
@@ -255,6 +256,7 @@ function TaskList({
   tasks,
   selectedId,
   onSelect,
+  onEdit,
   onRerun,
   onRevert,
   onDelete,
@@ -361,6 +363,7 @@ function TaskList({
                       {/* Kept on the meta line so the name above owns the full width. */}
                       <TaskRowActions
                         running={isTaskRunningStatus(item.status)}
+                        onEdit={() => onEdit(item)}
                         onRerun={() => onRerun(item)}
                         onRevert={() => onRevert(item.task_id)}
                         onDelete={() => onDelete(item.task_id)}
@@ -488,6 +491,8 @@ function TaskComposer({
   sessionId,
   workspaceId,
   composerRunning,
+  editRequest,
+  onCancelEdit,
   onCreate,
   onStop,
   onRequestCreateAgent,
@@ -507,6 +512,8 @@ function TaskComposer({
   const skillsButtonRef = useRef(null)
   const pickerRef = useRef(null)
   const textareaRef = useRef(null)
+  // The draft an edit filled over, so cancelling can bring it back.
+  const preEditDraftRef = useRef("")
 
   // The remembered model may no longer be in the list, in which case the picker
   // shows the first model instead of an empty selection.
@@ -536,6 +543,24 @@ function TaskComposer({
   const selectModel = (nextModelId) => {
     setModelId(nextModelId)
     saveRememberedModel(sessionId, workspaceId, nextModelId)
+  }
+
+  // Editing a task fills the composer with that turn's prompt, agent and model.
+  useEffect(() => {
+    if (!editRequest) return
+    preEditDraftRef.current = query
+    updateQuery(editRequest.query)
+    setAgentId(editRequest.agentId || "")
+    if (editRequest.modelId) selectModel(editRequest.modelId)
+    textareaRef.current?.focus()
+    // Keyed on the request object alone: every edit click builds a new one, and
+    // re-running this on each keystroke would overwrite what the user is typing.
+  }, [editRequest])
+
+  const cancelEdit = () => {
+    updateQuery(preEditDraftRef.current)
+    preEditDraftRef.current = ""
+    onCancelEdit()
   }
 
   // The meter answers "how much room is left before the next task", so it follows the
@@ -626,9 +651,19 @@ function TaskComposer({
   }
 
   return (
-    <section className="panel task-composer-panel">
+    <section className={`panel task-composer-panel${editRequest ? " is-editing" : ""}`}>
       <div className="panel-titlebar">
-        <h2>{translate("taskComposerTitle")}</h2>
+        <div>
+          <h2>
+            {translate(editRequest ? "taskComposerEditTitle" : "taskComposerTitle")}
+          </h2>
+          {editRequest ? <span className="hint">{translate("composerEditNotice")}</span> : null}
+        </div>
+        {editRequest ? (
+          <button type="button" className="btn btn-compact" onClick={cancelEdit}>
+            {translate("taskComposerEditCancel")}
+          </button>
+        ) : null}
       </div>
       <div className="panel-body">
         <form className="task-composer" onSubmit={submit}>
@@ -905,6 +940,9 @@ export default function App() {
   const [skills, setSkills] = useState([])
   const [skillsRoot, setSkillsRoot] = useState("")
   const [composerTaskId, setComposerTaskId] = useState("")
+  // Non-null while the composer is filled from a task row: sending it then replaces
+  // that task instead of appending a new turn.
+  const [composerEdit, setComposerEdit] = useState(null)
   const [taskColumnWidths, setTaskColumnWidths] = useState(loadTaskColumnWidths)
   const [leftColumnCollapsed, setLeftColumnCollapsed] = useState(loadLeftColumnCollapsed)
   const [resizingColumn, setResizingColumn] = useState("")
@@ -963,6 +1001,7 @@ export default function App() {
     setActiveMenu("tasks")
     setTaskTab("detail")
     setWorkspaceScopeId("")
+    setComposerEdit(null)
     setComposerFocusSignal((prev) => prev + 1)
   }, [])
   const [locale, setLocale] = useState(getDefaultLocale())
@@ -1231,6 +1270,9 @@ export default function App() {
   const selectSession = useCallback(
     async (sessionId) => {
       setActiveSessionId(sessionId)
+      // An edit belongs to one session's task list; carrying it into another one
+      // would let its send delete a task of a different conversation.
+      setComposerEdit(null)
       applySelection("")
       setSelectedTask(null)
       setEvents([])
@@ -1700,6 +1742,62 @@ export default function App() {
       }
     },
     [createNewTask, models, refreshTasks, translate]
+  )
+
+  // Filling the composer from a task row: its prompt, agent and model come back so
+  // the user can correct them and run the turn again.
+  const editTaskHandler = useCallback(
+    (task) => {
+      if (!task?.task_id) return
+      setError("")
+      setActiveMenu("tasks")
+      setComposerEdit(buildTaskEditDraft(task, { agents, models }))
+      setComposerFocusSignal((prev) => prev + 1)
+    },
+    [agents, models]
+  )
+
+  // Sending an edited task replaces the original turn: it and every turn after it
+  // are deleted first, so the edited content becomes the session's last turn and
+  // nothing that ran later can reach it as context.
+  const submitComposerTask = useCallback(
+    async (payload) => {
+      const edit = composerEdit
+      if (!edit) return createNewTask(payload)
+      try {
+        setError("")
+        const outcome = await replaceTaskWithEdit(edit, activeSessionRef.current)
+        if (!outcome.deleted) {
+          // The undo hit a conflict: keep the edit so nothing has to be retyped.
+          refreshTasks().catch(() => {})
+          throw new Error(
+            outcome.blocked.length > 0
+              ? `${translate("revertFailed")} ${translate("revertConflictNote")} ${outcome.blocked.join(", ")}`
+              : translate("revertFailed")
+          )
+        }
+        setComposerEdit(null)
+        setSelectedTaskIds((prev) => {
+          const next = new Set(prev)
+          outcome.removed.forEach((taskId) => next.delete(taskId))
+          return next
+        })
+        if (outcome.removed.includes(selectedIdRef.current)) {
+          // The pane must not keep describing a turn that no longer exists.
+          applySelection("")
+          setSelectedTask(null)
+          setEvents([])
+          nextOffsetRef.current = 0
+          setHasMoreEvents(false)
+        }
+        return await createNewTask(payload)
+      } catch (editError) {
+        setError(editError?.message || translate("errorUnknown"))
+        refreshTasks().catch(() => {})
+        throw editError
+      }
+    },
+    [applySelection, composerEdit, createNewTask, refreshTasks, translate]
   )
 
   const stopComposerTask = useCallback(async () => {
@@ -2339,6 +2437,7 @@ export default function App() {
                 tasks={pagedTasks}
                 selectedId={selectedId}
                 onSelect={selectTask}
+                onEdit={editTaskHandler}
                 onRerun={rerunTaskHandler}
                 onRevert={setRevertTaskId}
                 onDelete={deleteTaskItem}
@@ -2370,7 +2469,9 @@ export default function App() {
                 sessionId={activeSessionId}
                 workspaceId={activeSessionWorkspaceId}
                 composerRunning={Boolean(composerTaskId)}
-                onCreate={createNewTask}
+                editRequest={composerEdit}
+                onCancelEdit={() => setComposerEdit(null)}
+                onCreate={submitComposerTask}
                 onStop={stopComposerTask}
                 onRequestCreateAgent={requestCreateAgent}
                 onImportSkill={importSkillHandler}
