@@ -20,8 +20,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import app_state  # noqa: E402
 import main  # noqa: E402
+from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 from task_runtime import build_provider_config  # noqa: E402
 
@@ -32,13 +32,13 @@ GATEWAY_URL = "https://gateway.example.com"
 class ModelApiTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self._previous_store = app_state.monitor_store
+        self._previous_store = state.monitor_store
         self.store = _SqliteTaskStore(Path(self._tmp.name) / "tasks.db")
-        app_state.monitor_store = self.store
+        state.monitor_store = self.store
         self.client = TestClient(main.app)
 
     def tearDown(self):
-        app_state.monitor_store = self._previous_store
+        state.monitor_store = self._previous_store
         self.store.close()
         self._tmp.cleanup()
 

@@ -24,9 +24,9 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.models import TaskStatus  # noqa: E402
+from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 
 
@@ -34,15 +34,15 @@ class TaskStopApiTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.store = _SqliteTaskStore(Path(self._tmp.name) / "tasks.db")
-        self._previous_store = app_state.monitor_store
-        app_state.monitor_store = self.store
+        self._previous_store = state.monitor_store
+        state.monitor_store = self.store
         self.client = TestClient(main.app)
         self.session_id = self.store.create_session("conversation")
 
     def tearDown(self):
-        with app_state._task_stop_lock:
-            app_state._task_stop_events.clear()
-        app_state.monitor_store = self._previous_store
+        with state._task_stop_lock:
+            state._task_stop_events.clear()
+        state.monitor_store = self._previous_store
         self.store.close()
         self._tmp.cleanup()
 
@@ -68,7 +68,7 @@ class TaskStopApiTest(unittest.TestCase):
     def test_a_running_task_is_settled_by_the_click(self):
         task_id = self._task()
         # The live thread's flag, as ``POST /api/tasks`` registers it.
-        app_state.register_task_stop(task_id)
+        state.register_task_stop(task_id)
 
         response = self.client.post(f"/api/tasks/{task_id}/stop")
 
@@ -79,7 +79,7 @@ class TaskStopApiTest(unittest.TestCase):
     def test_a_waiting_task_is_settled_by_the_click(self):
         """Parked on a confirmation is still in flight, so a stop still ends it."""
         task_id = self._task(TaskStatus.WAITING)
-        app_state.register_task_stop(task_id)
+        state.register_task_stop(task_id)
 
         self.client.post(f"/api/tasks/{task_id}/stop")
 
@@ -87,7 +87,7 @@ class TaskStopApiTest(unittest.TestCase):
 
     def test_a_second_click_does_not_change_anything(self):
         task_id = self._task()
-        app_state.register_task_stop(task_id)
+        state.register_task_stop(task_id)
         self.client.post(f"/api/tasks/{task_id}/stop")
 
         second = self.client.post(f"/api/tasks/{task_id}/stop")
@@ -108,7 +108,7 @@ class TaskStopApiTest(unittest.TestCase):
     def test_a_late_worker_cannot_undo_the_stop(self):
         """The model request in flight may still answer at the very end."""
         task_id = self._task()
-        app_state.register_task_stop(task_id)
+        state.register_task_stop(task_id)
         self.client.post(f"/api/tasks/{task_id}/stop")
 
         self.store.finish_task(task_id, success=True, result="answered anyway")
@@ -120,7 +120,7 @@ class TaskStopApiTest(unittest.TestCase):
     def test_a_revert_is_not_undone_by_a_late_worker_either(self):
         """Same shape, other way round: undoing the files also outlives the thread."""
         task_id = self._task()
-        app_state.register_task_stop(task_id)
+        state.register_task_stop(task_id)
         self.client.post(f"/api/tasks/{task_id}/stop")
         self.store.set_task_status(task_id, TaskStatus.REVERTED)
 

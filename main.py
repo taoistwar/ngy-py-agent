@@ -3,7 +3,7 @@
 This module is the app assembly and the service entry point: it mounts the route modules
 on the FastAPI app, serves the built frontend, and starts the server. What it used to
 carry lives next door now - ``api_schemas`` (request/response models),
-``app_state`` (the live state), ``task_runtime`` (what a task is), and one module per
+``commons.state`` (the live state), ``task_runtime`` (what a task is), and one module per
 route group in ``routes/`` (``task_api``, ``workspace_api``, ``llm_api``, ``agent_api``,
 ``tool_api``, ``admin_api``, ``mcp_api``). A single 1700-line module is neither readable
 nor safe to edit (``AGENTS.md``).
@@ -21,19 +21,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from uvicorn import run as uvicorn_run
 
-import app_state
 from agent.telemetry import (
     active_provider,
     init_telemetry,
     is_telemetry_enabled,
     shutdown_telemetry,
 )
+from commons import state
 from routes import admin_api, agent_api, llm_api, task_api, tool_api, workspace_api
 from routes.mcp_api import router as mcp_router
 from task_recovery import resume_interrupted_tasks
 from task_runtime import purge_expired_tasks_with_log
 
-ROOT_DIR = app_state.ROOT_DIR
+ROOT_DIR = state.ROOT_DIR
 FRONTEND_DIR = ROOT_DIR / "web-admin"
 FRONTEND_DIST_DIR = FRONTEND_DIR / "dist"
 FRONTEND_DIST_INDEX = FRONTEND_DIST_DIR / "index.html"
@@ -52,7 +52,7 @@ OTEL_EXCLUDED_URLS = (
 )
 
 def _load_runtime_config() -> None:
-    """Resolve ``.env`` plus the database into ``app_state`` for the serving process.
+    """Resolve ``.env`` plus the database into ``commons.state`` for the serving process.
 
     This cannot live in :func:`main`: with ``--reload`` uvicorn imports this module in a
     child process that never runs ``main``, so the persisted settings were silently

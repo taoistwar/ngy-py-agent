@@ -10,7 +10,6 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-import app_state
 from agent import skills as skill_library
 from agent.modes import (
     DEFAULT_MODE,
@@ -20,7 +19,8 @@ from agent.modes import (
     list_available_skills,
     list_available_tools,
 )
-from api_schemas import (
+from commons import state
+from commons.schemas import (
     AgentItemResponse,
     AgentListResponse,
     AgentUpdateRequest,
@@ -59,7 +59,7 @@ async def list_modes() -> dict[str, Any]:
 
 @router.get("/api/agents", response_model=AgentListResponse)
 async def list_agents() -> AgentListResponse:
-    agents = app_state.monitor_store.list_agents()
+    agents = state.monitor_store.list_agents()
     return AgentListResponse(agents=[AgentItemResponse(**item) for item in agents])
 
 
@@ -81,13 +81,13 @@ async def get_agent_meta() -> dict[str, Any]:
 
 @router.post("/api/agents", response_model=AgentItemResponse)
 async def create_agent(payload: AgentUpsertRequest) -> AgentItemResponse:
-    created = app_state.monitor_store.create_agent(payload.model_dump())
+    created = state.monitor_store.create_agent(payload.model_dump())
     return AgentItemResponse(**created)
 
 
 @router.put("/api/agents/{agent_id}", response_model=AgentItemResponse)
 async def update_agent(agent_id: str, payload: AgentUpdateRequest) -> AgentItemResponse:
-    updated = app_state.monitor_store.update_agent(agent_id, payload.model_dump(exclude_unset=True))
+    updated = state.monitor_store.update_agent(agent_id, payload.model_dump(exclude_unset=True))
     if updated is None:
         raise HTTPException(status_code=404, detail="Agent not found.")
     return AgentItemResponse(**updated)
@@ -95,12 +95,12 @@ async def update_agent(agent_id: str, payload: AgentUpdateRequest) -> AgentItemR
 
 @router.delete("/api/agents/{agent_id}")
 async def delete_agent(agent_id: str) -> dict[str, Any]:
-    agent = app_state.monitor_store.get_agent(agent_id)
+    agent = state.monitor_store.get_agent(agent_id)
     if agent is None:
         raise HTTPException(status_code=404, detail="Agent not found.")
     if agent.get("is_builtin"):
         raise HTTPException(status_code=400, detail="Built-in agents cannot be deleted.")
-    if not app_state.monitor_store.delete_agent(agent_id):
+    if not state.monitor_store.delete_agent(agent_id):
         raise HTTPException(status_code=404, detail="Agent not found.")
     return {"agent_id": agent_id, "deleted": True}
 
@@ -117,7 +117,7 @@ async def list_skills() -> dict[str, Any]:
 
 @router.get("/api/admin/skills-root")
 async def get_skills_root() -> dict[str, Any]:
-    stored = app_state.monitor_store.get_skills_root()
+    stored = state.monitor_store.get_skills_root()
     return {
         "skills_root": resolve_skills_root(),
         "skills_root_source": "database" if stored and stored.strip() else "env",
@@ -126,7 +126,7 @@ async def get_skills_root() -> dict[str, Any]:
 
 @router.put("/api/admin/skills-root")
 async def update_skills_root(payload: SkillsRootUpdateRequest) -> dict[str, Any]:
-    app_state.monitor_store.set_skills_root(payload.skills_root.strip())
+    state.monitor_store.set_skills_root(payload.skills_root.strip())
     return {"skills_root": resolve_skills_root()}
 
 

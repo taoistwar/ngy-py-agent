@@ -16,10 +16,10 @@ import os
 import threading
 from typing import Any
 
-import app_state
 import task_runtime
 from agent.models import EventCategory, TaskEvent, TaskStatus
-from api_schemas import RunTaskRequest
+from commons import state
+from commons.schemas import RunTaskRequest
 from task_recovery.transcript import ResumeMode, ResumePlan, build_resume_plan
 
 # How many restarts one task may be resumed through *without making progress*. A
@@ -46,7 +46,7 @@ def resume_interrupted_tasks(store: Any | None = None) -> list[str]:
     Returns the ids that were actually started, which is also what makes the call
     testable without inspecting threads.
     """
-    target = store or app_state.monitor_store
+    target = store or state.monitor_store
     started: list[str] = []
     for task in target.list_unfinished_tasks():
         task_id = str(task.get("task_id") or "")
@@ -169,7 +169,7 @@ def _start(
         },
     )
 
-    stop_event = app_state.register_task_stop(task_id)
+    stop_event = state.register_task_stop(task_id)
     worker = threading.Thread(
         target=task_runtime.run_task,
         args=(task_id, request, model, provider_record, base_dir, agent_config, stop_event),
@@ -182,7 +182,7 @@ def _start(
     try:
         _spawn(worker)
     except Exception:
-        app_state.clear_task_stop(task_id)
+        state.clear_task_stop(task_id)
         raise
     return True
 
@@ -275,7 +275,7 @@ def _claim(task_id: str) -> bool:
     with _claim_lock:
         if task_id in _claimed:
             return False
-        if app_state.is_task_active(task_id):
+        if state.is_task_active(task_id):
             # A live thread owns it: the row is running because it *is* running.
             return False
         _claimed.add(task_id)

@@ -22,10 +22,10 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import app_state  # noqa: E402
 import main  # noqa: E402
 import task_runtime  # noqa: E402
 from agent import agents_md  # noqa: E402
+from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 from routes import admin_api  # noqa: E402
 
@@ -68,41 +68,41 @@ class AgentsMdConfigApiTest(unittest.TestCase):
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self._previous_store = app_state.monitor_store
+        self._previous_store = state.monitor_store
         self._previous = (
-            app_state.agents_md_enabled,
-            app_state.agents_md_max_bytes,
-            app_state.agents_md_source,
+            state.agents_md_enabled,
+            state.agents_md_max_bytes,
+            state.agents_md_source,
         )
         # ``load_startup_config`` resolves every setting, so the restart test has to put
         # the other three back as well.
         self._previous_others = (
-            app_state.permission_mode,
-            app_state.permission_mode_source,
-            app_state.agent_max_steps,
-            app_state.agent_max_steps_source,
-            app_state.task_retention_days,
-            app_state.task_retention_source,
+            state.permission_mode,
+            state.permission_mode_source,
+            state.agent_max_steps,
+            state.agent_max_steps_source,
+            state.task_retention_days,
+            state.task_retention_source,
         )
-        # The routes read ``app_state``, so that is where a test swaps the store.
+        # The routes read ``commons.state``, so that is where a test swaps the store.
         self.store = _SqliteTaskStore(Path(self._tmp.name) / "tasks.db")
-        app_state.monitor_store = self.store
+        state.monitor_store = self.store
         self.client = TestClient(main.app)
 
     def tearDown(self):
-        app_state.monitor_store = self._previous_store
+        state.monitor_store = self._previous_store
         (
-            app_state.agents_md_enabled,
-            app_state.agents_md_max_bytes,
-            app_state.agents_md_source,
+            state.agents_md_enabled,
+            state.agents_md_max_bytes,
+            state.agents_md_source,
         ) = self._previous
         (
-            app_state.permission_mode,
-            app_state.permission_mode_source,
-            app_state.agent_max_steps,
-            app_state.agent_max_steps_source,
-            app_state.task_retention_days,
-            app_state.task_retention_source,
+            state.permission_mode,
+            state.permission_mode_source,
+            state.agent_max_steps,
+            state.agent_max_steps_source,
+            state.task_retention_days,
+            state.task_retention_source,
         ) = self._previous_others
         self.store.close()
         self._tmp.cleanup()
@@ -178,15 +178,15 @@ class AgentsMdConfigApiTest(unittest.TestCase):
     def test_a_restart_reads_the_saved_value_back(self):
         self.client.put("/api/admin/agents-md", json={"enabled": True, "max_bytes": 8192})
         # A fresh process starts from the code defaults and then loads the database.
-        app_state.agents_md_enabled = True
-        app_state.agents_md_max_bytes = agents_md.DEFAULT_MAX_BYTES
-        app_state.agents_md_source = "default"
+        state.agents_md_enabled = True
+        state.agents_md_max_bytes = agents_md.DEFAULT_MAX_BYTES
+        state.agents_md_source = "default"
 
         admin_api.load_startup_config()
 
-        self.assertTrue(app_state.agents_md_enabled)
-        self.assertEqual(8192, app_state.agents_md_max_bytes)
-        self.assertEqual("database", app_state.agents_md_source)
+        self.assertTrue(state.agents_md_enabled)
+        self.assertEqual(8192, state.agents_md_max_bytes)
+        self.assertEqual("database", state.agents_md_source)
 
 
 if __name__ == "__main__":

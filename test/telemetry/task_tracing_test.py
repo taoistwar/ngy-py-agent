@@ -24,7 +24,7 @@ import task_runtime  # noqa: E402
 from agent.telemetry import spans  # noqa: E402
 from agent.telemetry.config import TelemetryConfig  # noqa: E402
 from agent.telemetry.setup import init_telemetry, shutdown_telemetry  # noqa: E402
-from api_schemas import RunTaskRequest  # noqa: E402
+from commons.schemas import RunTaskRequest  # noqa: E402
 
 
 class _Store:
@@ -42,7 +42,7 @@ class _Store:
         self.finished.append((args, kwargs))
 
 
-def _fake_app_state(store):
+def _fake_state(store):
     return SimpleNamespace(
         monitor_store=store,
         agent_max_steps=8,
@@ -84,7 +84,7 @@ class RunTaskTracingTest(unittest.TestCase):
         self.assertIsNotNone(handle)
 
         with (
-            patch.object(task_runtime, "app_state", _fake_app_state(store)),
+            patch.object(task_runtime, "state", _fake_state(store)),
             patch.object(task_runtime, "run_react_loop", fake_loop),
             patch.object(task_runtime, "name_task_and_session", lambda *args: None),
         ):
@@ -110,7 +110,7 @@ class RunTaskTracingTest(unittest.TestCase):
         handle = spans.start_task_span("task-2")
 
         with (
-            patch.object(task_runtime, "app_state", _fake_app_state(store)),
+            patch.object(task_runtime, "state", _fake_state(store)),
             patch.object(task_runtime, "run_react_loop", exploding_loop),
             patch.object(task_runtime, "name_task_and_session", lambda *args: None),
         ):
@@ -125,7 +125,7 @@ class RunTaskTracingTest(unittest.TestCase):
         store = _Store()
 
         with (
-            patch.object(task_runtime, "app_state", _fake_app_state(store)),
+            patch.object(task_runtime, "state", _fake_state(store)),
             patch.object(task_runtime, "run_react_loop", lambda **kwargs: "ok"),
             patch.object(task_runtime, "name_task_and_session", lambda *args: None),
         ):

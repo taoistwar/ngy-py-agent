@@ -25,9 +25,9 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.tools.denylist import ToolDenyList  # noqa: E402
+from commons import state  # noqa: E402
 
 ENDPOINT = "/api/admin/denylist"
 
@@ -36,13 +36,13 @@ class DenyListApiTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self._tmp.name)
-        self._previous = app_state.denylist_store
+        self._previous = state.denylist_store
         self.denylist = ToolDenyList(self.root / "denylist.json")
-        app_state.denylist_store = self.denylist
+        state.denylist_store = self.denylist
         self.client = TestClient(main.app)
 
     def tearDown(self):
-        app_state.denylist_store = self._previous
+        state.denylist_store = self._previous
         self._tmp.cleanup()
 
     def create(self, **payload):

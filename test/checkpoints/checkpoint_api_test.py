@@ -26,11 +26,11 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.checkpoints import CheckpointStore  # noqa: E402
 from agent.checkpoints import git as git_module  # noqa: E402
 from agent.models import TaskStatus  # noqa: E402
+from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 
 
@@ -47,9 +47,9 @@ class CheckpointApiTest(unittest.TestCase):
         )
         self._env.start()
 
-        self._previous_store = app_state.monitor_store
+        self._previous_store = state.monitor_store
         self.store = _SqliteTaskStore(root / "tasks.db")
-        app_state.monitor_store = self.store
+        state.monitor_store = self.store
         self.client = TestClient(main.app)
 
         self.workspace_id = self.store.create_workspace("ws", str(self.workspace))
@@ -63,7 +63,7 @@ class CheckpointApiTest(unittest.TestCase):
 
     def tearDown(self):
         self._env.stop()
-        app_state.monitor_store = self._previous_store
+        state.monitor_store = self._previous_store
         self.store.close()
         self._tmp.cleanup()
 

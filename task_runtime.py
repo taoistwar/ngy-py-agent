@@ -5,7 +5,7 @@ workspace root, which step limit, which confirmation mode - and then runs the Re
 loop under brokers the API can reach. ``routes/task_api.py`` calls :func:`run_task` on a thread
 and answers the request immediately.
 
-It reads and writes the app's live state through :mod:`app_state`, never through
+It reads and writes the app's live state through :mod:`commons.state`, never through
 ``main``: the routes import this module, so this module must not import them back.
 """
 
@@ -17,7 +17,6 @@ import threading
 from datetime import datetime
 from typing import Any, Callable, Optional
 
-import app_state
 from agent.agent_loop import DEFAULT_MAX_STEPS, run_react_loop
 from agent.agents_md import AgentsMdSettings
 from agent.checkpoints import CheckpointStore
@@ -32,7 +31,8 @@ from agent.telemetry import (
 )
 from agent.tools.permissions import PermissionBroker, PermissionMode, normalize_mode
 from agent.tools.user_question import UserQuestionBroker
-from api_schemas import RunTaskRequest
+from commons import state
+from commons.schemas import RunTaskRequest
 
 # ------------------------------------------------------------------ events
 
@@ -114,7 +114,7 @@ def build_provider_config(
 
 def global_max_steps() -> int:
     """Global ReAct step limit, loaded at startup and editable via the admin API."""
-    return app_state.agent_max_steps or DEFAULT_MAX_STEPS
+    return state.agent_max_steps or DEFAULT_MAX_STEPS
 
 
 def resolve_max_steps(request: RunTaskRequest) -> int:
@@ -128,14 +128,14 @@ def resolve_permission_mode(request: RunTaskRequest) -> PermissionMode:
     """Resolve the confirmation mode for one task: explicit override, else global."""
     if request.permission_mode:
         return normalize_mode(request.permission_mode)
-    return app_state.permission_mode
+    return state.permission_mode
 
 
 def resolve_agents_md_settings() -> AgentsMdSettings:
     """AGENTS.md reading rules for one task: on/off and byte cap, already resolved."""
     return AgentsMdSettings(
-        enabled=app_state.agents_md_enabled,
-        max_bytes=app_state.agents_md_max_bytes,
+        enabled=state.agents_md_enabled,
+        max_bytes=state.agents_md_max_bytes,
     )
 
 
@@ -143,11 +143,11 @@ def resolve_session_base_dir(session_id: str | None) -> str | None:
     """Return the workspace root path bound to a session, if any."""
     if not session_id:
         return None
-    session = app_state.monitor_store.get_session(session_id)
+    session = state.monitor_store.get_session(session_id)
     workspace_id = (session or {}).get("workspace_id")
     if not workspace_id:
         return None
-    workspace = app_state.monitor_store.get_workspace(workspace_id)
+    workspace = state.monitor_store.get_workspace(workspace_id)
     root_path = str((workspace or {}).get("root_path") or "").strip()
     return root_path or None
 
@@ -183,13 +183,13 @@ def agent_runtime_config(agent: dict[str, Any] | None) -> dict[str, Any] | None:
 
 def resolve_skills_root() -> str:
     """Shared skills root folder: database setting, else env, else the repo ``skills`` folder."""
-    stored = app_state.monitor_store.get_skills_root()
+    stored = state.monitor_store.get_skills_root()
     if stored is not None and stored.strip():
         return stored.strip()
     env_root = os.getenv("SKILLS_ROOT", "").strip()
     if env_root:
         return env_root
-    return str(app_state.ROOT_DIR / "skills")
+    return str(state.ROOT_DIR / "skills")
 
 
 # ------------------------------------------------- task and session names (LLM)
@@ -291,7 +291,7 @@ def update_session_title(
         return
     title = _summarize_session_title(provider_name, provider_config, query)
     if title:
-        app_state.monitor_store.rename_session(session_id, title)
+        state.monitor_store.rename_session(session_id, title)
 
 
 def update_task_name(
@@ -310,7 +310,7 @@ def update_task_name(
     if not collapsed:
         return
     if len(collapsed) <= _TASK_NAME_MAX_LENGTH:
-        app_state.monitor_store.set_task_name(task_id, collapsed)
+        state.monitor_store.set_task_name(task_id, collapsed)
         return
     name = _summarize(
         _TASK_NAME_PROMPT,
@@ -320,7 +320,7 @@ def update_task_name(
         query,
         _fallback_task_name,
     )
-    app_state.monitor_store.set_task_name(task_id, name)
+    state.monitor_store.set_task_name(task_id, name)
 
 
 def is_first_task_in_session(session_id: str | None) -> bool:
@@ -331,7 +331,7 @@ def is_first_task_in_session(session_id: str | None) -> bool:
     """
     if not session_id:
         return True
-    session = app_state.monitor_store.get_session(session_id)
+    session = state.monitor_store.get_session(session_id)
     if session is None:
         return True
     return int(session.get("task_count") or 0) <= 1
@@ -362,14 +362,14 @@ def name_task_and_session(
 
 def purge_expired_tasks() -> int:
     """Drop task detail older than the configured retention window."""
-    return app_state.monitor_store.purge_expired_tasks(app_state.task_retention_days)
+    return state.monitor_store.purge_expired_tasks(state.task_retention_days)
 
 
 def purge_expired_tasks_with_log(scope: str) -> int:
     removed = purge_expired_tasks()
     if removed > 0:
         print(
-            f"[Task cleanup] {scope}: TASK_RETENTION_DAYS={app_state.task_retention_days}, "
+            f"[Task cleanup] {scope}: TASK_RETENTION_DAYS={state.task_retention_days}, "
             f"removed={removed} expired tasks."
         )
     return removed
@@ -450,10 +450,10 @@ def _execute_task(
     max_steps = resolve_max_steps(request)
 
     def _sink(_: str, event: TaskEvent) -> None:
-        app_state.monitor_store.append_event(task_id, event)
-        status = app_state.status_for_event(event.category)
+        state.monitor_store.append_event(task_id, event)
+        status = state.status_for_event(event.category)
         if status is not None:
-            app_state.monitor_store.set_task_status(task_id, status)
+            state.monitor_store.set_task_status(task_id, status)
 
     def _broker_event(category: str, title: str, data: dict[str, Any]) -> None:
         """Bridge a broker's audit events onto this task's event sink.
@@ -520,7 +520,7 @@ def _execute_task(
             should_stop=stop_event.is_set if stop_event is not None else None,
             # One shared store, so the management API and every task agree on
             # which rules exist.
-            rules=app_state.permission_rule_store,
+            rules=state.permission_rule_store,
         )
         # Its own broker, not the permission one: a question is not a gate, and the
         # two must not be able to answer for each other (ADR 0010 D1).
@@ -529,8 +529,8 @@ def _execute_task(
             emit=_broker_event,
             should_stop=stop_event.is_set if stop_event is not None else None,
         )
-        app_state.register_task_permission(task_id, permission_broker)
-        app_state.register_task_questions(task_id, question_broker)
+        state.register_task_permission(task_id, permission_broker)
+        state.register_task_questions(task_id, question_broker)
         result = run_react_loop(
             user_query=request.query,
             history_messages=history_messages,
@@ -559,12 +559,12 @@ def _execute_task(
         )
         if stop_event is not None and stop_event.is_set():
             emit_debug(_sink, task_id, "Task stopped", {"result": result, **current_trace_ids()})
-            app_state.monitor_store.finish_task(
+            state.monitor_store.finish_task(
                 task_id, success=False, result=result, status=TaskStatus.STOPPED
             )
         else:
             emit_debug(_sink, task_id, "Task finished", {"result": result, **current_trace_ids()})
-            app_state.monitor_store.finish_task(task_id, success=True, result=result)
+            state.monitor_store.finish_task(task_id, success=True, result=result)
     except Exception as exc:  # noqa: BLE001 - a failed task must still be recorded as failed
         emit_debug(
             _sink,
@@ -575,20 +575,20 @@ def _execute_task(
         # An error raised after the user stopped the task is a consequence of the
         # stop (the request in flight was abandoned): the row stays stopped.
         stopped = stop_event is not None and stop_event.is_set()
-        app_state.monitor_store.finish_task(
+        state.monitor_store.finish_task(
             task_id,
             success=False,
             status=TaskStatus.STOPPED if stopped else None,
         )
     finally:
-        active_broker = app_state.get_task_permission_broker(task_id)
+        active_broker = state.get_task_permission_broker(task_id)
         if active_broker is not None:
             # Release anything still waiting, so no thread stays blocked until the
             # timeout after the run is already over.
             active_broker.cancel_all()
-        active_questions = app_state.get_task_question_broker(task_id)
+        active_questions = state.get_task_question_broker(task_id)
         if active_questions is not None:
             active_questions.cancel_all()
-        app_state.clear_task_permission(task_id)
-        app_state.clear_task_questions(task_id)
-        app_state.clear_task_stop(task_id)
+        state.clear_task_permission(task_id)
+        state.clear_task_questions(task_id)
+        state.clear_task_stop(task_id)

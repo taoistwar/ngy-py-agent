@@ -23,8 +23,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-import app_state  # noqa: E402
 import task_runtime  # noqa: E402
+from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 
 
@@ -44,12 +44,12 @@ class TaskNamingTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.store = _SqliteTaskStore(Path(self._tmp.name) / "tasks.db")
-        self._previous_store = app_state.monitor_store
-        app_state.monitor_store = self.store
+        self._previous_store = state.monitor_store
+        state.monitor_store = self.store
         self.task_id = self.store.create_task("placeholder", "openai")
 
     def tearDown(self):
-        app_state.monitor_store = self._previous_store
+        state.monitor_store = self._previous_store
         self._tmp.cleanup()
 
     def _name(self):
@@ -111,11 +111,11 @@ class SessionNamingTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.store = _SqliteTaskStore(Path(self._tmp.name) / "tasks.db")
-        self._previous_store = app_state.monitor_store
-        app_state.monitor_store = self.store
+        self._previous_store = state.monitor_store
+        state.monitor_store = self.store
 
     def tearDown(self):
-        app_state.monitor_store = self._previous_store
+        state.monitor_store = self._previous_store
         self._tmp.cleanup()
 
     def _session_name(self, session_id):

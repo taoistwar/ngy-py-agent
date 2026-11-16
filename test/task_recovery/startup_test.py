@@ -22,10 +22,10 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import app_state  # noqa: E402
 import main  # noqa: E402
 import task_recovery.launch as launch  # noqa: E402
 from agent.models import EventCategory, TaskEvent, TaskStatus  # noqa: E402
+from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 
 SYSTEM = {"role": "system", "content": "you are an agent"}
@@ -36,14 +36,14 @@ class StartupResumeTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.store = _SqliteTaskStore(Path(self._tmp.name) / "tasks.db")
-        self._previous_store = app_state.monitor_store
-        app_state.monitor_store = self.store
+        self._previous_store = state.monitor_store
+        state.monitor_store = self.store
         launch._claimed.clear()
         self.session_id = self.store.create_session("conversation")
 
     def tearDown(self):
         launch._claimed.clear()
-        app_state.monitor_store = self._previous_store
+        state.monitor_store = self._previous_store
         self.store.close()
         self._tmp.cleanup()
 

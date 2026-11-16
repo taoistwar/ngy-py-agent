@@ -5,7 +5,7 @@ stored result is the assistant message. A task created in the same session start
 from that transcript, so a follow-up ("make it faster", "add tests for that") still
 refers to what the earlier task built instead of starting from nothing.
 
-It reads the live store through :mod:`app_state` for the same reason the task
+It reads the live store through :mod:`commons.state` for the same reason the task
 runtime does: every reader goes through one module, so a test can swap the store.
 """
 
@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
-import app_state
 from agent.models import TaskStatus
+from commons import state
 
 # The transcript is context, not a record: an unbounded session would otherwise
 # outgrow any model window. Whole turns are dropped, never half of one.
@@ -43,7 +43,7 @@ def _finished_turns(session_id: str) -> list[tuple[str, str]]:
     exists (ADR 0020 D6).
     """
     turns: list[tuple[str, str]] = []
-    for task in app_state.monitor_store.list_tasks(session_id=session_id):
+    for task in state.monitor_store.list_tasks(session_id=session_id):
         if str(task.get("status")) != TaskStatus.SUCCESS.value:
             continue
         query = str(task.get("query") or "").strip()

@@ -20,9 +20,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-import app_state  # noqa: E402
 import task_recovery.launch as launch  # noqa: E402
 from agent.models import EventCategory, TaskEvent, TaskStatus  # noqa: E402
+from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 
 SYSTEM = {"role": "system", "content": "you are an agent"}
@@ -33,8 +33,8 @@ class LaunchTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.store = _SqliteTaskStore(Path(self._tmp.name) / "tasks.db")
-        self._previous_store = app_state.monitor_store
-        app_state.monitor_store = self.store
+        self._previous_store = state.monitor_store
+        state.monitor_store = self.store
         launch._claimed.clear()
         self.session_id = self.store.create_session("conversation")
         # Every test drives the worker inline: a background thread would make the
@@ -49,7 +49,7 @@ class LaunchTest(unittest.TestCase):
         self._run_patch.stop()
         self._spawn_patch.stop()
         launch._claimed.clear()
-        app_state.monitor_store = self._previous_store
+        state.monitor_store = self._previous_store
         self.store.close()
         self._tmp.cleanup()
 
@@ -250,11 +250,11 @@ class LaunchTest(unittest.TestCase):
         task_id = self._task()
         self._starting(task_id, initial_messages=[SYSTEM, QUERY])
         self._request(task_id, 1, [SYSTEM, QUERY])
-        app_state.register_task_stop(task_id)
+        state.register_task_stop(task_id)
         try:
             launch.resume_interrupted_tasks(self.store)
         finally:
-            app_state.clear_task_stop(task_id)
+            state.clear_task_stop(task_id)
 
         self.assertEqual(0, self.run_task.call_count)
         self.assertEqual(TaskStatus.RUNNING.value, self._status(task_id))

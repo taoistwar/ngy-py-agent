@@ -17,10 +17,10 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-import app_state
 from agent.provider import SUPPORTED_PROVIDERS, canonicalize_provider
 from agent.rate_limit import RPM_LIMIT_MAX, bucket_key, provider_throttle
-from api_schemas import (
+from commons import state
+from commons.schemas import (
     ModelItemResponse,
     ModelListResponse,
     ModelUpdateRequest,
@@ -40,7 +40,7 @@ BASE_URL_REQUIRED_PROTOCOLS = ("anthropic_compatible",)
 
 def sync_provider_throttle() -> None:
     """Point the process-wide limiter at the stored endpoints; called on every write."""
-    provider_throttle.configure_endpoints(app_state.monitor_store.llm.list_providers())
+    provider_throttle.configure_endpoints(state.monitor_store.llm.list_providers())
 
 
 def _protocol(raw: Any) -> str:
@@ -76,7 +76,7 @@ def _ensure_endpoint_is_free(protocol: str, base_url: str, ignore_id: str = "") 
     and the operator would have no way to tell which one is in force.
     """
     key = bucket_key(protocol, base_url)
-    for existing in app_state.monitor_store.llm.list_providers():
+    for existing in state.monitor_store.llm.list_providers():
         if ignore_id and existing["provider_id"] == ignore_id:
             continue
         if bucket_key(existing["protocol"], existing["base_url"]) == key:
@@ -90,7 +90,7 @@ def _ensure_endpoint_is_free(protocol: str, base_url: str, ignore_id: str = "") 
 
 
 def _require_provider(provider_id: str) -> str:
-    if app_state.monitor_store.llm.get_provider(provider_id) is None:
+    if state.monitor_store.llm.get_provider(provider_id) is None:
         # A model without a working endpoint cannot be built, so the reference is
         # refused at write time instead of failing every task that selects it.
         raise HTTPException(status_code=400, detail=f"Unknown provider '{provider_id}'.")
@@ -102,7 +102,7 @@ def _require_provider(provider_id: str) -> str:
 
 @router.get("/api/providers", response_model=ProviderListResponse)
 async def list_providers() -> ProviderListResponse:
-    providers = app_state.monitor_store.llm.list_providers()
+    providers = state.monitor_store.llm.list_providers()
     return ProviderListResponse(providers=[ProviderItemResponse(**item) for item in providers])
 
 
@@ -113,7 +113,7 @@ async def create_provider(payload: ProviderCreateRequest) -> ProviderItemRespons
     data["base_url"] = _base_url(data.get("base_url"))
     _validate_endpoint(data["protocol"], data["base_url"], data["rpm_limit"])
     _ensure_endpoint_is_free(data["protocol"], data["base_url"])
-    created = app_state.monitor_store.llm.create_provider(data)
+    created = state.monitor_store.llm.create_provider(data)
     sync_provider_throttle()
     return ProviderItemResponse(**created)
 
@@ -122,7 +122,7 @@ async def create_provider(payload: ProviderCreateRequest) -> ProviderItemRespons
 async def update_provider(
     provider_id: str, payload: ProviderUpdateRequest
 ) -> ProviderItemResponse:
-    current = app_state.monitor_store.llm.get_provider(provider_id)
+    current = state.monitor_store.llm.get_provider(provider_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Provider not found.")
     changes = payload.model_dump(exclude_unset=True)
@@ -132,7 +132,7 @@ async def update_provider(
     _validate_endpoint(protocol, base_url, rpm_limit)
     _ensure_endpoint_is_free(protocol, base_url, ignore_id=provider_id)
     changes.update(protocol=protocol, base_url=base_url)
-    updated = app_state.monitor_store.llm.update_provider(provider_id, changes)
+    updated = state.monitor_store.llm.update_provider(provider_id, changes)
     if updated is None:
         raise HTTPException(status_code=404, detail="Provider not found.")
     sync_provider_throttle()
@@ -141,7 +141,7 @@ async def update_provider(
 
 @router.delete("/api/providers/{provider_id}")
 async def delete_provider(provider_id: str) -> dict[str, Any]:
-    used_by = app_state.monitor_store.llm.model_count(provider_id)
+    used_by = state.monitor_store.llm.model_count(provider_id)
     if used_by > 0:
         # Refused rather than cascaded: deleting a provider would silently leave its
         # models pointing at nothing, and a task that selects one would fail later.
@@ -149,7 +149,7 @@ async def delete_provider(provider_id: str) -> dict[str, Any]:
             status_code=409,
             detail=f"Provider still has {used_by} model(s); move or delete them first.",
         )
-    if not app_state.monitor_store.llm.delete_provider(provider_id):
+    if not state.monitor_store.llm.delete_provider(provider_id):
         raise HTTPException(status_code=404, detail="Provider not found.")
     sync_provider_throttle()
     return {"provider_id": provider_id, "deleted": True}
@@ -160,7 +160,7 @@ async def delete_provider(provider_id: str) -> dict[str, Any]:
 
 @router.get("/api/models", response_model=ModelListResponse)
 async def list_models() -> ModelListResponse:
-    models = app_state.monitor_store.llm.list_models()
+    models = state.monitor_store.llm.list_models()
     return ModelListResponse(models=[ModelItemResponse(**item) for item in models])
 
 
@@ -168,7 +168,7 @@ async def list_models() -> ModelListResponse:
 async def create_model(payload: ModelUpsertRequest) -> ModelItemResponse:
     data = payload.model_dump()
     data["provider_id"] = _require_provider(data["provider_id"])
-    created = app_state.monitor_store.llm.create_model(data)
+    created = state.monitor_store.llm.create_model(data)
     return ModelItemResponse(**created)
 
 
@@ -177,7 +177,7 @@ async def update_model(model_id: str, payload: ModelUpdateRequest) -> ModelItemR
     changes = payload.model_dump(exclude_unset=True)
     if changes.get("provider_id"):
         changes["provider_id"] = _require_provider(changes["provider_id"])
-    updated = app_state.monitor_store.llm.update_model(model_id, changes)
+    updated = state.monitor_store.llm.update_model(model_id, changes)
     if updated is None:
         raise HTTPException(status_code=404, detail="Model not found.")
     return ModelItemResponse(**updated)
@@ -185,6 +185,6 @@ async def update_model(model_id: str, payload: ModelUpdateRequest) -> ModelItemR
 
 @router.delete("/api/models/{model_id}")
 async def delete_model(model_id: str) -> dict[str, Any]:
-    if not app_state.monitor_store.llm.delete_model(model_id):
+    if not state.monitor_store.llm.delete_model(model_id):
         raise HTTPException(status_code=404, detail="Model not found.")
     return {"model_id": model_id, "deleted": True}

@@ -3,5 +3,5 @@
 Each module owns one ``APIRouter`` (``task_api``, ``workspace_api``, ``llm_api``,
 ``agent_api``, ``tool_api``, ``admin_api``, ``mcp_api``). They are mounted by ``main``,
 which is the only module allowed to depend on them - a route module reads live state
-through ``app_state`` and task logic through ``task_runtime``, never through ``main``.
+through ``commons.state`` and task logic through ``task_runtime``, never through ``main``.
 """

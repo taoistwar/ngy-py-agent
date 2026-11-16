@@ -27,7 +27,6 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.models import TaskStatus  # noqa: E402
 from agent.tools.permission_rules import PermissionRuleStore  # noqa: E402
@@ -37,6 +36,7 @@ from agent.tools.permissions import (  # noqa: E402
     PermissionBroker,
     PermissionMode,
 )
+from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 
 WAIT_SECONDS = 30.0
@@ -46,31 +46,31 @@ class PermissionApiTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         root = Path(self._tmp.name)
-        # The live state is ``app_state``'s, not ``main``'s: the routes read it there,
-        # so that is where a test has to swap it (see app_state's module docstring).
-        self._previous_store = app_state.monitor_store
-        self._previous_rules = app_state.permission_rule_store
-        self._previous_mode = app_state.permission_mode
-        self._previous_source = app_state.permission_mode_source
-        self._previous_steps = app_state.agent_max_steps
-        self._previous_steps_source = app_state.agent_max_steps_source
+        # The live state is ``commons.state``'s, not ``main``'s: the routes read it there,
+        # so that is where a test has to swap it (see commons.state's module docstring).
+        self._previous_store = state.monitor_store
+        self._previous_rules = state.permission_rule_store
+        self._previous_mode = state.permission_mode
+        self._previous_source = state.permission_mode_source
+        self._previous_steps = state.agent_max_steps
+        self._previous_steps_source = state.agent_max_steps_source
         self.store = _SqliteTaskStore(root / "tasks.db")
         self.rules = PermissionRuleStore(root / "permission_rules.json")
-        app_state.monitor_store = self.store
-        app_state.permission_rule_store = self.rules
-        app_state.permission_mode = PermissionMode.ASK
-        app_state.permission_mode_source = "env"
+        state.monitor_store = self.store
+        state.permission_rule_store = self.rules
+        state.permission_mode = PermissionMode.ASK
+        state.permission_mode_source = "env"
         self.client = TestClient(main.app)
 
     def tearDown(self):
-        with app_state._task_permission_lock:
-            app_state._task_permission_brokers.clear()
-        app_state.monitor_store = self._previous_store
-        app_state.permission_rule_store = self._previous_rules
-        app_state.permission_mode = self._previous_mode
-        app_state.permission_mode_source = self._previous_source
-        app_state.agent_max_steps = self._previous_steps
-        app_state.agent_max_steps_source = self._previous_steps_source
+        with state._task_permission_lock:
+            state._task_permission_brokers.clear()
+        state.monitor_store = self._previous_store
+        state.permission_rule_store = self._previous_rules
+        state.permission_mode = self._previous_mode
+        state.permission_mode_source = self._previous_source
+        state.agent_max_steps = self._previous_steps
+        state.agent_max_steps_source = self._previous_steps_source
         self.store.close()
         self._tmp.cleanup()
 
@@ -80,9 +80,9 @@ class PermissionApiTest(unittest.TestCase):
         # ``rules`` must be the swapped-in store: the default one points at the
         # repository's real rule file, and a test must not write there.
         broker = PermissionBroker(
-            task_id=task_id, wait_seconds=WAIT_SECONDS, rules=app_state.permission_rule_store
+            task_id=task_id, wait_seconds=WAIT_SECONDS, rules=state.permission_rule_store
         )
-        app_state.register_task_permission(task_id, broker)
+        state.register_task_permission(task_id, broker)
         return broker
 
     def park(self, broker, command="ls"):
@@ -230,10 +230,10 @@ class PermissionApiTest(unittest.TestCase):
 
         main._load_runtime_config()
 
-        self.assertEqual(app_state.permission_mode, PermissionMode.AUTO_APPROVE)
-        self.assertEqual(app_state.permission_mode_source, "database")
-        self.assertEqual(app_state.agent_max_steps, 42)
-        self.assertEqual(app_state.agent_max_steps_source, "database")
+        self.assertEqual(state.permission_mode, PermissionMode.AUTO_APPROVE)
+        self.assertEqual(state.permission_mode_source, "database")
+        self.assertEqual(state.agent_max_steps, 42)
+        self.assertEqual(state.agent_max_steps_source, "database")
 
     def test_an_unknown_permission_mode_is_rejected_rather_than_coerced(self):
         response = self.client.put("/api/admin/permission-mode", json={"mode": "whatever"})
@@ -272,7 +272,7 @@ class PermissionApiTest(unittest.TestCase):
     # --------------------------------------------------------- waiting visibility
 
     def test_task_detail_and_list_expose_the_pending_permission(self):
-        task_id = app_state.monitor_store.create_task("do something", "openai-compatible")
+        task_id = state.monitor_store.create_task("do something", "openai-compatible")
         broker = self.register_broker(task_id=task_id)
         thread, box, pending = self.park(broker)
 
@@ -289,9 +289,9 @@ class PermissionApiTest(unittest.TestCase):
         self.assertIsNone(self.client.get(f"/api/tasks/{task_id}").json()["pending_permission"])
 
     def test_a_waiting_task_reports_the_waiting_status(self):
-        task_id = app_state.monitor_store.create_task("do something", "openai-compatible")
+        task_id = state.monitor_store.create_task("do something", "openai-compatible")
 
-        app_state.monitor_store.set_task_status(task_id, TaskStatus.WAITING)
+        state.monitor_store.set_task_status(task_id, TaskStatus.WAITING)
 
         self.assertEqual(self.client.get(f"/api/tasks/{task_id}").json()["status"], "waiting")
 

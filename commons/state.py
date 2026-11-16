@@ -3,8 +3,8 @@ and the registries a running task owns.
 
 It gets its own module so the API modules and the task runtime can share this state
 without importing ``main`` - which imports them. Every reader goes through *this*
-module (``app_state.monitor_store``, not a direct import of the name), so a test can
-swap a store in one place and every route picks the swap up.
+module (``commons.state.monitor_store``, not a direct import of the name), so a test
+can swap a store in one place and every route picks the swap up.
 
 Nothing here decides anything; it holds what the process knows while it runs.
 """
@@ -27,10 +27,10 @@ from dao import TASK_RETENTION_DEFAULT_DAYS
 
 # The repository root. Defined once because two modules need it (the frontend paths and
 # the default skills folder) and two answers to "where is the repo" is one too many.
-ROOT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = Path(__file__).resolve().parents[1]
 
 # The live task store. ``dao`` builds it at import; keeping the reference here is
-# what makes ``app_state.monitor_store = temporary`` reach every reader.
+# what makes ``commons.state.monitor_store = temporary`` reach every reader.
 monitor_store = dao.monitor_store
 
 # Persisted "always allow" rules, shared by every task (ADR 0006 D8).

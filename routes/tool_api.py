@@ -18,10 +18,10 @@ from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, HTTPException
 
-import app_state
 from agent.models import ToolOutcome
 from agent.tools.registry import ToolRegistry
-from api_schemas import ToolItemResponse, ToolListResponse, ToolTestRequest, ToolTestResponse
+from commons import state
+from commons.schemas import ToolItemResponse, ToolListResponse, ToolTestRequest, ToolTestResponse
 
 router = APIRouter()
 
@@ -61,7 +61,7 @@ def _agent_ids_by_tool(
 async def list_tools() -> ToolListResponse:
     """Every registered tool with its schema, permission gate and agents."""
     described = ToolRegistry().describe_tools()
-    agents = app_state.monitor_store.list_agents()
+    agents = state.monitor_store.list_agents()
     used_by = _agent_ids_by_tool(agents, [item["name"] for item in described])
     return ToolListResponse(
         tools=[

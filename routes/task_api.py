@@ -17,13 +17,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
-import app_state
 from agent.models import EventCategory, TaskStatus
 from agent.modes import DEFAULT_MODE, VALID_MODES
 from agent.telemetry import end_task_span, start_task_span
 from agent.tools.permissions import SCOPES
 from agent.tools.user_question import STATUS_ANSWERED, validate_answers
-from api_schemas import (
+from commons import state
+from commons.schemas import (
     EventPageResponse,
     ForkTaskResponse,
     PermissionDecisionRequest,
@@ -59,26 +59,26 @@ async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
     agent_id = (payload.agent_id or "").strip() or (
         payload.mode if payload.mode in VALID_MODES else DEFAULT_MODE
     )
-    agent = app_state.monitor_store.get_agent(agent_id)
+    agent = state.monitor_store.get_agent(agent_id)
     if agent is None:
         agent_id = payload.mode if payload.mode in VALID_MODES else DEFAULT_MODE
-        agent = app_state.monitor_store.get_agent(agent_id)
+        agent = state.monitor_store.get_agent(agent_id)
     # A model names what to ask for; the provider record it points at says where and
     # how often (ADR 0014). Both are read before the task exists, so a broken endpoint
     # reference fails the request instead of a task that has already started.
-    model = app_state.monitor_store.llm.get_model(payload.model_id) if payload.model_id else None
+    model = state.monitor_store.llm.get_model(payload.model_id) if payload.model_id else None
     if payload.model_id and model is None:
         raise HTTPException(status_code=404, detail="Model not found.")
     provider_record = (
-        app_state.monitor_store.llm.get_provider(model["provider_id"])
+        state.monitor_store.llm.get_provider(model["provider_id"])
         if model and model.get("provider_id")
         else None
     )
     session_id = payload.session_id
-    if session_id and app_state.monitor_store.get_session(session_id) is None:
+    if session_id and state.monitor_store.get_session(session_id) is None:
         raise HTTPException(status_code=404, detail="Session not found.")
     if not session_id:
-        session_id = app_state.monitor_store.ensure_default_session()
+        session_id = state.monitor_store.ensure_default_session()
 
     provider = str(
         (provider_record or {}).get("protocol")
@@ -89,7 +89,7 @@ async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
     # Read the transcript before the task exists, so the task itself can never be
     # part of its own context. A task in the same session continues that conversation.
     history_messages = build_session_history(session_id)
-    task_id = app_state.monitor_store.create_task(
+    task_id = state.monitor_store.create_task(
         query=payload.query,
         provider=provider,
         session_id=session_id,
@@ -100,7 +100,7 @@ async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
     request = payload.model_copy(update={"session_id": session_id, "mode": agent_id})
     agent_config = agent_runtime_config(agent)
     base_dir = resolve_session_base_dir(session_id)
-    stop_event = app_state.register_task_stop(task_id)
+    stop_event = state.register_task_stop(task_id)
     # Started on the request thread so the task's spans join the request's trace.
     # The worker attaches it: ``contextvars`` do not cross ``threading.Thread``.
     otel_handle = start_task_span(
@@ -124,7 +124,7 @@ async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
         end_task_span(otel_handle)
         raise
 
-    trace = app_state.monitor_store.get_task(task_id)
+    trace = state.monitor_store.get_task(task_id)
     if trace is None:
         raise HTTPException(status_code=500, detail="Failed to read created task record.")
     return RunTaskResponse(
@@ -141,14 +141,14 @@ async def list_tasks(
         None, description="Only return tasks that belong to this session."
     ),
 ) -> TaskListResponse:
-    tasks = app_state.monitor_store.list_tasks(session_id=session_id)
+    tasks = state.monitor_store.list_tasks(session_id=session_id)
     return TaskListResponse(
         tasks=[
             TaskListItemResponse(
                 **{
                     **item,
-                    "pending_permission": app_state.pending_permission(item["task_id"]),
-                    "pending_question": app_state.pending_question(item["task_id"]),
+                    "pending_permission": state.pending_permission(item["task_id"]),
+                    "pending_question": state.pending_question(item["task_id"]),
                 }
             )
             for item in tasks
@@ -187,14 +187,14 @@ async def stop_task(task_id: str) -> dict[str, Any]:
     trace = _stored_task(task_id)
     if str(trace.get("status")) in _SETTLED_STATUSES:
         return {"task_id": task_id, "stopped": False}
-    app_state.signal_task_stop(task_id)
-    app_state.monitor_store.finish_task(task_id, success=False, status=TaskStatus.STOPPED)
+    state.signal_task_stop(task_id)
+    state.monitor_store.finish_task(task_id, success=False, status=TaskStatus.STOPPED)
     return {"task_id": task_id, "stopped": True}
 
 
 def _stored_task(task_id: str) -> dict[str, Any]:
     """The task record, or the 404 every per-task route answers with."""
-    trace = app_state.monitor_store.get_task(task_id)
+    trace = state.monitor_store.get_task(task_id)
     if trace is None:
         raise HTTPException(status_code=404, detail="Task not found.")
     return trace
@@ -265,7 +265,7 @@ async def revert_task(task_id: str, payload: RevertTaskRequest) -> dict[str, Any
     store = _undo_store(task_id, _stored_task(task_id))
     result = store.revert(task_id, payload.paths, payload.force)
     payload_out = {"task_id": task_id, **result.to_dict()}
-    app_state.monitor_store.append_event(
+    state.monitor_store.append_event(
         task_id,
         build_event(task_id, EventCategory.DEBUG, "Task reverted", payload_out),
     )
@@ -276,7 +276,7 @@ async def revert_task(task_id: str, payload: RevertTaskRequest) -> dict[str, Any
     if completed:
         # ``set_task_status`` rather than ``finish_task``: the result is still worth
         # reading, and only the status changes (see its docstring).
-        app_state.monitor_store.set_task_status(task_id, TaskStatus.REVERTED)
+        state.monitor_store.set_task_status(task_id, TaskStatus.REVERTED)
     payload_out["status"] = (
         TaskStatus.REVERTED.value
         if completed
@@ -299,7 +299,7 @@ async def answer_permission(
     This is the other half of the gate: the tool call is parked inside the task
     thread until this arrives, the deadline passes, or the task is stopped.
     """
-    broker = app_state.get_task_permission_broker(task_id)
+    broker = state.get_task_permission_broker(task_id)
     if broker is None:
         raise HTTPException(status_code=404, detail="Task not found or not running.")
     # Rejected rather than coerced: mapping an unknown scope onto "once" would
@@ -346,7 +346,7 @@ async def answer_question(
     rather than coerced - an id nobody asked about, or a non-string answer, would
     otherwise reach the model as an answer to a question it never asked.
     """
-    broker = app_state.get_task_question_broker(task_id)
+    broker = state.get_task_question_broker(task_id)
     if broker is None:
         raise HTTPException(status_code=404, detail="Task not found or not running.")
     pending = broker.pending()
@@ -367,12 +367,12 @@ async def answer_question(
 
 @router.get("/api/tasks/{task_id}", response_model=TaskDetailResponse)
 async def get_task(task_id: str) -> TaskDetailResponse:
-    trace = app_state.monitor_store.get_task(task_id)
+    trace = state.monitor_store.get_task(task_id)
     if trace is None:
         raise HTTPException(status_code=404, detail="Task not found.")
     result = extract_task_result(trace.get("events"))
     usage = task_usage_summary(trace)
-    broker = app_state.get_task_permission_broker(task_id)
+    broker = state.get_task_permission_broker(task_id)
     pending = broker.pending() if broker is not None else None
     return TaskDetailResponse(
         task_id=trace["task_id"],
@@ -391,7 +391,7 @@ async def get_task(task_id: str) -> TaskDetailResponse:
         duration_ms=usage["duration_ms"],
         result=result,
         pending_permission=pending.to_payload() if pending is not None else None,
-        pending_question=app_state.pending_question(task_id),
+        pending_question=state.pending_question(task_id),
         events=trace["events"],
     )
 
@@ -416,10 +416,10 @@ async def fork_task(task_id: str) -> ForkTaskResponse:
     session_id = trace.get("session_id")
     if not session_id:
         raise HTTPException(status_code=409, detail="Task has no session to fork.")
-    forked = app_state.monitor_store.fork_session_through_task(task_id)
+    forked = state.monitor_store.fork_session_through_task(task_id)
     if forked is None:
         raise HTTPException(status_code=404, detail="Task not found.")
-    session = app_state.monitor_store.get_session(forked["session_id"])
+    session = state.monitor_store.get_session(forked["session_id"])
     if session is None:
         raise HTTPException(status_code=500, detail="Failed to read forked session.")
     return ForkTaskResponse(
@@ -437,8 +437,8 @@ async def fork_task(task_id: str) -> ForkTaskResponse:
 async def delete_task(task_id: str) -> dict[str, Any]:
     # Read the task before deleting it: the checkpoint refs are keyed by it, and once
     # the row is gone there is no way to find the workspace they belong to.
-    trace = app_state.monitor_store.get_task(task_id)
-    removed = app_state.monitor_store.delete_task(task_id)
+    trace = state.monitor_store.get_task(task_id)
+    removed = state.monitor_store.delete_task(task_id)
     if not removed:
         raise HTTPException(status_code=404, detail="Task not found.")
     store = checkpoint_store_for_task(trace)
@@ -456,10 +456,10 @@ async def get_task_events(
         None, ge=0, description="Start at this offset instead of the default offset."
     ),
 ) -> EventPageResponse:
-    if app_state.monitor_store.get_task(task_id) is None:
+    if state.monitor_store.get_task(task_id) is None:
         raise HTTPException(status_code=404, detail="Task not found.")
     real_offset = offset if since is None else max(0, since)
-    items, total = app_state.monitor_store.list_events_paginated(
+    items, total = state.monitor_store.list_events_paginated(
         task_id=task_id,
         offset=real_offset,
         limit=limit,
@@ -478,10 +478,10 @@ async def get_task_events(
 async def _iter_task_events(task_id: str):
     seen = 0
     while True:
-        task = app_state.monitor_store.get_task(task_id)
+        task = state.monitor_store.get_task(task_id)
         if task is None:
             return
-        events = app_state.monitor_store.get_events(task_id)
+        events = state.monitor_store.get_events(task_id)
 
         while seen < len(events):
             yield events[seen]
@@ -497,7 +497,7 @@ async def _iter_task_events(task_id: str):
 
 @router.get("/api/tasks/{task_id}/events/stream")
 async def stream_task_events(task_id: str) -> StreamingResponse:
-    if app_state.monitor_store.get_task(task_id) is None:
+    if state.monitor_store.get_task(task_id) is None:
         raise HTTPException(status_code=404, detail="Task not found.")
 
     async def _generator() -> Any:
@@ -515,7 +515,7 @@ async def stream_task_events_ws(
     heartbeat: int = 0,
 ) -> None:
     await websocket.accept()
-    if app_state.monitor_store.get_task(task_id) is None:
+    if state.monitor_store.get_task(task_id) is None:
         await websocket.close(code=1008, reason="Task not found.")
         return
 
@@ -525,7 +525,7 @@ async def stream_task_events_ws(
 
     try:
         while True:
-            events = app_state.monitor_store.get_events_since(task_id, since_event_id=last_event_id)
+            events = state.monitor_store.get_events_since(task_id, since_event_id=last_event_id)
             if events:
                 for event in events:
                     await websocket.send_text(json.dumps(event, default=str))
@@ -533,7 +533,7 @@ async def stream_task_events_ws(
                 heartbeat_at = asyncio.get_running_loop().time()
                 continue
 
-            task = app_state.monitor_store.get_task(task_id)
+            task = state.monitor_store.get_task(task_id)
             if task is None:
                 await websocket.close(code=1008, reason="Task not found.")
                 return

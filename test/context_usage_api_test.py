@@ -22,9 +22,9 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.models import EventCategory, TaskEvent  # noqa: E402
+from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 
 WINDOW = 262_144
@@ -35,9 +35,9 @@ LOOP_DEFAULT_TOKENS = 50_000
 class ContextUsageApiTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self._previous_store = app_state.monitor_store
+        self._previous_store = state.monitor_store
         self.store = _SqliteTaskStore(Path(self._tmp.name) / "tasks.db")
-        app_state.monitor_store = self.store
+        state.monitor_store = self.store
         self.client = TestClient(main.app)
         self.session_id = self.store.create_session("meter")
         provider = self.store.llm.create_provider(
@@ -57,7 +57,7 @@ class ContextUsageApiTest(unittest.TestCase):
 
     def tearDown(self):
         self._env.stop()
-        app_state.monitor_store = self._previous_store
+        state.monitor_store = self._previous_store
         self.store.close()
         self._tmp.cleanup()
 

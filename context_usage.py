@@ -15,7 +15,7 @@ Two numbers, two sources:
   bounded by the loop's own budget (:mod:`agent.agent_loop.micro_compact`), so the
   denominator still describes the limit that will actually stop the run.
 
-It reads the live store through :mod:`app_state` for the same reason the other
+It reads the live store through :mod:`commons.state` for the same reason the other
 readers do: a test can swap the store.
 """
 
@@ -23,10 +23,10 @@ from __future__ import annotations
 
 from typing import Any
 
-import app_state
 from agent.agent_loop.micro_compact import CHARS_PER_TOKEN, resolve_context_limit
 from agent.models import EventCategory
 from agent.telemetry.usage import extract_token_usage
+from commons import state
 
 # A reading further back than this is a stale number wearing a current label: the
 # session history is rebuilt per task, so the previous task's turn already describes
@@ -40,7 +40,7 @@ RECENT_RESPONSES = 5
 
 def _usage_of_task(task_id: str) -> dict[str, int]:
     """Token counts of the task's newest turn that reported any."""
-    for event in app_state.monitor_store.recent_events_of_category(
+    for event in state.monitor_store.recent_events_of_category(
         task_id, EventCategory.LLM_RESPONSE.value, RECENT_RESPONSES
     ):
         counts = extract_token_usage((event.get("data") or {}).get("raw_response"))
@@ -78,7 +78,7 @@ def session_context_usage(session_id: str, model_id: str | None = None) -> dict[
     even when the last turn ran on another model, because the next request will be
     sent to the selected one.
     """
-    tasks = app_state.monitor_store.list_tasks(session_id=session_id)
+    tasks = state.monitor_store.list_tasks(session_id=session_id)
     reading_task, counts = _last_turn(tasks)
     input_tokens = int(counts.get("input_tokens") or 0)
     output_tokens = int(counts.get("output_tokens") or 0)
@@ -90,7 +90,7 @@ def session_context_usage(session_id: str, model_id: str | None = None) -> dict[
         or (tasks[-1].get("model_id") if tasks else "")
         or ""
     )
-    model = app_state.monitor_store.llm.get_model(target_model_id) if target_model_id else None
+    model = state.monitor_store.llm.get_model(target_model_id) if target_model_id else None
     max_tokens, limit_source = _resolve_limit(model)
     percent = round(used_tokens / max_tokens * 100, 1) if max_tokens > 0 else 0.0
 

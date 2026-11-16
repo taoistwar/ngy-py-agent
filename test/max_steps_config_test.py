@@ -23,10 +23,10 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.agent_loop import DEFAULT_MAX_STEPS  # noqa: E402
-from api_schemas import MAX_STEPS_LIMIT  # noqa: E402
+from commons import state  # noqa: E402
+from commons.schemas import MAX_STEPS_LIMIT  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 from routes import admin_api  # noqa: E402
 
@@ -34,16 +34,16 @@ from routes import admin_api  # noqa: E402
 class MaxStepsConfigTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self._previous_store = app_state.monitor_store
-        self._previous = (app_state.agent_max_steps, app_state.agent_max_steps_source)
-        # The routes read ``app_state``, so that is where a test swaps the store.
+        self._previous_store = state.monitor_store
+        self._previous = (state.agent_max_steps, state.agent_max_steps_source)
+        # The routes read ``commons.state``, so that is where a test swaps the store.
         self.store = _SqliteTaskStore(Path(self._tmp.name) / "tasks.db")
-        app_state.monitor_store = self.store
+        state.monitor_store = self.store
         self.client = TestClient(main.app)
 
     def tearDown(self):
-        app_state.monitor_store = self._previous_store
-        app_state.agent_max_steps, app_state.agent_max_steps_source = self._previous
+        state.monitor_store = self._previous_store
+        state.agent_max_steps, state.agent_max_steps_source = self._previous
         self.store.close()
         self._tmp.cleanup()
 
