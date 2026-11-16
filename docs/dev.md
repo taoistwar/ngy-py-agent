@@ -433,7 +433,7 @@ npm run i18n:check
 | `context_usage.py` | 任务窗口的上下文占用读数：会话最近一次模型请求的 `usage`（回溯最多 5 个任务 / 5 条响应）+ 分母（模型 `max_input_tokens`，缺失时回退到循环自己的字符预算 ÷ 4） | 不估算文本、不改上下文 |
 | `task_runtime.py` | "一个任务是什么"：provider / 工作目录 / 步数 / 确认模式的解析、会话标题、保留期清理、`run_task`（跑 ReAct 循环并把两个 broker 注册进 `app_state`） | HTTP 细节 |
 | `task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
-| `task_store.py` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁 | provider 与模型（在 `llm_store.py`） |
+| `task_store/` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁；按职责拆成 `base`（常量与行工具）/ `schema`（建表与迁移）/ `sessions`（会话、工作空间、Fork）/ `agents` / `settings` / `tasks`（任务与事件）/ `store`（组合类） | provider 与模型（在 `llm_store.py`） |
 | `llm_store.py` | provider 端点与模型两张表的 SQL、旧 `models` 表的一次性迁移；共用 `task_store` 的连接与锁 | 限流策略 |
 | `workspace_api.py` | 会话、工作空间路由 | 模型 / provider 配置 |
 | `llm_api.py` | provider 与模型路由、写入时把 RPM 推给 `provider_throttle`（`sync_provider_throttle`） | 限流的窗口算法 |
@@ -446,6 +446,8 @@ npm run i18n:check
 2. **路由模块不得 import `main`。** 需要状态就 import `app_state`，需要任务逻辑就 import `task_runtime`；`main` 只单向 import 它们。这条是拆分成立的前提，否则就是循环依赖。
 
 拆分本身是**纯搬运**：路由路径、字段、状态码、事件顺序都没动；验证方式是"全量测试 + 与拆分前的 OpenAPI 路径清单逐一比对"（29 条对 29 条）。
+
+`task_store.py` 后来同样超过行数上限，按职责拆成了包：`__init__.py` 只做导出并创建单例，对外仍是 `from task_store import _SqliteTaskStore, monitor_store, TASK_DB_PATH`；各部分共用 `store.py` 里的连接与锁。新增存储逻辑写进对应职责的模块，不要再往 `store.py` 堆。
 
 ### provider 包与流式请求
 
