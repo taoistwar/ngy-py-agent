@@ -21,7 +21,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-import session_history  # noqa: E402
+from agent.history import _TRUNCATION_NOTE, MAX_MESSAGE_CHARS, build_session_history  # noqa: E402
 from agent.models import TaskStatus  # noqa: E402
 from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
@@ -47,12 +47,12 @@ class SessionHistoryTest(unittest.TestCase):
         return task_id
 
     def test_an_empty_session_has_no_history(self):
-        self.assertEqual([], session_history.build_session_history(self.session_id))
+        self.assertEqual([], build_session_history(self.session_id))
 
     def test_no_session_has_no_history(self):
         self._finished_task("create add()", "created add()")
 
-        self.assertEqual([], session_history.build_session_history(None))
+        self.assertEqual([], build_session_history(None))
 
     def test_a_finished_task_is_one_user_and_one_assistant_message(self):
         self._finished_task("create add()", "created add()")
@@ -62,7 +62,7 @@ class SessionHistoryTest(unittest.TestCase):
                 {"role": "user", "content": "create add()"},
                 {"role": "assistant", "content": "created add()"},
             ],
-            session_history.build_session_history(self.session_id),
+            build_session_history(self.session_id),
         )
 
     def test_turns_are_oldest_first(self):
@@ -70,7 +70,7 @@ class SessionHistoryTest(unittest.TestCase):
         self._finished_task("second", "answer two")
 
         contents = [
-            message["content"] for message in session_history.build_session_history(self.session_id)
+            message["content"] for message in build_session_history(self.session_id)
         ]
 
         self.assertEqual(["first", "answer one", "second", "answer two"], contents)
@@ -78,13 +78,13 @@ class SessionHistoryTest(unittest.TestCase):
     def test_a_running_task_is_not_context(self):
         self.store.create_task("still running", "openai", session_id=self.session_id)
 
-        self.assertEqual([], session_history.build_session_history(self.session_id))
+        self.assertEqual([], build_session_history(self.session_id))
 
     def test_a_failed_task_is_not_context(self):
         task_id = self.store.create_task("failed", "openai", session_id=self.session_id)
         self.store.finish_task(task_id, success=False)
 
-        self.assertEqual([], session_history.build_session_history(self.session_id))
+        self.assertEqual([], build_session_history(self.session_id))
 
     def test_a_stopped_task_is_not_context(self):
         task_id = self.store.create_task("stopped", "openai", session_id=self.session_id)
@@ -92,7 +92,7 @@ class SessionHistoryTest(unittest.TestCase):
             task_id, success=False, result="Task stopped by user.", status=TaskStatus.STOPPED
         )
 
-        self.assertEqual([], session_history.build_session_history(self.session_id))
+        self.assertEqual([], build_session_history(self.session_id))
 
     def test_a_reverted_task_is_not_context(self):
         """Its files are back to the baseline, so "it built X" is no longer true."""
@@ -100,19 +100,19 @@ class SessionHistoryTest(unittest.TestCase):
         self.store.finish_task(task_id, success=True, result="Done.")
         self.store.set_task_status(task_id, TaskStatus.REVERTED)
 
-        self.assertEqual([], session_history.build_session_history(self.session_id))
+        self.assertEqual([], build_session_history(self.session_id))
 
     def test_another_sessions_tasks_are_not_context(self):
         other_session = self.store.create_session("other")
         self._finished_task("elsewhere", "answering elsewhere", session_id=other_session)
 
-        self.assertEqual([], session_history.build_session_history(self.session_id))
+        self.assertEqual([], build_session_history(self.session_id))
 
     def test_the_newest_turns_win_when_the_budget_is_small(self):
         self._finished_task("old question", "old answer")
         self._finished_task("new question", "new answer")
 
-        history = session_history.build_session_history(self.session_id, max_chars=30)
+        history = build_session_history(self.session_id, max_chars=30)
 
         self.assertEqual(
             [
@@ -125,7 +125,7 @@ class SessionHistoryTest(unittest.TestCase):
     def test_the_newest_turn_survives_a_budget_it_alone_exceeds(self):
         self._finished_task("only question", "only answer")
 
-        history = session_history.build_session_history(self.session_id, max_chars=1)
+        history = build_session_history(self.session_id, max_chars=1)
 
         self.assertEqual(2, len(history))
 
@@ -133,19 +133,19 @@ class SessionHistoryTest(unittest.TestCase):
         self._finished_task("old question", "old answer")
         self._finished_task("new question", "new answer")
 
-        history = session_history.build_session_history(self.session_id, max_messages=2)
+        history = build_session_history(self.session_id, max_messages=2)
 
         self.assertEqual(["new question", "new answer"], [item["content"] for item in history])
 
     def test_a_huge_answer_is_clipped_instead_of_swallowing_the_budget(self):
-        limit = session_history.MAX_MESSAGE_CHARS
+        limit = MAX_MESSAGE_CHARS
         self._finished_task("long answer", "x" * (limit + 500))
 
-        history = session_history.build_session_history(self.session_id)
+        history = build_session_history(self.session_id)
         answer = history[1]["content"]
 
-        self.assertLessEqual(len(answer), limit + len(session_history._TRUNCATION_NOTE))
-        self.assertTrue(answer.endswith(session_history._TRUNCATION_NOTE))
+        self.assertLessEqual(len(answer), limit + len(_TRUNCATION_NOTE))
+        self.assertTrue(answer.endswith(_TRUNCATION_NOTE))
 
 
 if __name__ == "__main__":

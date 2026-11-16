@@ -1,6 +1,6 @@
 """The API wiring: a created task is handed the session's earlier conversation.
 
-``session_history`` decides *what* the context is and the loop decides *where* it
+``agent.history`` decides *what* the context is and the loop decides *where* it
 goes; this test pins the part in between - ``POST /api/tasks`` reads the history
 of the target session and gives it to the worker thread, before its own task row
 can appear in that history.

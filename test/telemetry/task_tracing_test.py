@@ -20,7 +20,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (  # noqa: E4
     InMemorySpanExporter,
 )
 
-import task_runtime  # noqa: E402
+from agent.runtime import runner  # noqa: E402
 from agent.telemetry import spans  # noqa: E402
 from agent.telemetry.config import TelemetryConfig  # noqa: E402
 from agent.telemetry.setup import init_telemetry, shutdown_telemetry  # noqa: E402
@@ -84,11 +84,11 @@ class RunTaskTracingTest(unittest.TestCase):
         self.assertIsNotNone(handle)
 
         with (
-            patch.object(task_runtime, "state", _fake_state(store)),
-            patch.object(task_runtime, "run_react_loop", fake_loop),
-            patch.object(task_runtime, "name_task_and_session", lambda *args: None),
+            patch.object(runner, "state", _fake_state(store)),
+            patch.object(runner, "run_react_loop", fake_loop),
+            patch.object(runner, "name_task_and_session", lambda *args: None),
         ):
-            task_runtime.run_task("task-1", RunTaskRequest(query="hi"), otel_handle=handle)
+            runner.run_task("task-1", RunTaskRequest(query="hi"), otel_handle=handle)
 
         self.assertTrue(seen["recording"])
         task = {span.name: span for span in self.exporter.get_finished_spans()}["task"]
@@ -110,11 +110,11 @@ class RunTaskTracingTest(unittest.TestCase):
         handle = spans.start_task_span("task-2")
 
         with (
-            patch.object(task_runtime, "state", _fake_state(store)),
-            patch.object(task_runtime, "run_react_loop", exploding_loop),
-            patch.object(task_runtime, "name_task_and_session", lambda *args: None),
+            patch.object(runner, "state", _fake_state(store)),
+            patch.object(runner, "run_react_loop", exploding_loop),
+            patch.object(runner, "name_task_and_session", lambda *args: None),
         ):
-            task_runtime.run_task("task-2", RunTaskRequest(query="hi"), otel_handle=handle)
+            runner.run_task("task-2", RunTaskRequest(query="hi"), otel_handle=handle)
 
         self.assertEqual([span.name for span in self.exporter.get_finished_spans()], ["task"])
         failure = [event for event in store.events if event.title == "Task failed"]
@@ -125,11 +125,11 @@ class RunTaskTracingTest(unittest.TestCase):
         store = _Store()
 
         with (
-            patch.object(task_runtime, "state", _fake_state(store)),
-            patch.object(task_runtime, "run_react_loop", lambda **kwargs: "ok"),
-            patch.object(task_runtime, "name_task_and_session", lambda *args: None),
+            patch.object(runner, "state", _fake_state(store)),
+            patch.object(runner, "run_react_loop", lambda **kwargs: "ok"),
+            patch.object(runner, "name_task_and_session", lambda *args: None),
         ):
-            task_runtime.run_task("task-3", RunTaskRequest(query="hi"))
+            runner.run_task("task-3", RunTaskRequest(query="hi"))
 
         self.assertEqual(list(self.exporter.get_finished_spans()), [])
         self.assertNotIn("trace_id", store.events[0].data)

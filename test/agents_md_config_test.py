@@ -23,8 +23,7 @@ if str(_REPO_ROOT) not in sys.path:
 from fastapi.testclient import TestClient  # noqa: E402
 
 import main  # noqa: E402
-import task_runtime  # noqa: E402
-from agent import agents_md  # noqa: E402
+from agent import agents_md, runtime  # noqa: E402
 from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 from routes import admin_api  # noqa: E402
@@ -171,7 +170,7 @@ class AgentsMdConfigApiTest(unittest.TestCase):
     def test_the_saved_setting_reaches_the_next_task(self):
         self.client.put("/api/admin/agents-md", json={"enabled": False, "max_bytes": 2048})
 
-        settings = task_runtime.resolve_agents_md_settings()
+        settings = runtime.resolve_agents_md_settings()
 
         self.assertEqual(agents_md.AgentsMdSettings(enabled=False, max_bytes=2048), settings)
 

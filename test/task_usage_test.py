@@ -26,9 +26,9 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 import main  # noqa: E402
 from agent.models import EventCategory, TaskEvent  # noqa: E402
+from agent.usage import elapsed_ms, sum_token_usage  # noqa: E402
 from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
-from task_usage import elapsed_ms, sum_token_usage  # noqa: E402
 
 
 def _response_event(input_tokens: int, output_tokens: int, *, usage: bool = True) -> dict:

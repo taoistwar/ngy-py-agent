@@ -22,6 +22,7 @@ from agent.agents_md import DEFAULT_MAX_BYTES as AGENTS_MD_DEFAULT_MAX_BYTES
 from agent.agents_md import MAX_BYTES_LIMIT as AGENTS_MD_MAX_BYTES_LIMIT
 from agent.agents_md import MIN_MAX_BYTES as AGENTS_MD_MIN_BYTES
 from agent.agents_md import AgentsMdSettings
+from agent.runtime import purge_expired_tasks_with_log
 from agent.tools.denylist import (
     MATCH_FIXED,
     MATCH_KINDS,
@@ -50,7 +51,6 @@ from commons.schemas import (
 )
 from dao import TASK_RETENTION_DEFAULT_DAYS
 from routes import llm_api
-from task_runtime import purge_expired_tasks_with_log
 
 router = APIRouter()
 

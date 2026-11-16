@@ -19,6 +19,7 @@ from agent.modes import (
     list_available_skills,
     list_available_tools,
 )
+from agent.runtime import resolve_skills_root
 from commons import state
 from commons.schemas import (
     AgentItemResponse,
@@ -29,7 +30,6 @@ from commons.schemas import (
     SkillsRootUpdateRequest,
 )
 from dao.mcp import MCP_TRANSPORTS
-from task_runtime import resolve_skills_root
 
 router = APIRouter()
 

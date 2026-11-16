@@ -6,7 +6,7 @@ Ollama share one quota (they are one API key on one server), while ``openai`` po
 a local gateway and at ``api.openai.com`` are two endpoints with two quotas (ADR 0014).
 
 The bucket cannot live on a provider instance: it is rebuilt for every task
-(``agent_loop.runtime``, ``task_runtime``), so an instance-owned counter would restart
+(``agent_loop.runtime``, ``agent.runtime``), so an instance-owned counter would restart
 at zero on every run and two tasks would each think they own the whole minute. It lives
 here instead, one bucket per endpoint, shared by every thread in the process.
 

@@ -21,9 +21,9 @@ if str(_REPO_ROOT) not in sys.path:
 from fastapi.testclient import TestClient  # noqa: E402
 
 import main  # noqa: E402
+from agent.runtime import build_provider_config  # noqa: E402
 from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
-from task_runtime import build_provider_config  # noqa: E402
 
 LOCAL_URL = "http://127.0.0.1:11434/v1"
 GATEWAY_URL = "https://gateway.example.com"

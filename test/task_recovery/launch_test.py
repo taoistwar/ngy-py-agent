@@ -42,7 +42,7 @@ class LaunchTest(unittest.TestCase):
         self.spawned = []
         self._spawn_patch = mock.patch.object(launch, "_spawn", side_effect=self._spawn_inline)
         self._spawn_patch.start()
-        self._run_patch = mock.patch.object(launch.task_runtime, "run_task")
+        self._run_patch = mock.patch.object(launch.runtime, "run_task")
         self.run_task = self._run_patch.start()
 
     def tearDown(self):

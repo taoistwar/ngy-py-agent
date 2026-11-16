@@ -137,7 +137,7 @@ def run_react_loop(
     if history_messages:
         # Earlier turns of the session sit before this task's query, so a follow-up
         # continues the conversation instead of restarting it. The API builds this
-        # from the session's finished tasks (see ``session_history``).
+        # from the session's finished tasks (see ``agent.history``).
         messages = _with_history(messages, history_messages)
 
     if append_user_query:

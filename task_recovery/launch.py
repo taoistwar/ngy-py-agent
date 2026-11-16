@@ -16,7 +16,7 @@ import os
 import threading
 from typing import Any
 
-import task_runtime
+from agent import runtime
 from agent.models import EventCategory, TaskEvent, TaskStatus
 from commons import state
 from commons.schemas import RunTaskRequest
@@ -80,7 +80,7 @@ def _resume_one(task_id: str, store: Any) -> bool:
     plan = build_resume_plan(
         trace.get("events"),
         str(trace.get("query") or ""),
-        default_max_steps=task_runtime.global_max_steps(),
+        default_max_steps=runtime.global_max_steps(),
         provider=str(trace.get("provider") or ""),
     )
     if plan is None:
@@ -153,8 +153,8 @@ def _start(
         stream=True,
     )
     agent_id = str(trace.get("mode") or "build")
-    agent_config = task_runtime.agent_runtime_config(store.get_agent(agent_id))
-    base_dir = task_runtime.resolve_session_base_dir(trace.get("session_id"))
+    agent_config = runtime.agent_runtime_config(store.get_agent(agent_id))
+    base_dir = runtime.resolve_session_base_dir(trace.get("session_id"))
 
     _record(
         task_id,
@@ -171,7 +171,7 @@ def _start(
 
     stop_event = state.register_task_stop(task_id)
     worker = threading.Thread(
-        target=task_runtime.run_task,
+        target=runtime.run_task,
         args=(task_id, request, model, provider_record, base_dir, agent_config, stop_event),
         kwargs={
             "resume_messages": plan.messages if plan.mode is ResumeMode.CONTINUE else None,

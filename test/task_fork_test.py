@@ -22,7 +22,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi import HTTPException  # noqa: E402
 
-import session_history  # noqa: E402
+from agent.history import build_session_history  # noqa: E402
 from agent.models import EventCategory, TaskEvent, TaskStatus  # noqa: E402
 from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
@@ -106,7 +106,7 @@ class ForkSessionTest(unittest.TestCase):
                 {"role": "user", "content": "second"},
                 {"role": "assistant", "content": "did the second"},
             ],
-            session_history.build_session_history(forked["session_id"]),
+            build_session_history(forked["session_id"]),
         )
 
     def test_the_forked_task_is_the_branch_tip(self):
