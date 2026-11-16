@@ -18,7 +18,6 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Query
 
 import app_state
-import llm_api
 from agent.agent_loop import DEFAULT_MAX_STEPS
 from agent.agents_md import DEFAULT_MAX_BYTES as AGENTS_MD_DEFAULT_MAX_BYTES
 from agent.agents_md import MAX_BYTES_LIMIT as AGENTS_MD_MAX_BYTES_LIMIT
@@ -49,6 +48,7 @@ from api_schemas import (
     RetentionConfigRequest,
     RetentionConfigResponse,
 )
+from routes import llm_api
 from task_runtime import purge_expired_tasks_with_log
 from task_store import TASK_RETENTION_DEFAULT_DAYS
 

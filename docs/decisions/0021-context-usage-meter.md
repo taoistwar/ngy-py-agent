@@ -2,7 +2,7 @@
 
 - 状态：已接受（Accepted）
 - 日期：2026-11-14
-- 相关：`context_usage.py`、`workspace_api.py`、`api_schemas.py`、`task_store.py`（`recent_events_of_category`）、`web-admin/src/components/ContextMeter.jsx`、`web-admin/src/utils/contextUsage.js`、`test/context_usage_api_test.py`
+- 相关：`context_usage.py`、`routes/workspace_api.py`、`api_schemas.py`、`task_store.py`（`recent_events_of_category`）、`web-admin/src/components/ContextMeter.jsx`、`web-admin/src/utils/contextUsage.js`、`test/context_usage_api_test.py`
 - 前置：[ADR 0015](0015-snip-compact.md)（对话窗口裁剪）、[ADR 0016](0016-micro-compact.md)（上下文微型压缩）、[ADR 0017](0017-compact-history.md)（历史摘要）
 
 ## 背景

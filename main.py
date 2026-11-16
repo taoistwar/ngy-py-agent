@@ -4,9 +4,9 @@ This module is the app assembly and the service entry point: it mounts the route
 on the FastAPI app, serves the built frontend, and starts the server. What it used to
 carry lives next door now - ``api_schemas`` (request/response models),
 ``app_state`` (the live state), ``task_runtime`` (what a task is), and one module per
-route group (``task_api``, ``workspace_api``, ``llm_api``, ``agent_api``, ``tool_api``,
-``admin_api``). A single 1700-line module is neither readable nor safe to edit
-(``AGENTS.md``).
+route group in ``routes/`` (``task_api``, ``workspace_api``, ``llm_api``, ``agent_api``,
+``tool_api``, ``admin_api``, ``mcp_api``). A single 1700-line module is neither readable
+nor safe to edit (``AGENTS.md``).
 """
 
 from __future__ import annotations
@@ -21,20 +21,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from uvicorn import run as uvicorn_run
 
-import admin_api
-import agent_api
 import app_state
-import llm_api
-import task_api
-import tool_api
-import workspace_api
 from agent.telemetry import (
     active_provider,
     init_telemetry,
     is_telemetry_enabled,
     shutdown_telemetry,
 )
-from mcp_api import router as mcp_router
+from routes import admin_api, agent_api, llm_api, task_api, tool_api, workspace_api
+from routes.mcp_api import router as mcp_router
 from task_recovery import resume_interrupted_tasks
 from task_runtime import purge_expired_tasks_with_log
 

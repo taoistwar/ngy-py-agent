@@ -190,7 +190,7 @@
 | **`user_question` / `user_answer`** | 提问通道的两个事件类别：前者携带问题原文（每题带 `is_other: true`），后者携带 `status`、`answers` 与 `answered_count`。`_sink` 把前者置 `WAITING`、后者置 `RUNNING`（`app_state.status_for_event`）。**不复用** `permission_*`：审计必须能区分"允许了命令"与"选了方案"。 | `agent/models.py` |
 | **答案契约（answers）** | `{"answers": {"<id>": {"answers": [...]}}}`：选项标签一个元素，用户输入的自由文本**另一个**元素，**不加** `user_note:` 之类的前缀。跳过的题为空数组或直接缺席。 | [ADR 0010](decisions/0010-ask-user-question.md) |
 | **"其他"行（Other）** | 自由输入项由**客户端**添加（`QuestionPrompt.jsx`），模型被要求在选项里不要自己加 "Other"。它不产生标签，只把用户输入作为答案。 | `web-admin/src/components/QuestionPrompt.jsx` |
-| **`pending_question`** | 任务详情/列表里的待答问题批（与 `pending_permission` 并列），前端 1 秒轮询它渲染对话框；答复后置空。 | `task_api.py`、`app_state.py` |
+| **`pending_question`** | 任务详情/列表里的待答问题批（与 `pending_permission` 并列），前端 1 秒轮询它渲染对话框；答复后置空。 | `routes/task_api.py`、`app_state.py` |
 | **`no_client`** | 没有客户端可问（CLI、库调用、未注入 broker）时提问结果的 `status`。**不阻塞、不抛异常、不假装问过**：模型拿到空答案并被告知自行决定。 | `agent/tools/registry.py` |
 | **提问超时（`ASK_USER_TIMEOUT_SECONDS`）** | 默认 120 秒，**独立于** `PERMISSION_TIMEOUT_SECONDS`：两人应答的语义不同（"拒绝这次调用" vs "带着假设继续"），共用一个旋钮会互相误伤。超时返回空答案 + "自行决定并说明假设"，**不是拒绝**。 | `agent/tools/user_question.py` |
 
@@ -215,6 +215,6 @@
 | --- | --- | --- |
 | **trace** | 一次执行的全部 span 集合，共享一个 `trace_id`：`HTTP 请求 → task → react.step → chat <model> / execute_tool <name>`。**与事件流并存**：事件流仍是 Web Admin 的数据源，trace 是后端调用树。 | `agent/telemetry/spans.py` |
 | **span** | 链路里的一个节点：名字、起止时间、父子关系、状态与属性。四类 span 的名字固定为 `task`、`react.step`、`chat <模型名>`、`execute_tool <工具名>`。 | `agent/telemetry/spans.py` |
-| **TaskSpanHandle** | 在请求线程 start、在工作线程 attach/end 的任务 span 句柄。之所以要它：`contextvars` 不跨 `threading.Thread`，靠显式传参才能让任务成为 HTTP 请求的子节点。 | `agent/telemetry/spans.py`、`task_api.py` |
+| **TaskSpanHandle** | 在请求线程 start、在工作线程 attach/end 的任务 span 句柄。之所以要它：`contextvars` 不跨 `threading.Thread`，靠显式传参才能让任务成为 HTTP 请求的子节点。 | `agent/telemetry/spans.py`、`routes/task_api.py` |
 | **JSONL 导出器（`JsonlSpanExporter`）** | 默认导出方式：每行一个 span 的 JSON。写不进去返回 `FAILURE`，**不抛异常**——trace 文件坏了不能连累任务。 | `agent/telemetry/exporters.py` |
 | **埋点降级** | tracing 关闭（默认）时 `active_tracer()` 为 `None`，所有 span 助手直接 `yield None`，事件 `data` 里不出现 `trace_id`。开启后若组件自身出错，同样只吞掉自己的错误。 | `agent/telemetry/setup.py` |

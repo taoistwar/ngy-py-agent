@@ -402,7 +402,7 @@ npm run i18n:check
 
 ## 13. 后端模块划分（`main.py` 拆分后）
 
-`main.py` 曾经承担全部后端职责，涨到 1700+ 行、超过 `AGENTS.md` 的 ~700 行上限。现在按职责拆开：
+`main.py` 曾经承担全部后端职责，涨到 1700+ 行、超过 `AGENTS.md` 的 ~700 行上限。现在按职责拆开，URL 路由模块统一放在 `routes/` 包里（一个模块一组路由）：
 
 | 文件 | 放什么 | 不放什么 |
 | --- | --- | --- |
@@ -412,13 +412,14 @@ npm run i18n:check
 | `session_history.py` | 会话上下文：把同一会话中**已完成**任务的 `query` / `result` 重建成 `user` / `assistant` messages，并按消息数 / 字符预算裁剪（只留最近的轮次） | 不注入、不运行任务 |
 | `context_usage.py` | 任务窗口的上下文占用读数：会话最近一次模型请求的 `usage`（回溯最多 5 个任务 / 5 条响应）+ 分母（模型 `max_input_tokens`，缺失时回退到循环自己的字符预算 ÷ 4） | 不估算文本、不改上下文 |
 | `task_runtime.py` | "一个任务是什么"：provider / 工作目录 / 步数 / 确认模式的解析、会话标题、保留期清理、`run_task`（跑 ReAct 循环并把两个 broker 注册进 `app_state`） | HTTP 细节 |
-| `task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
+| `routes/task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
 | `task_store/` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁；按职责拆成 `base`（常量与行工具）/ `schema`（建表与迁移）/ `sessions`（会话、工作空间）/ `forks`（Fork 复制）/ `agents` / `settings` / `tasks`（任务与事件）/ `store`（组合类） | provider 与模型（在 `llm_store.py`） |
 | `llm_store.py` | provider 端点与模型两张表的 SQL、旧 `models` 表的一次性迁移；共用 `task_store` 的连接与锁 | 限流策略 |
-| `workspace_api.py` | 会话、工作空间路由 | 模型 / provider 配置 |
-| `llm_api.py` | provider 与模型路由、写入时把 RPM 推给 `provider_throttle`（`sync_provider_throttle`） | 限流的窗口算法 |
-| `agent_api.py` | 模式、智能体、技能库路由 | |
-| `admin_api.py` | 管理配置路由（保留期 / 步数 / 确认模式 / 权限规则）、启动时把 env + 数据库读进 `app_state` 的 loader、`.env` 加载 | 业务路由 |
+| `routes/workspace_api.py` | 会话、工作空间路由 | 模型 / provider 配置 |
+| `routes/llm_api.py` | provider 与模型路由、写入时把 RPM 推给 `provider_throttle`（`sync_provider_throttle`） | 限流的窗口算法 |
+| `routes/agent_api.py` | 模式、智能体、技能库路由 | |
+| `routes/admin_api.py` | 管理配置路由（保留期 / 步数 / 确认模式 / 权限规则）、启动时把 env + 数据库读进 `app_state` 的 loader、`.env` 加载 | 业务路由 |
+| `routes/mcp_api.py` | MCP 集市路由（`/api/mcp-servers`） | 存储实现（在 `mcp_store.py`） |
 
 两条必须守住的规则：
 

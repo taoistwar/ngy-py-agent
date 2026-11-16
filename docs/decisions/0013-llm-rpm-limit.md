@@ -2,7 +2,7 @@
 
 - 状态：部分被取代（D1 的桶键与 D6 的配置层见 [ADR 0014](0014-provider-model-split.md)；滑动窗口、wire 层钩子、等待上限仍然有效）
 - 日期：2026-10-25
-- 相关：`agent/rate_limit.py`、`agent/provider.py`、`agent/agent_loop/steps.py`、`admin_api.py`、`task_store.py`、`app_state.py`、`api_schemas.py`、`web-admin/src/components/admin/SettingsPanels.jsx`、`test/rate_limit_test.py`、`test/rpm_config_api_test.py`
+- 相关：`agent/rate_limit.py`、`agent/provider.py`、`agent/agent_loop/steps.py`、`routes/admin_api.py`、`task_store.py`、`app_state.py`、`api_schemas.py`、`web-admin/src/components/admin/SettingsPanels.jsx`、`test/rate_limit_test.py`、`test/rpm_config_api_test.py`
 - 前置：[ADR 0006](0006-tool-permission-confirmation.md)（全局配置的读写惯例）
 
 ## 背景

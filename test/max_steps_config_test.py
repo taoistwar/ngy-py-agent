@@ -23,11 +23,11 @@ if str(_REPO_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import admin_api  # noqa: E402
 import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.agent_loop import DEFAULT_MAX_STEPS  # noqa: E402
 from api_schemas import MAX_STEPS_LIMIT  # noqa: E402
+from routes import admin_api  # noqa: E402
 from task_store import _SqliteTaskStore  # noqa: E402
 
 

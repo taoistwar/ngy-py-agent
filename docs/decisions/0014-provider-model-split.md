@@ -2,7 +2,7 @@
 
 - 状态：已接受（Accepted）
 - 日期：2026-10-26
-- 相关：`llm_store.py`、`llm_api.py`、`agent/rate_limit.py`、`agent/provider.py`、`task_runtime.py`、`task_api.py`、`web-admin/src/components/admin/ProviderManager.jsx`、`web-admin/src/components/admin/ModelManager.jsx`、`test/rate_limit_test.py`、`test/provider_api_test.py`、`test/model_api_test.py`
+- 相关：`llm_store.py`、`routes/llm_api.py`、`agent/rate_limit.py`、`agent/provider.py`、`task_runtime.py`、`routes/task_api.py`、`web-admin/src/components/admin/ProviderManager.jsx`、`web-admin/src/components/admin/ModelManager.jsx`、`test/rate_limit_test.py`、`test/provider_api_test.py`、`test/model_api_test.py`
 - 取代：[ADR 0013](0013-llm-rpm-limit.md) 的 D1（限流键）与 D6（配置层）
 
 ## 背景

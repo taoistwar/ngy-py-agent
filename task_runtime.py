@@ -2,7 +2,7 @@
 
 This is the piece that turns a request into concrete things - which provider, which
 workspace root, which step limit, which confirmation mode - and then runs the ReAct
-loop under brokers the API can reach. ``task_api.py`` calls :func:`run_task` on a thread
+loop under brokers the API can reach. ``routes/task_api.py`` calls :func:`run_task` on a thread
 and answers the request immediately.
 
 It reads and writes the app's live state through :mod:`app_state`, never through

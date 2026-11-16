@@ -2,7 +2,7 @@
 
 - 状态：已接受（Accepted）
 - 日期：2026-11-16
-- 相关：`agent/agents_md.py`、`agent/agent_loop/loop.py`、`admin_api.py`、`task_runtime.py`、`app_state.py`、`task_store.py`、`web-admin/src/components/admin/SettingsPanels.jsx`、`test/agents_md_test.py`、`test/agents_md_config_test.py`、`test/agent_loop_agents_md_test.py`
+- 相关：`agent/agents_md.py`、`agent/agent_loop/loop.py`、`routes/admin_api.py`、`task_runtime.py`、`app_state.py`、`task_store.py`、`web-admin/src/components/admin/SettingsPanels.jsx`、`test/agents_md_test.py`、`test/agents_md_config_test.py`、`test/agent_loop_agents_md_test.py`
 - 前置：[ADR 0007](0007-default-workspace.md)（未绑定会话的基目录）
 
 ## 背景
