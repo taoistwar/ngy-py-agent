@@ -1,6 +1,6 @@
-// Row actions collapsed behind one "more" button: edit, re-run, fork into a new
-// session, undo what it changed, and delete. They used to sit inline, but five
-// icon buttons crowded the meta line of every row.
+// Row actions collapsed behind one "more" button: copy the prompt, edit, re-run,
+// fork into a new session, undo what it changed, and delete. They used to sit
+// inline, but five icon buttons crowded the meta line of every row.
 //
 // The menu is portaled to the body and positioned with viewport coordinates,
 // because the task list scrolls (`overflow: auto`) and would clip it.
@@ -8,11 +8,15 @@
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
-import { EditIcon, ForkIcon, MoreIcon, RerunIcon, TrashIcon, UndoIcon } from "./icons"
+import { copyText } from "../utils/clipboard"
+import { CopyIcon, EditIcon, ForkIcon, MoreIcon, RerunIcon, TrashIcon, UndoIcon } from "./icons"
 
 // Rough menu box, used to flip it above the button and keep it on screen.
 const MENU_WIDTH = 184
-const MENU_HEIGHT = 216
+const MENU_HEIGHT = 250
+
+// How long the copy item keeps showing "copied" before going back to its label.
+const COPY_FEEDBACK_MS = 1600
 
 function anchorFromRect(rect) {
   const spaceBelow = window.innerHeight - rect.bottom
@@ -27,6 +31,7 @@ function anchorFromRect(rect) {
 }
 
 export default function TaskRowActions({
+  prompt,
   running,
   onEdit,
   onRerun,
@@ -36,8 +41,15 @@ export default function TaskRowActions({
   translate,
 }) {
   const [anchor, setAnchor] = useState(null)
+  // idle | done | failed; the copy item reports its own result in place, since the
+  // menu stays open after a copy.
+  const [copyState, setCopyState] = useState("idle")
   const buttonRef = useRef(null)
   const menuRef = useRef(null)
+  const copyTimerRef = useRef(null)
+
+  // The row can disappear mid-feedback (list refresh, pagination); drop the timer.
+  useEffect(() => () => window.clearTimeout(copyTimerRef.current), [])
 
   useEffect(() => {
     if (!anchor) return undefined
@@ -72,13 +84,43 @@ export default function TaskRowActions({
       setAnchor(null)
       return
     }
+    // Each opening starts from a clean copy confirmation.
+    setCopyState("idle")
     const rect = buttonRef.current?.getBoundingClientRect()
     setAnchor(rect ? anchorFromRect(rect) : null)
   }
 
+  const copyPrompt = async () => {
+    const copied = await copyText(prompt)
+    if (!copied) {
+      setCopyState("failed")
+      return
+    }
+    setCopyState("done")
+    window.clearTimeout(copyTimerRef.current)
+    copyTimerRef.current = window.setTimeout(() => setCopyState("idle"), COPY_FEEDBACK_MS)
+  }
+
+  const copyLabel =
+    copyState === "done"
+      ? translate("taskCopyPromptDone")
+      : copyState === "failed"
+        ? translate("taskCopyPromptFailed")
+        : translate("taskCopyPrompt")
+
   // Editing, re-running, forking or undoing a running task would work from a turn
-  // that is still writing; deleting stays available.
+  // that is still writing; copying the prompt and deleting stay available.
   const items = [
+    {
+      key: "copy",
+      label: copyLabel,
+      icon: <CopyIcon />,
+      run: copyPrompt,
+      disabled: !prompt,
+      // Kept open so the copied/failed label above is visible.
+      keepOpen: true,
+      tone: copyState === "failed" ? "failed" : "",
+    },
     { key: "edit", label: translate("taskEdit"), icon: <EditIcon />, run: onEdit, disabled: running },
     { key: "rerun", label: translate("taskRerun"), icon: <RerunIcon />, run: onRerun, disabled: running },
     { key: "fork", label: translate("taskFork"), icon: <ForkIcon />, run: onFork, disabled: running },
@@ -88,7 +130,7 @@ export default function TaskRowActions({
 
   const pick = (item) => {
     if (item.disabled) return
-    setAnchor(null)
+    if (!item.keepOpen) setAnchor(null)
     item.run()
   }
 
@@ -122,7 +164,7 @@ export default function TaskRowActions({
                 key={item.key}
                 type="button"
                 role="menuitem"
-                className={`task-row-menu-item ${item.danger ? "danger" : ""}`}
+                className={`task-row-menu-item ${item.danger ? "danger" : ""} ${item.tone || ""}`}
                 disabled={Boolean(item.disabled)}
                 onClick={(event) => {
                   event.stopPropagation()

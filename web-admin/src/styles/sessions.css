@@ -592,7 +592,8 @@
   cursor: not-allowed;
 }
 
-.task-row-menu-item.danger {
+.task-row-menu-item.danger,
+.task-row-menu-item.failed {
   color: var(--danger-text);
 }
 

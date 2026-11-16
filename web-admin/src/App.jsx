@@ -368,6 +368,7 @@ function TaskList({
                       </span>
                       {/* Kept on the meta line so the name above owns the full width. */}
                       <TaskRowActions
+                        prompt={item.query}
                         running={isTaskRunningStatus(item.status)}
                         onEdit={() => onEdit(item)}
                         onRerun={() => onRerun(item)}
