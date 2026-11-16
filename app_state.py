@@ -19,6 +19,7 @@ import task_store
 from agent.agent_loop import DEFAULT_MAX_STEPS
 from agent.agents_md import DEFAULT_MAX_BYTES as AGENTS_MD_DEFAULT_MAX_BYTES
 from agent.models import EventCategory, TaskStatus
+from agent.tools.denylist import ToolDenyList
 from agent.tools.permission_rules import PermissionRuleStore
 from agent.tools.permissions import PermissionBroker, PermissionMode
 from agent.tools.user_question import UserQuestionBroker
@@ -34,6 +35,11 @@ monitor_store = task_store.monitor_store
 
 # Persisted "always allow" rules, shared by every task (ADR 0006 D8).
 permission_rule_store = PermissionRuleStore()
+
+# Static hard denials (ADR 0024), shared by the admin API and every task. Tasks
+# build their own ``ToolDenyList`` over the same file, which is why a write here
+# reaches a running task on its next call rather than on the next restart.
+denylist_store = ToolDenyList()
 
 # Config resolved at startup from env + database, and rewritten by the admin API.
 task_retention_days: int = TASK_RETENTION_DEFAULT_DAYS

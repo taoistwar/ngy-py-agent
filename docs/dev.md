@@ -99,6 +99,9 @@ npm run dev
 - `GET /api/admin/permission-rules`
 - `POST /api/admin/permission-rules`
 - `DELETE /api/admin/permission-rules?tool=&target=`
+- `GET /api/admin/denylist`
+- `POST /api/admin/denylist`
+- `DELETE /api/admin/denylist?id=`
 
 WebSocket 示例：
 
@@ -394,6 +397,7 @@ npm run i18n:check
 - **写错的规则整条丢弃**，原因记在 `ToolDenyList.problems`：半解析的规则会匹配到写规则的人没看到的调用，所以绝不保留，也就绝不部分生效。
 - **求值异常一律拒绝**（fail closed），和权限门同一原则；`details.reason = "denylist_error"` 与配置写错（`problems`）是两回事。
 - 新增事件字段时别忘了前端：拒绝复用 `permission_decision` 类别，因此 `details` 里的 `rule` / `matched_fields` 会直接显示在事件详情里。
+- **页面写同一份文件**：`GET/POST/DELETE /api/admin/denylist` 由 `app_state.denylist_store` 落到 `ToolDenyList.add/remove`（整文件原子重写、按 `id` 替换）。POST 的扁平请求先组装成文件里的 JSON 形状，再交给**同一个 `parse_rules`** 校验，坏正则直接 400——页面因此写不进一条会被任务静默丢掉的规则。GET 同时返回 `path` 与 `problems`，前端把两者都显示出来。
 
 ### ask_user_question：把决策交回用户（它不是权限）
 

@@ -263,6 +263,99 @@
   overflow-wrap: anywhere;
 }
 
+/* Deny-list page (ADR 0024): one form for a rule, then the rules themselves. */
+.deny-form {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-tint);
+}
+
+.deny-form h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.deny-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.deny-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr);
+  gap: 10px;
+}
+
+.deny-args {
+  display: grid;
+  gap: 6px;
+}
+
+.deny-args-title {
+  font-size: 12px;
+}
+
+.deny-arg-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) 110px minmax(0, 2fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.deny-rule-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.deny-match {
+  color: var(--accent-text);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* The list rule above also matches nested items, so these have to win back
+   their own look (same specificity, later in the file). */
+.permission-rule-list .deny-rule-args {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.permission-rule-list .deny-rule-args li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-size: 11px;
+}
+
+.deny-problems {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--warning-border);
+  border-radius: 8px;
+  color: var(--warning);
+  font-size: 12px;
+}
+
+.deny-problems ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
 /* Question dialog (ask_user_question). Deliberately a plain form: one radio group
    per question plus a free-form row, because the model is told not to send an
    "Other" option - this dialog is what supplies it. */

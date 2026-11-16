@@ -233,6 +233,15 @@ export function ShieldCheckIcon() {
   )
 }
 
+export function ShieldOffIcon() {
+  return (
+    <Icon>
+      <path d="M12 21s7.5-3.6 7.5-9.4V5.6L12 3 4.5 5.6v6c0 5.8 7.5 9.4 7.5 9.4z" />
+      <path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6" />
+    </Icon>
+  )
+}
+
 export function SettingsIcon() {
   return (
     <Icon>

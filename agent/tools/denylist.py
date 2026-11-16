@@ -57,6 +57,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from agent.tools.file_bytes import DEFAULT_NEW_FILE_MODE, write_bytes_atomic
+
 DENYLIST_ENV = "TOOL_DENYLIST_CONFIG"
 DEFAULT_DENYLIST_PATH = "data/tool_denylist.json"
 
@@ -215,7 +217,9 @@ class ToolDenyList:
         self._embedded: Optional[Tuple[ToolDenyRule, ...]] = (
             tuple(rules) if rules is not None else None
         )
-        self._lock = threading.Lock()
+        # Re-entrant: ``add``/``remove`` hold it while they re-read the file, and
+        # the read itself takes the same lock to touch the cache.
+        self._lock = threading.RLock()
         self._cache_key: Optional[Tuple[int, int]] = None
         self._cached: Tuple[ToolDenyRule, ...] = ()
         self._problems: Tuple[str, ...] = ()
@@ -231,6 +235,32 @@ class ToolDenyList:
 
     def list(self) -> List[ToolDenyRule]:
         return list(self._load()[0])
+
+    def add(self, rule: ToolDenyRule) -> bool:
+        """Persist ``rule``, replacing an entry with the same id.
+
+        Returns whether the rule is in the file afterwards, so an admin API can
+        report a write failure instead of claiming a rule that does not exist.
+        """
+        if self._embedded is not None:
+            return False
+        with self._lock:
+            rules = [item for item in self._load()[0] if item.rule_id != rule.rule_id]
+            return self._write(tuple(rules) + (rule,))
+
+    def remove(self, rule_id: str) -> bool:
+        """Delete one rule by id. Returns whether a rule was actually removed."""
+        if self._embedded is not None:
+            return False
+        target = str(rule_id or "").strip()
+        if not target:
+            return False
+        with self._lock:
+            rules = self._load()[0]
+            kept = tuple(item for item in rules if item.rule_id != target)
+            if len(kept) == len(rules):
+                return False
+            return self._write(kept)
 
     def match(self, tool: str, arguments: Optional[Mapping[str, Any]]) -> Optional[DenyMatch]:
         """The rule blocking this call, or ``None`` when it may run."""
@@ -273,6 +303,30 @@ class ToolDenyList:
             self._cached = rules
             self._problems = problems
         return rules, problems
+
+    def _write(self, rules: Tuple[ToolDenyRule, ...]) -> bool:
+        """Replace the whole file; the caller holds the lock and read it first.
+
+        The file is rewritten from the parsed rules, so a rule that was dropped
+        while reading disappears from the file too - it could not be enforced, and
+        leaving it in place would keep reporting the same problem forever.
+        """
+        body = json.dumps(
+            {"rules": [rule.to_payload() for rule in rules]},
+            indent=2,
+            ensure_ascii=False,
+        )
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            write_bytes_atomic(self._path, body.encode("utf-8"), DEFAULT_NEW_FILE_MODE)
+        except OSError:
+            return False
+        # Our own write has to be what the next read sees, even if the stat key
+        # happens to collide with the cached one.
+        self._cache_key = None
+        self._cached = rules
+        self._problems = ()
+        return True
 
 
 def parse_rules(payload: Any) -> Tuple[Tuple[ToolDenyRule, ...], Tuple[str, ...]]:

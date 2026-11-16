@@ -394,6 +394,29 @@ export async function deletePermissionRule(tool, target) {
   })
 }
 
+// Static hard denials (ADR 0024): a matching tool + argument combination never
+// runs, and the permission gate is never asked about it.
+export async function fetchDenyList() {
+  return requestJson(`${API_BASE}/api/admin/denylist`)
+}
+
+export async function createDenyRule(payload) {
+  return requestJson(`${API_BASE}/api/admin/denylist`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteDenyRule(id) {
+  const query = new URLSearchParams({ id }).toString()
+  return requestJson(`${API_BASE}/api/admin/denylist?${query}`, {
+    method: "DELETE",
+  })
+}
+
 // Answer a pending tool confirmation. ``scope`` is "once", "session" or "always":
 // session allows the same tool + target for the rest of the task, always also
 // remembers it on disk.

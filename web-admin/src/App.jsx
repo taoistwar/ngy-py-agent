@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import {
   createAgent,
+  createDenyRule,
   createMcpServer,
   createModel,
   createProvider,
@@ -9,6 +10,7 @@ import {
   createTask,
   createWorkspace,
   deleteAgent,
+  deleteDenyRule,
   deleteMcpServer,
   deleteModel,
   deleteProvider,
@@ -19,6 +21,7 @@ import {
   fetchAgentMeta,
   fetchAgents,
   fetchContextUsage,
+  fetchDenyList,
   fetchSkills,
   fetchHealth,
   fetchMcpServers,
@@ -73,6 +76,7 @@ import TaskRowActions from "./components/TaskRowActions"
 import TaskToolbarActions from "./components/TaskToolbarActions"
 import { SearchIcon, SkillIcon } from "./components/icons"
 import AgentManager from "./components/admin/AgentManager"
+import DenyListManager from "./components/admin/DenyListManager"
 import McpServerManager from "./components/admin/McpServerManager"
 import ModelManager from "./components/admin/ModelManager"
 import PermissionRulesManager from "./components/admin/PermissionRulesManager"
@@ -977,6 +981,7 @@ export default function App() {
   const [agentsMdConfig, setAgentsMdConfig] = useState(null)
   const [permissionModeConfig, setPermissionModeConfig] = useState(null)
   const [permissionRules, setPermissionRules] = useState(null)
+  const [denyList, setDenyList] = useState(null)
   const [health, setHealth] = useState("unknown")
   const [providers, setProviders] = useState([])
   const [models, setModels] = useState([])
@@ -2112,6 +2117,34 @@ export default function App() {
     [refreshPermissionRules, translate]
   )
 
+  const refreshDenyList = useCallback(async () => {
+    const config = await fetchDenyList()
+    setDenyList(config)
+    return config
+  }, [])
+
+  // Creation errors stay in the form so the reason a pattern was rejected is
+  // visible next to the field instead of in the page-wide banner.
+  const createDenyRuleHandler = useCallback(
+    async (payload) => {
+      await createDenyRule(payload)
+      await refreshDenyList()
+    },
+    [refreshDenyList]
+  )
+
+  const deleteDenyRuleHandler = useCallback(
+    async (id) => {
+      try {
+        await deleteDenyRule(id)
+        await refreshDenyList()
+      } catch (ruleError) {
+        setError(ruleError?.message || translate("errorUnknown"))
+      }
+    },
+    [refreshDenyList, translate]
+  )
+
   // A decision unblocks the task thread, so pull the task and its events right
   // away instead of waiting for the next poll tick.
   const handlePermissionDecided = useCallback(() => {
@@ -2204,6 +2237,7 @@ export default function App() {
       setError(permissionError?.message || translate("errorLoadFailed"))
     )
     refreshPermissionRules().catch(() => {})
+    refreshDenyList().catch(() => {})
     refreshHealth().catch(() => {})
     refreshAgentMeta().catch(() => {})
 
@@ -2261,13 +2295,16 @@ export default function App() {
       if (activeMenu === "permissions") {
         refreshPermissionRules().catch(() => {})
       }
+      if (activeMenu === "denylist") {
+        refreshDenyList().catch(() => {})
+      }
     }, 5000)
 
     return () => {
       cancelled = true
       clearInterval(timer)
     }
-  }, [activeMenu, applySelection, refreshAgentMeta, refreshAgents, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWorkspaces, translate])
+  }, [activeMenu, applySelection, refreshAgentMeta, refreshAgents, refreshDenyList, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWorkspaces, translate])
 
   useEffect(() => {
     if (!selectedId || activeMenu !== "tasks") return
@@ -2623,6 +2660,18 @@ export default function App() {
             onDelete={deletePermissionRuleHandler}
             onRefresh={() =>
               refreshPermissionRules().catch((refreshError) =>
+                setError(refreshError?.message || translate("errorLoadFailed"))
+              )
+            }
+            translate={translate}
+          />
+        ) : activeMenu === "denylist" ? (
+          <DenyListManager
+            denylist={denyList}
+            onCreate={createDenyRuleHandler}
+            onDelete={deleteDenyRuleHandler}
+            onRefresh={() =>
+              refreshDenyList().catch((refreshError) =>
                 setError(refreshError?.message || translate("errorLoadFailed"))
               )
             }

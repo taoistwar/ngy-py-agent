@@ -1,4 +1,4 @@
-"""Admin configuration: retention, step limit, AGENTS.md, permission mode and rules.
+"""Admin configuration: retention, step limit, AGENTS.md, permission mode and rules, deny-list.
 
 Two things live here that are not routes: the startup loaders that resolve env + database
 into :mod:`app_state`, and the retention purge the task routes also call. Both belong to
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Query
@@ -23,11 +24,21 @@ from agent.agents_md import DEFAULT_MAX_BYTES as AGENTS_MD_DEFAULT_MAX_BYTES
 from agent.agents_md import MAX_BYTES_LIMIT as AGENTS_MD_MAX_BYTES_LIMIT
 from agent.agents_md import MIN_MAX_BYTES as AGENTS_MD_MIN_BYTES
 from agent.agents_md import AgentsMdSettings
+from agent.tools.denylist import (
+    MATCH_FIXED,
+    MATCH_KINDS,
+    MATCH_REGEX,
+    ToolDenyRule,
+    parse_rules,
+)
 from agent.tools.permissions import PermissionMode, normalize_mode
 from api_schemas import (
     MAX_STEPS_LIMIT,
     AgentsMdConfigRequest,
     AgentsMdConfigResponse,
+    DenyRuleItem,
+    DenyRuleListResponse,
+    DenyRuleRequest,
     MaxStepsConfigRequest,
     MaxStepsConfigResponse,
     PermissionModeConfigRequest,
@@ -278,3 +289,76 @@ async def delete_permission_rule(
     if not app_state.permission_rule_store.remove(tool, target):
         raise HTTPException(status_code=404, detail="No such permission rule.")
     return {"removed": True, "tool": tool, "target": target}
+
+
+# ------------------------------------------------------------------- deny-list
+
+
+def _deny_spec(kind: str, text: str, where: str) -> dict[str, str]:
+    """Build one match spec from the flat form the management page posts."""
+    match = (kind or MATCH_FIXED).strip().lower()
+    if match not in MATCH_KINDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{where}: unknown match kind '{kind}'. Use one of: {', '.join(MATCH_KINDS)}.",
+        )
+    body = str(text or "")
+    if not body.strip():
+        raise HTTPException(status_code=400, detail=f"{where}: value must not be empty.")
+    if match == MATCH_REGEX:
+        return {"match": MATCH_REGEX, "pattern": body}
+    return {"match": MATCH_FIXED, "value": body}
+
+
+def _build_deny_rule(payload: DenyRuleRequest) -> ToolDenyRule:
+    """Validate a posted rule through the parser the file itself goes through.
+
+    One parser means the page cannot write a rule that the running tasks would
+    drop: a bad pattern fails here with a 400 instead of silently never matching.
+    """
+    draft: dict[str, Any] = {
+        "id": payload.id.strip() or f"ui-{uuid4().hex[:8]}",
+        "tool": _deny_spec(payload.tool_match, payload.tool, "tool"),
+        "reason": payload.reason.strip(),
+    }
+    args = [
+        {
+            "field": item.field.strip(),
+            **_deny_spec(item.match, item.value, f"args[{index}].{item.field}"),
+        }
+        for index, item in enumerate(payload.args)
+    ]
+    if args:
+        draft["args"] = args
+    rules, problems = parse_rules({"rules": [draft]})
+    if problems or not rules:
+        raise HTTPException(status_code=400, detail="; ".join(problems) or "Invalid deny rule.")
+    return rules[0]
+
+
+@router.get("/api/admin/denylist", response_model=DenyRuleListResponse)
+async def list_deny_rules() -> DenyRuleListResponse:
+    """Rules that refuse a tool call outright, before the permission gate (ADR 0024)."""
+    store = app_state.denylist_store
+    return DenyRuleListResponse(
+        rules=[DenyRuleItem(**rule.to_payload()) for rule in store.list()],
+        path=store.path.as_posix(),
+        problems=store.problems,
+    )
+
+
+@router.post("/api/admin/denylist", response_model=DenyRuleItem)
+async def add_deny_rule(payload: DenyRuleRequest) -> DenyRuleItem:
+    rule = _build_deny_rule(payload)
+    if not app_state.denylist_store.add(rule):
+        raise HTTPException(status_code=500, detail="Could not write the deny-list file.")
+    return DenyRuleItem(**rule.to_payload())
+
+
+@router.delete("/api/admin/denylist")
+async def delete_deny_rule(rule_id: str = Query(min_length=1, alias="id")) -> dict[str, Any]:
+    # Query parameter rather than a body, for the same reason as the rule delete
+    # above: a silently dropped DELETE body would look like "rule not found".
+    if not app_state.denylist_store.remove(rule_id):
+        raise HTTPException(status_code=404, detail="No such deny rule.")
+    return {"removed": True, "id": rule_id}
