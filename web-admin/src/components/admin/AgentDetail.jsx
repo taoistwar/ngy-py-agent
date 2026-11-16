@@ -16,60 +16,9 @@ export function normalizeParameters(parameters) {
   }))
 }
 
-const TEXTUAL_TYPES = new Set(["string", "any", "null"])
-
-// Editor for one tool argument, chosen from its JSON schema. It sits next to the
-// read-only rendering so the tool page and the agent editor describe a parameter
-// the same way.
-function ParameterInput({ param, value, onChange, translate }) {
-  const current = value ?? ""
-
-  if (param.options.length > 0 || param.type === "boolean") {
-    const options = param.options.length > 0 ? param.options : ["true", "false"]
-    return (
-      <select
-        className="agent-param-input"
-        value={current}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">{translate("toolTestValueUnset")}</option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    )
-  }
-
-  if (param.type === "object" || param.type === "array") {
-    return (
-      <textarea
-        className="agent-param-input"
-        rows={3}
-        value={current}
-        placeholder={param.type === "array" ? '["value"]' : '{"key": "value"}'}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    )
-  }
-
-  return (
-    <input
-      className="agent-param-input"
-      type="text"
-      inputMode={TEXTUAL_TYPES.has(param.type) ? undefined : "decimal"}
-      value={current}
-      placeholder={param.defaultValue !== undefined ? String(param.defaultValue) : param.name}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  )
-}
-
-export function AgentToolDetail({ tool, translate, values, onChange, translation }) {
+export function AgentToolDetail({ tool, translate, translation }) {
   const params = normalizeParameters(tool.parameters)
   const hasSchema = Boolean(tool.parameters) && Object.keys(tool.parameters).length > 0
-  const editable = typeof onChange === "function"
   // English is always shown; a locale's own text only ever adds to it.
   const translatedParams = translation?.parameters || {}
 
@@ -101,14 +50,6 @@ export function AgentToolDetail({ tool, translate, values, onChange, translation
                   <span className="agent-param-desc agent-desc-i18n">
                     {translatedParams[param.name]}
                   </span>
-                ) : null}
-                {editable ? (
-                  <ParameterInput
-                    param={param}
-                    value={values?.[param.name]}
-                    onChange={(next) => onChange(param.name, next)}
-                    translate={translate}
-                  />
                 ) : null}
               </div>
             ))}

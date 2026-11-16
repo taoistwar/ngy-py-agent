@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { testTool } from "../../api"
 import { AgentToolDetail, normalizeParameters } from "./AgentDetail"
 import Modal from "./Modal"
+import ToolTestPanel from "./ToolTestPanel"
 import {
   buildArguments,
   initialValues,
@@ -17,39 +18,6 @@ const ARGUMENT_ERROR_KEYS = {
   missing: "toolTestMissing",
   number: "toolTestInvalidNumber",
   json: "toolTestInvalidJson",
-}
-
-function ToolTestResult({ result, translate }) {
-  const ok = Boolean(result.ok)
-
-  return (
-    <div className="agent-section">
-      <div className="agent-section-head">
-        <span>{translate("toolTestResult")}</span>
-        <div className="agent-section-actions">
-          <span className={`badge ${ok ? "badge-library" : "badge-warning"}`}>
-            {ok ? translate("toolTestOk") : translate("toolTestFailed")}
-          </span>
-          {typeof result.duration_ms === "number" ? (
-            <span className="hint">{`${result.duration_ms} ms`}</span>
-          ) : null}
-        </div>
-      </div>
-      {ok ? (
-        <>
-          <pre className="agent-detail-block tool-test-output">{result.result || "-"}</pre>
-          {result.details ? (
-            <pre className="agent-detail-block tool-test-output">{result.details}</pre>
-          ) : null}
-          {result.truncated ? (
-            <p className="hint">{translate("toolTestTruncated")}</p>
-          ) : null}
-        </>
-      ) : (
-        <pre className="agent-detail-block tool-test-output tool-test-error">{result.error}</pre>
-      )}
-    </div>
-  )
 }
 
 export default function ToolDetailDialog({ tool, agents, locale, onClose, translate }) {
@@ -101,6 +69,7 @@ export default function ToolDetailDialog({ tool, agents, locale, onClose, transl
   return (
     <Modal
       wide
+      className="modal-dialog-tool"
       title={tool.name}
       hint={translate("toolDetailHint")}
       closeLabel={translate("dialogClose")}
@@ -111,54 +80,54 @@ export default function ToolDetailDialog({ tool, agents, locale, onClose, transl
         </button>
       }
     >
-      <div className="agent-detail">
-        <div className="agent-detail-meta">
-          <span className="agent-detail-label">{translate("toolDetailPermission")}</span>
-          <span className={`badge badge-permission-${tool.permission || "none"}`}>
-            {permissionLabel(tool.permission, translate)}
-          </span>
-        </div>
-        <div className="agent-detail-meta">
-          <span className="agent-detail-label">{translate("toolDetailScopes")}</span>
-          <span className="agent-detail-value">{scopeSummary(tool, translate)}</span>
-        </div>
-        <div className="agent-detail-meta">
-          <span className="agent-detail-label">{translate("toolDetailSource")}</span>
-          <code className="agent-detail-value">{tool.source || "-"}</code>
-        </div>
-        <div className="agent-detail-meta">
-          <span className="agent-detail-label">{translate("toolDetailPreview")}</span>
-          <span className="agent-detail-value">
-            {tool.has_preview ? translate("yes") : translate("no")}
-          </span>
-        </div>
-        <div className="agent-detail-meta">
-          <span className="agent-detail-label">{translate("toolDetailAgents")}</span>
-          {agentNames.length > 0 ? (
-            agentNames.map((agent) => (
-              <span className={`badge badge-mode-${agent.id}`} key={agent.id}>
-                {agent.label}
-              </span>
-            ))
-          ) : (
-            <span className="hint">{translate("toolDetailNoAgents")}</span>
-          )}
+      {/* Schema on the left, test bench on the right. */}
+      <div className="tool-detail-layout">
+        <div className="tool-detail-main">
+          <div className="agent-detail-meta">
+            <span className="agent-detail-label">{translate("toolDetailPermission")}</span>
+            <span className={`badge badge-permission-${tool.permission || "none"}`}>
+              {permissionLabel(tool.permission, translate)}
+            </span>
+          </div>
+          <div className="agent-detail-meta">
+            <span className="agent-detail-label">{translate("toolDetailScopes")}</span>
+            <span className="agent-detail-value">{scopeSummary(tool, translate)}</span>
+          </div>
+          <div className="agent-detail-meta">
+            <span className="agent-detail-label">{translate("toolDetailSource")}</span>
+            <code className="agent-detail-value">{tool.source || "-"}</code>
+          </div>
+          <div className="agent-detail-meta">
+            <span className="agent-detail-label">{translate("toolDetailPreview")}</span>
+            <span className="agent-detail-value">
+              {tool.has_preview ? translate("yes") : translate("no")}
+            </span>
+          </div>
+          <div className="agent-detail-meta">
+            <span className="agent-detail-label">{translate("toolDetailAgents")}</span>
+            {agentNames.length > 0 ? (
+              agentNames.map((agent) => (
+                <span className={`badge badge-mode-${agent.id}`} key={agent.id}>
+                  {agent.label}
+                </span>
+              ))
+            ) : (
+              <span className="hint">{translate("toolDetailNoAgents")}</span>
+            )}
+          </div>
+
+          <AgentToolDetail tool={tool} translate={translate} translation={translation} />
         </div>
 
-        <AgentToolDetail
-          tool={tool}
-          translate={translate}
+        <ToolTestPanel
+          params={params}
           values={values}
           onChange={setValue}
-          translation={translation}
+          translate={translate}
+          inputError={inputError}
+          result={result}
+          resultRef={resultRef}
         />
-
-        {inputError ? <div className="form-error">{inputError}</div> : null}
-        {result ? (
-          <div ref={resultRef}>
-            <ToolTestResult result={result} translate={translate} />
-          </div>
-        ) : null}
       </div>
     </Modal>
   )

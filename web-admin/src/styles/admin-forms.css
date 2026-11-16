@@ -18,6 +18,11 @@
   width: min(920px, 100%);
 }
 
+/* The tool dialog splits into a schema column and a test column. */
+.modal-dialog-tool {
+  width: min(1080px, 100%);
+}
+
 .modal-dialog-body {
   overflow: auto;
   display: grid;
@@ -199,7 +204,7 @@
   line-height: 1.4;
 }
 
-/* Editable argument, shown by the tool test dialog under each parameter. */
+/* Editable argument in the tool test column of the tool detail dialog. */
 .agent-param-input {
   width: 100%;
   border: 1px solid var(--input-border);
@@ -225,6 +230,43 @@
 
 .tool-test-error {
   color: var(--danger);
+}
+
+/* Tool detail: read-only schema on the left, test bench on the right. */
+.tool-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.tool-detail-main {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tool-test-panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+}
+
+/* Narrow screens stack the two columns; the divider turns horizontal. */
+@media (max-width: 820px) {
+  .tool-detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tool-test-panel {
+    padding-left: 0;
+    padding-top: 12px;
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
 }
 
 .model-form {

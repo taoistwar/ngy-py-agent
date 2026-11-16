@@ -14,7 +14,11 @@ export default function Modal({
   wide = false,
   dismissible = true,
   actions = null,
+  className = "",
 }) {
+  const dialogClass = ["panel", "modal-dialog", wide ? "modal-dialog-wide" : "", className]
+    .filter(Boolean)
+    .join(" ")
   useEffect(() => {
     if (!dismissible) {
       return undefined
@@ -38,7 +42,7 @@ export default function Modal({
       }}
     >
       <section
-        className={`panel modal-dialog ${wide ? "modal-dialog-wide" : ""}`}
+        className={dialogClass}
         role="dialog"
         aria-modal="true"
         aria-label={title}
