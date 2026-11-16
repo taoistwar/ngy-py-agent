@@ -18,7 +18,7 @@ uv run python main.py --web --host 0.0.0.0 --port 8080 --reload
 
 ## 文档
 
-- 用户文档：[docs/guide.md](docs/guide.md)
+- 用户文档：[docs/guide/README.md](docs/guide/README.md)
 - 开发者文档：[docs/dev.md](docs/dev.md)
 
 ## 前端资源
