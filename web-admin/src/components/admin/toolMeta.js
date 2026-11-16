@@ -10,7 +10,6 @@ export const CATEGORY_ORDER = [
   "shell",
   "computer",
   "compute",
-  "lookup",
   "interaction",
   "other",
 ]
@@ -20,7 +19,6 @@ const CATEGORY_LABEL_KEYS = {
   shell: "toolCategoryShell",
   computer: "toolCategoryComputer",
   compute: "toolCategoryCompute",
-  lookup: "toolCategoryLookup",
   interaction: "toolCategoryInteraction",
   other: "toolCategoryOther",
 }

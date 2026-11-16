@@ -500,7 +500,6 @@
   "toolCategoryShell": "Commandes et processus",
   "toolCategoryComputer": "Contrôle de l'ordinateur",
   "toolCategoryCompute": "Calcul et code",
-  "toolCategoryLookup": "Recherches",
   "toolCategoryInteraction": "Interaction utilisateur",
   "toolCategoryOther": "Autres",
   "toolManagerHint": "Tous les outils que l'agent peut appeler, avec leur autorisation et leur schéma de paramètres.",

@@ -500,7 +500,6 @@
   "toolCategoryShell": "Команды и процессы",
   "toolCategoryComputer": "Управление рабочим столом",
   "toolCategoryCompute": "Вычисления и код",
-  "toolCategoryLookup": "Справки",
   "toolCategoryInteraction": "Взаимодействие с пользователем",
   "toolCategoryOther": "Прочее",
   "toolManagerHint": "Все инструменты, которые может вызвать агент, с подтверждением и схемой параметров.",

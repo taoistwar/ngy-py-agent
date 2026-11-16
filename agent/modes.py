@@ -50,7 +50,7 @@ MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
         "description": "Answer questions clearly using read-only tools when helpful.",
         "system_prompt": (
             "You are an Ask agent. Answer the user's question clearly and accurately. You may "
-            "use read-only tools (such as the clock or a calculator) to verify facts, but do "
+            "use read-only tools (such as the code interpreter) to verify facts, but do "
             "not perform side-effecting actions. If the question is ambiguous, state your "
             "assumptions before answering."
         ),
@@ -59,7 +59,6 @@ MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
         # ``plan`` stays tool-less on purpose - its contract is to plan, not to ask
         # (ADR 0010 D6).
         "tool_names": [
-            "get_current_time",
             "code_interpreter",
             # Finding a file, or the code inside it, is read-only and is what
             # ``read_file`` often needs first, so discovery belongs to this mode.

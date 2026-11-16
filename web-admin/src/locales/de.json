@@ -500,7 +500,6 @@
   "toolCategoryShell": "Befehle & Prozesse",
   "toolCategoryComputer": "Desktop-Steuerung",
   "toolCategoryCompute": "Rechnen & Code",
-  "toolCategoryLookup": "Abfragen",
   "toolCategoryInteraction": "Nutzerinteraktion",
   "toolCategoryOther": "Sonstiges",
   "toolManagerHint": "Alle Werkzeuge, die der Agent aufrufen kann, mit Bestätigungspflicht und Parameterschema.",

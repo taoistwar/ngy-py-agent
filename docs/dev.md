@@ -362,7 +362,7 @@ npm run i18n:check
 
 - **门禁写在 `ToolRegistry.execute_tool` 这个唯一收口上**，不要写进各个工具内部（工具拿不到 `EventSink`，而且按工具加门禁的默认结局是漏掉某个工具）。新增工具时必须在**该工具包内 `spec.py`** 的 `ToolSpec.permission` 里声明种类，默认 `none`＝永不询问；工具清单与顺序由 `agent/tools/catalog.py` 统一决定。
 - **分类与翻译也写在工具包里**：`ToolSpec.category` 决定管理页的分组，`description_i18n` 只给管理页展示。文案放本包 `i18n.py`，五套语言常量（`ZH_CN` / `ZH_TW` / `FR` / `DE` / `RU`）由 `agent/tools/spec.py` 的 `localized_texts(...)` 装配；它要求五个都传，漏一个在 import 期就报错，不会等到法文页面上才发现某工具回退成英文。它们**不能**写进 `parameters`/`description`：那两处会原样发给 provider，每次请求都付费。`test/tool_api_test.py` 会校验每个工具的每个语种都覆盖全部参数，所以改 schema 时要同步改 `i18n.py`。
-- **新增界面语言是两处一起改**：`web-admin/src/i18n.js` 的 `LOCALES` 与 `agent/tools/spec.py` 的 `LOCALES`（后者决定工具的 `description_i18n` 键），另外要给 14 个工具包各补一套 `ToolText`，两处清单不一致时工具页会静默回退英文。
+- **新增界面语言是两处一起改**：`web-admin/src/i18n.js` 的 `LOCALES` 与 `agent/tools/spec.py` 的 `LOCALES`（后者决定工具的 `description_i18n` 键），另外要给 11 个工具包各补一套 `ToolText`，两处清单不一致时工具页会静默回退英文。
 - **`TaskStatus.WAITING` 仍属"进行中"**：`/events/stream`、WebSocket 循环与前端 `isTaskRunningStatus` 都必须把它当作在飞行中。否则事件流会在用户最需要看到确认请求的那一刻断掉（这个坑已踩过一次）。
 - **scope 不做降级**：未知取值返回 400。把 `always` 静默降级成 `once` 会让用户以为已经长期允许了。
 

@@ -38,7 +38,7 @@ class ToolItemResponse(BaseModel):
     source: str = ""
     # Agent ids whose configuration lets the model call this tool.
     agent_ids: list[str] = Field(default_factory=list)
-    # Grouping in the tool list (file / shell / computer / compute / lookup / ...).
+    # Grouping in the tool list (file / shell / computer / compute / interaction / ...).
     category: str = "other"
     # Locale -> display text. English is not repeated here: it is the fields above.
     description_i18n: dict[str, ToolTextResponse] = Field(default_factory=dict)

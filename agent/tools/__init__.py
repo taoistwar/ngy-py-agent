@@ -7,8 +7,8 @@ The package is split so that reading one tool means reading one directory:
   ``ToolBindings`` tools are constructed with, and the list of built-in tools
 - ``<tool>/``: one package per model-visible tool, **named after that tool**
   (``exec_command/``, ``write_stdin/``, ``glob/``, ``grep/``, ``read_file/``,
-  ``edit_file/``, ``write_file/``, ``code_interpreter/``, ``get_current_time/``,
-  ``get_current_temperature/``, ``convert_currency/``). ``__init__.py`` holds the
+  ``edit_file/``, ``write_file/``, ``code_interpreter/``, ``computer_observe/``,
+  ``computer_control/``, ``ask_user_question/``). ``__init__.py`` holds the
   package docstring and the public surface, ``spec.py`` declares the tool to the
   registry, and the implementation is split by responsibility
   (``description.py``, ``errors.py``, topic modules, ``tool.py``).

@@ -23,9 +23,6 @@ from agent.tools.bindings import ToolBindings  # noqa: E402
 from agent.tools.catalog import build_all_specs  # noqa: E402
 
 EXPECTED_ORDER = (
-    "get_current_temperature",
-    "get_current_time",
-    "convert_currency",
     "code_interpreter",
     "glob",
     "grep",

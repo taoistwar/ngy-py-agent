@@ -500,7 +500,6 @@
   "toolCategoryShell": "Commands & processes",
   "toolCategoryComputer": "Desktop control",
   "toolCategoryCompute": "Compute & code",
-  "toolCategoryLookup": "Lookups",
   "toolCategoryInteraction": "User interaction",
   "toolCategoryOther": "Other",
   "toolManagerHint": "Every tool the agent can call, with its permission gate and parameter schema.",

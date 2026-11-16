@@ -500,7 +500,6 @@
   "toolCategoryShell": "命令與行程",
   "toolCategoryComputer": "桌面控制",
   "toolCategoryCompute": "運算與程式碼",
-  "toolCategoryLookup": "查詢",
   "toolCategoryInteraction": "與使用者互動",
   "toolCategoryOther": "其他",
   "toolManagerHint": "代理可以呼叫的每個工具，含權限管制與參數結構。",

@@ -65,41 +65,6 @@ def _load_runtime_modules():
             class _FallbackToolRegistry:
                 def __init__(self):
                     self.tools = {
-                        "get_current_time": {
-                            "description": "Get current time in timezone",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {"timezone": {"type": "string"}},
-                                "required": ["timezone"],
-                            },
-                        },
-                        "get_current_temperature": {
-                            "description": "Get current temperature in specific location",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "location": {"type": "string", "description": "City, Country"},
-                                    "unit": {
-                                        "type": "string",
-                                        "enum": ["celsius", "fahrenheit"],
-                                        "description": "Temperature unit",
-                                    },
-                                },
-                                "required": ["location", "unit"],
-                            },
-                        },
-                        "convert_currency": {
-                            "description": "Convert an amount from one currency to another",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "amount": {"type": "number", "description": "Amount to convert"},
-                                    "from_currency": {"type": "string", "description": "Source currency"},
-                                    "to_currency": {"type": "string", "description": "Target currency"},
-                                },
-                                "required": ["amount", "from_currency", "to_currency"],
-                            },
-                        },
                         "code_interpreter": {
                             "description": "Execute Python code for calculations",
                             "parameters": {
@@ -184,7 +149,7 @@ def _simulate_provider_request(provider_name: str) -> dict[str, Any]:
         },
         {
             "role": "user",
-            "content": "Get the current date and time in UTC. Return only tool result."
+            "content": "Run a small Python calculation. Return only tool result."
         },
     ]
 

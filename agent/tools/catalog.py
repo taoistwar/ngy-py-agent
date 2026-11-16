@@ -15,11 +15,8 @@ from agent.tools.bindings import ToolBindings
 from agent.tools.code_interpreter import spec as code_interpreter
 from agent.tools.computer_control import spec as computer_control
 from agent.tools.computer_observe import spec as computer_observe
-from agent.tools.convert_currency import spec as convert_currency
 from agent.tools.edit_file import spec as edit_file
 from agent.tools.exec_command import spec as exec_command
-from agent.tools.get_current_temperature import spec as get_current_temperature
-from agent.tools.get_current_time import spec as get_current_time
 from agent.tools.glob import spec as glob
 from agent.tools.grep import spec as grep
 from agent.tools.read_file import spec as read_file
@@ -29,9 +26,6 @@ from agent.tools.write_stdin import spec as write_stdin
 
 # The order here is the order the model sees the tools in, so it stays stable.
 _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
-    get_current_temperature.build_spec,
-    get_current_time.build_spec,
-    convert_currency.build_spec,
     code_interpreter.build_spec,
     # Find before read: ``glob`` locates a file by name, ``grep`` locates the code
     # inside it, and only then does ``read_file`` need to run.

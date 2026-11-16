@@ -113,7 +113,7 @@ class PermissionBrokerTest(unittest.TestCase):
     def test_tools_without_a_kind_never_ask(self):
         broker = self.make_broker()
 
-        self.assertIsNone(broker.check("get_current_time", PERMISSION_NONE, {}))
+        self.assertIsNone(broker.check("ask_user_question", PERMISSION_NONE, {}))
         self.assertEqual(self.events, [])
 
     def test_ordinary_read_is_not_worth_interrupting_the_user_for(self):
@@ -440,9 +440,6 @@ class RegistryGateTest(unittest.TestCase):
             # Without this, code_interpreter is an unrestricted bypass: it can
             # open() and subprocess.run() anything (ADR 0005 D1, ADR 0006 D2).
             "code_interpreter": PERMISSION_EXEC,
-            "get_current_time": PERMISSION_NONE,
-            "get_current_temperature": PERMISSION_NONE,
-            "convert_currency": PERMISSION_NONE,
         }
         for name, kind in expected.items():
             with self.subTest(tool=name):

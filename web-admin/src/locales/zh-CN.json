@@ -500,7 +500,6 @@
   "toolCategoryShell": "命令与进程",
   "toolCategoryComputer": "桌面操作",
   "toolCategoryCompute": "计算与代码",
-  "toolCategoryLookup": "信息查询",
   "toolCategoryInteraction": "用户交互",
   "toolCategoryOther": "其他",
   "toolManagerHint": "列出智能体可调用的全部工具，可查看权限门禁与参数结构。",

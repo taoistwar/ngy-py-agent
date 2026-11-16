@@ -57,7 +57,7 @@ class ToolApiTest(unittest.TestCase):
         tools = self.fetch_tools()
 
         self.assertGreater(len(tools), 0)
-        for name in ("read_file", "write_file", "exec_command", "get_current_time"):
+        for name in ("read_file", "write_file", "exec_command", "ask_user_question"):
             self.assertIn(name, tools)
         for name, item in tools.items():
             self.assertEqual(item["name"], name)
@@ -69,7 +69,7 @@ class ToolApiTest(unittest.TestCase):
 
         self.assertEqual(tools["exec_command"]["permission"], "exec")
         self.assertEqual(tools["write_file"]["permission"], "write")
-        self.assertEqual(tools["get_current_time"]["permission"], "none")
+        self.assertEqual(tools["ask_user_question"]["permission"], "none")
 
         for name, item in tools.items():
             self.assertIn(item["permission"], PERMISSION_KINDS, name)
@@ -94,11 +94,11 @@ class ToolApiTest(unittest.TestCase):
 
     def test_new_agent_shows_up_as_a_user_of_its_tools(self):
         created = self.store.create_agent(
-            {"name": "Reader", "tool_names": ["get_current_time"]}
+            {"name": "Reader", "tool_names": ["glob"]}
         )
         tools = self.fetch_tools()
 
-        self.assertIn(created["agent_id"], tools["get_current_time"]["agent_ids"])
+        self.assertIn(created["agent_id"], tools["glob"]["agent_ids"])
         self.assertNotIn(created["agent_id"], tools["read_file"]["agent_ids"])
 
     # ----------------------------------------------------------------- grouping
@@ -110,7 +110,6 @@ class ToolApiTest(unittest.TestCase):
         self.assertEqual(tools["exec_command"]["category"], "shell")
         self.assertEqual(tools["computer_control"]["category"], "computer")
         self.assertEqual(tools["code_interpreter"]["category"], "compute")
-        self.assertEqual(tools["get_current_time"]["category"], "lookup")
         self.assertEqual(tools["ask_user_question"]["category"], "interaction")
         for name, item in tools.items():
             self.assertIn(item["category"], CATEGORY_KINDS, name)
@@ -165,12 +164,12 @@ class ToolApiTest(unittest.TestCase):
         return self.client.post(f"/api/tools/{name}/test", json={"arguments": arguments})
 
     def test_runs_a_tool_with_the_given_arguments(self):
-        response = self.run_tool("get_current_time", {"timezone": "UTC"})
+        response = self.run_tool("code_interpreter", {"code": "result = 2 + 2"})
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertTrue(body["ok"])
-        self.assertEqual(body["tool"], "get_current_time")
+        self.assertEqual(body["tool"], "code_interpreter")
         self.assertTrue(body["result"])
         self.assertEqual(body["error"], "")
         self.assertGreaterEqual(body["duration_ms"], 0)

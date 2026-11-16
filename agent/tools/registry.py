@@ -9,16 +9,11 @@ from agent.provider import canonicalize_provider
 from agent.tools.bindings import ToolBindings
 from agent.tools.catalog import build_all_specs
 from agent.tools.code_interpreter import code_interpreter as _code_interpreter
-from agent.tools.convert_currency import convert_currency as _convert_currency
 from agent.tools.denylist import (
     REASON_DENYLIST,
     REASON_DENYLIST_ERROR,
     ToolDenyList,
 )
-from agent.tools.get_current_temperature import (
-    get_current_temperature as _get_current_temperature,
-)
-from agent.tools.get_current_time import get_current_time as _get_current_time
 from agent.tools.output_store import (
     output_root_path,
     workspace_result_directory,
@@ -506,7 +501,4 @@ class ToolRegistry:
             )
 
     # Backwards compatible aliases for the previous static-method API.
-    get_current_temperature = staticmethod(_get_current_temperature)
-    get_current_time = staticmethod(_get_current_time)
-    convert_currency = staticmethod(_convert_currency)
     code_interpreter = staticmethod(_code_interpreter)
