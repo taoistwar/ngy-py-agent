@@ -8,6 +8,8 @@ wheels/
 
 # Node.js-generated files
 node_modules/
+# Throwaway build output from a local check (the real build goes to dist/)
+web-admin/dist-check/
 
 # Virtual environments
 .venv
@@ -29,3 +31,5 @@ output/
 /llm/
 /test/llm/
 /learn-claude-code/
+/.codebuddy/
+/.playwright-cli/
