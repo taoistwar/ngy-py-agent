@@ -288,6 +288,7 @@
   "denyListToolPlaceholder": "exec_command oder ^computer_",
   "denyListArgs": "Argumente (alle müssen zutreffen)",
   "denyListArgField": "Argument",
+  "denyListArgFieldSelect": "Argument auswählen",
   "denyListArgMatch": "Abgleich",
   "denyListArgValue": "Wert oder Muster",
   "denyListArgAdd": "Argument hinzufügen",

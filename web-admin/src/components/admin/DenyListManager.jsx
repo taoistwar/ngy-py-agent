@@ -38,6 +38,24 @@ export default function DenyListManager({ denylist, tools, onCreate, onDelete, o
   const exactChoices = tool && !toolNames.includes(tool) ? [tool, ...toolNames] : toolNames
   const pickTool = toolMatch === MATCH_FIXED && exactChoices.length > 0
 
+  // Argument names come from the selected tool's schema. Switching tools drops a
+  // row whose name the new tool does not declare, so the form cannot submit a
+  // combination the tool would never receive.
+  const selectedTool = toolNames.includes(tool)
+    ? (tools || []).find((item) => item.name === tool)
+    : null
+  const parameterNames = Object.keys(selectedTool?.parameters?.properties || {})
+
+  const chooseTool = (name) => {
+    setTool(name)
+    const nextTool = (tools || []).find((item) => item.name === name)
+    const nextNames = Object.keys(nextTool?.parameters?.properties || {})
+    if (nextNames.length === 0) return
+    setArgs((current) =>
+      current.map((item) => (nextNames.includes(item.field) ? item : { ...item, field: "" })),
+    )
+  }
+
   const updateArg = (index, patch) => {
     setArgs((current) =>
       current.map((item, position) => (position === index ? { ...item, ...patch } : item)),
@@ -124,7 +142,7 @@ export default function DenyListManager({ denylist, tools, onCreate, onDelete, o
             <label>
               <span>{translate("denyListTool")}</span>
               {pickTool ? (
-                <select value={tool} onChange={(event) => setTool(event.target.value)}>
+                <select value={tool} onChange={(event) => chooseTool(event.target.value)}>
                   <option value="">{translate("denyListToolSelect")}</option>
                   {exactChoices.map((name) => (
                     <option key={name} value={name}>
@@ -155,41 +173,68 @@ export default function DenyListManager({ denylist, tools, onCreate, onDelete, o
 
           <div className="deny-args">
             <span className="deny-args-title">{translate("denyListArgs")}</span>
-            {args.map((item, index) => (
-              <div className="deny-arg-row" key={index}>
-                <input
-                  type="text"
-                  value={item.field}
-                  placeholder={translate("denyListArgField")}
-                  aria-label={translate("denyListArgField")}
-                  onChange={(event) => updateArg(index, { field: event.target.value })}
-                />
-                <select
-                  value={item.match}
-                  aria-label={translate("denyListArgMatch")}
-                  onChange={(event) => updateArg(index, { match: event.target.value })}
-                >
-                  <option value={MATCH_FIXED}>{translate("denyListMatchFixed")}</option>
-                  <option value={MATCH_REGEX}>{translate("denyListMatchRegex")}</option>
-                </select>
-                <input
-                  type="text"
-                  value={item.value}
-                  placeholder={translate("denyListArgValue")}
-                  aria-label={translate("denyListArgValue")}
-                  onChange={(event) => updateArg(index, { value: event.target.value })}
-                />
-                <button
-                  type="button"
-                  className="btn btn-compact"
-                  aria-label={translate("denyListArgRemove")}
-                  disabled={args.length === 1}
-                  onClick={() => setArgs((current) => current.filter((_, position) => position !== index))}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+            {args.map((item, index) => {
+              // A name that the tool no longer declares is kept visible instead of
+              // snapping the select back to the placeholder mid-edit.
+              const fieldChoices =
+                parameterNames.length > 0
+                  ? item.field && !parameterNames.includes(item.field)
+                    ? [item.field, ...parameterNames]
+                    : parameterNames
+                  : []
+              return (
+                <div className="deny-arg-row" key={index}>
+                  {fieldChoices.length > 0 ? (
+                    <select
+                      value={item.field}
+                      aria-label={translate("denyListArgField")}
+                      onChange={(event) => updateArg(index, { field: event.target.value })}
+                    >
+                      <option value="">{translate("denyListArgFieldSelect")}</option>
+                      {fieldChoices.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={item.field}
+                      placeholder={translate("denyListArgField")}
+                      aria-label={translate("denyListArgField")}
+                      onChange={(event) => updateArg(index, { field: event.target.value })}
+                    />
+                  )}
+                  <select
+                    value={item.match}
+                    aria-label={translate("denyListArgMatch")}
+                    onChange={(event) => updateArg(index, { match: event.target.value })}
+                  >
+                    <option value={MATCH_FIXED}>{translate("denyListMatchFixed")}</option>
+                    <option value={MATCH_REGEX}>{translate("denyListMatchRegex")}</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={item.value}
+                    placeholder={translate("denyListArgValue")}
+                    aria-label={translate("denyListArgValue")}
+                    onChange={(event) => updateArg(index, { value: event.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-compact"
+                    aria-label={translate("denyListArgRemove")}
+                    disabled={args.length === 1}
+                    onClick={() =>
+                      setArgs((current) => current.filter((_, position) => position !== index))
+                    }
+                  >
+                    ×
+                  </button>
+                </div>
+              )
+            })}
             <button
               type="button"
               className="btn btn-compact"

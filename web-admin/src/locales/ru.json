@@ -288,6 +288,7 @@
   "denyListToolPlaceholder": "exec_command или ^computer_",
   "denyListArgs": "Аргументы (все должны совпасть)",
   "denyListArgField": "Аргумент",
+  "denyListArgFieldSelect": "Выберите аргумент",
   "denyListArgMatch": "Сопоставление",
   "denyListArgValue": "Значение или шаблон",
   "denyListArgAdd": "Добавить аргумент",

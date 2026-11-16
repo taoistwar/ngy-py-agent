@@ -288,6 +288,7 @@
   "denyListToolPlaceholder": "exec_command 或 ^computer_",
   "denyListArgs": "參數條件（全部成立才拒絕）",
   "denyListArgField": "參數名稱",
+  "denyListArgFieldSelect": "選擇參數",
   "denyListArgMatch": "比對方式",
   "denyListArgValue": "值或正則",
   "denyListArgAdd": "新增參數條件",

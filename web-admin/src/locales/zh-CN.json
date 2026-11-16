@@ -288,6 +288,7 @@
   "denyListToolPlaceholder": "exec_command 或 ^computer_",
   "denyListArgs": "参数条件（全部满足才拒绝）",
   "denyListArgField": "参数名",
+  "denyListArgFieldSelect": "选择参数",
   "denyListArgMatch": "匹配方式",
   "denyListArgValue": "值或正则",
   "denyListArgAdd": "添加参数条件",
