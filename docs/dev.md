@@ -9,12 +9,7 @@
 
 ## 2. 项目安装
 
-```bash
-uv sync
-cd web-admin
-npm install
-cd ..
-```
+依赖版本、`uv sync` / `npm install`、前端构建与两种启动方式统一见 [快速开始](quickstart.md)。
 
 ## 3. 环境变量
 
@@ -44,9 +39,7 @@ cd ..
 
 ## 4. 启动方式
 
-```bash
-uv run python main.py --web --reload
-```
+生产启动与开发启动（`--reload` + Vite dev server）见 [快速开始](quickstart.md)。
 
 单次运行（`--query`）与交互式 CLI（`--interactive`）都已移除：一次性问题就是 Web Admin 的 `POST /api/tasks`，多轮对话就是 Web Admin 的会话；模型与 provider 在数据库里配置，不再依赖 `.env`。
 
@@ -62,24 +55,11 @@ uv run python main.py --web --reload
 
 ### 构建前端
 
-```bash
-cd web-admin
-npm run build
-cd ..
-uv run python main.py --web --reload
-```
+构建命令与「构建后由后端直出」的验证方式见 [快速开始 · 生产启动](quickstart.md#3-生产启动)。
 
 ### 本地开发（Vite）
 
-```bash
-cd web-admin
-npm run dev
-```
-
-### 访问地址
-
-- 后端服务地址：`http://127.0.0.1:8001`
-- 本地 Vite 调试地址：`http://127.0.0.1:3000`
+前端 dev server 与后端并跑的步骤见 [快速开始 · 开发启动](quickstart.md#4-开发启动)。访问地址：后端 `http://127.0.0.1:8001`，Vite `http://127.0.0.1:3000`（`/api` 已代理到后端）。
 
 ## 6. API 联调
 
@@ -433,7 +413,7 @@ npm run i18n:check
 | `context_usage.py` | 任务窗口的上下文占用读数：会话最近一次模型请求的 `usage`（回溯最多 5 个任务 / 5 条响应）+ 分母（模型 `max_input_tokens`，缺失时回退到循环自己的字符预算 ÷ 4） | 不估算文本、不改上下文 |
 | `task_runtime.py` | "一个任务是什么"：provider / 工作目录 / 步数 / 确认模式的解析、会话标题、保留期清理、`run_task`（跑 ReAct 循环并把两个 broker 注册进 `app_state`） | HTTP 细节 |
 | `task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
-| `task_store/` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁；按职责拆成 `base`（常量与行工具）/ `schema`（建表与迁移）/ `sessions`（会话、工作空间、Fork）/ `agents` / `settings` / `tasks`（任务与事件）/ `store`（组合类） | provider 与模型（在 `llm_store.py`） |
+| `task_store/` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁；按职责拆成 `base`（常量与行工具）/ `schema`（建表与迁移）/ `sessions`（会话、工作空间）/ `forks`（Fork 复制）/ `agents` / `settings` / `tasks`（任务与事件）/ `store`（组合类） | provider 与模型（在 `llm_store.py`） |
 | `llm_store.py` | provider 端点与模型两张表的 SQL、旧 `models` 表的一次性迁移；共用 `task_store` 的连接与锁 | 限流策略 |
 | `workspace_api.py` | 会话、工作空间路由 | 模型 / provider 配置 |
 | `llm_api.py` | provider 与模型路由、写入时把 RPM 推给 `provider_throttle`（`sync_provider_throttle`） | 限流的窗口算法 |
