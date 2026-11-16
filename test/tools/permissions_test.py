@@ -354,6 +354,22 @@ class PermissionBrokerTest(unittest.TestCase):
 
         self.assertEqual(box["result"].details["reason"], REASON_STOPPED)
 
+    def test_a_delete_request_says_delete_and_names_the_file(self):
+        broker = self.make_broker()
+        call = lambda: broker.check("delete_file", PERMISSION_WRITE, {"file_path": "notes.txt"})
+
+        thread, _box = self.run_in_thread(call)
+        self.answer_next_request(broker, allowed=False)
+        thread.join(timeout=5.0)
+
+        request = self.requests()[0][2]
+        self.assertEqual(request["tool"], "delete_file")
+        self.assertTrue(request["summary"].startswith("Delete "))
+        self.assertTrue(request["target"].endswith("notes.txt"))
+        self.assertEqual(request["details"]["operation"], "delete")
+        # Not the edit branch: a deletion has no old/new text to show.
+        self.assertNotIn("old_string", request["details"])
+
     def test_pending_is_none_when_nothing_is_waiting(self):
         self.assertIsNone(self.make_broker().pending())
 

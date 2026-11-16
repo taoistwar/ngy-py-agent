@@ -436,6 +436,11 @@ class PermissionBroker:
             action = str(arguments.get("action") or "").strip().lower() or "computer action"
             summary = _computer_summary(action, arguments)
             details.update(_computer_details(arguments))
+        elif kind == PERMISSION_WRITE and tool == "delete_file":
+            # Not an edit: there is no content to show, and the dialog has to say that
+            # the file is about to be removed rather than changed.
+            summary = f"Delete {target}"
+            details["operation"] = "delete"
         elif kind == PERMISSION_WRITE and "content" in arguments:
             content = str(arguments.get("content") or "")
             details["content"] = _truncate(content)

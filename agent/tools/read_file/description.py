@@ -5,8 +5,9 @@ Kept apart from the implementation so the tool's contract can be read on its own
 
 from typing import Any, Dict
 
-# Hard ceiling for the "read to the end of file" path.
-MAX_FULL_READ_BYTES = 256 * 1024
+# Re-exported: the ceiling is shared with ``delete_file``, which has to know which
+# files the reader refuses to read as a whole (``agent/tools/file_limits.py``).
+from agent.tools.file_limits import MAX_FULL_READ_BYTES  # noqa: F401
 
 # Line numbers are always emitted and deliberately have no opt-out switch: the
 # model cannot see the real line numbers, so a numberless read turns every later

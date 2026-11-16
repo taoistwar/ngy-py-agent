@@ -202,7 +202,7 @@ npm run i18n:check
 
 - 有工作空间：相对路径以会话绑定的工作空间根为基准，且**不得逃出**该目录。
 - 无工作空间（未绑定会话）：相对路径以**会话默认目录** `<程序启动路径>/data/default_workspace` 为基准（`DEFAULT_WORKSPACE_DIR` 可覆盖）。它是**基目录不是边界**——`..` 仍可离开，全局策略照旧生效。
-- 解析是三个文件工具**共用**的一条路径（`file_access._resolve_path`），所以三者的相对路径语义**必须一致**。不要只给某一个工具加特例：那会造成"写得进去、读不回来"。
+- 解析是四个文件工具（`read_file` / `edit_file` / `write_file` / `delete_file`）**共用**的一条路径（`file_access._resolve_path`），所以四者的相对路径语义**必须一致**。不要只给某一个工具加特例：那会造成"写得进去、读不回来"。
 - 写入时按需创建默认目录（`write_file` 新建文件要求父目录存在），**读取不创建**：一次查找不该有副作用。
 - 未绑定会话的 system prompt 会明确告知该目录，别把这段文案删掉（只改解析等于修一半）。取舍见 [ADR 0007](decisions/0007-default-workspace.md)。
 
@@ -235,6 +235,16 @@ npm run i18n:check
 - 这是该工具唯一能强制的保护。`write_file` 的失败模式是无界的（整文件被毁），不要为了"顺手"去掉它。
 - 相关取舍见 [ADR 0004](decisions/0004-file-write-tool.md)；说明页：`docs/tools/file_write/eli5-read-before-write.html`。
 - 追加**不用新工具**：把 `edit_file` 的锚点放在最后一行即可（幂等，大文件同样可行）。
+
+### delete_file 的删除前置（与写入同源，有一处例外）
+
+- 删除**复用 `write_file` 的读前置**：本 run 内完整读过（第 1 行、不带 `limit`）且指纹未变，否则报 `read_required` / `file_changed`。"没见过的文件不会被摧毁"对删除同样成立，工具集里最不可逆的操作不该是唯一没有保护的那个。
+- **例外**：超过 `MAX_FULL_READ_BYTES` 的文件根本不掉，因为 `read_file` 读不全。硬拒会把模型推回 `exec_command` / `code_interpreter`（两者绕过工作空间天花板、全局策略、只读根与权限目标），所以这类文件照删，结果里标 `content_verified: false`。空文件同理不需要读。
+- 删除后**必须 `ledger.forget(path)`**：指纹描述的文件已经不存在，留着会让同一路径上新建的文件无需读取即可被删。
+- 路径解析用 `resolve_write_path`（删除是修改），`create_default` 不传；只删常规文件，目录报 `not_a_file` 并指向 `code_interpreter`。
+- 进入改动快照：`CheckpointStore.FILE_TOOLS` 里有 `delete_file → file_path`，`git add -A -- <path>` 会把删除也暂存，撤销时恢复该文件。别把它挪进 `TREE_TOOLS`（那样每次删除都整树扫描）。
+- 权限种类是 `write`（参数名必须是 `file_path`，否则确认框拿不到目标），但 **scope 只有 `once` / `session`**：一条持久化的 always 规则会活过它当初批准的那个文件，将来同路径的新文件会被静默删除。
+- 相关取舍见 [ADR 0026](decisions/0026-delete-file-tool.md)。
 
 ### exec_command：命令执行，以及它的 containment 到底管什么
 
@@ -362,7 +372,7 @@ npm run i18n:check
 
 - **门禁写在 `ToolRegistry.execute_tool` 这个唯一收口上**，不要写进各个工具内部（工具拿不到 `EventSink`，而且按工具加门禁的默认结局是漏掉某个工具）。新增工具时必须在**该工具包内 `spec.py`** 的 `ToolSpec.permission` 里声明种类，默认 `none`＝永不询问；工具清单与顺序由 `agent/tools/catalog.py` 统一决定。
 - **分类与翻译也写在工具包里**：`ToolSpec.category` 决定管理页的分组，`description_i18n` 只给管理页展示。文案放本包 `i18n.py`，五套语言常量（`ZH_CN` / `ZH_TW` / `FR` / `DE` / `RU`）由 `agent/tools/spec.py` 的 `localized_texts(...)` 装配；它要求五个都传，漏一个在 import 期就报错，不会等到法文页面上才发现某工具回退成英文。它们**不能**写进 `parameters`/`description`：那两处会原样发给 provider，每次请求都付费。`test/tool_api_test.py` 会校验每个工具的每个语种都覆盖全部参数，所以改 schema 时要同步改 `i18n.py`。
-- **新增界面语言是两处一起改**：`web-admin/src/i18n.js` 的 `LOCALES` 与 `agent/tools/spec.py` 的 `LOCALES`（后者决定工具的 `description_i18n` 键），另外要给 11 个工具包各补一套 `ToolText`，两处清单不一致时工具页会静默回退英文。
+- **新增界面语言是两处一起改**：`web-admin/src/i18n.js` 的 `LOCALES` 与 `agent/tools/spec.py` 的 `LOCALES`（后者决定工具的 `description_i18n` 键），另外要给 12 个工具包各补一套 `ToolText`，两处清单不一致时工具页会静默回退英文。
 - **`TaskStatus.WAITING` 仍属"进行中"**：`/events/stream`、WebSocket 循环与前端 `isTaskRunningStatus` 都必须把它当作在飞行中。否则事件流会在用户最需要看到确认请求的那一刻断掉（这个坑已踩过一次）。
 - **scope 不做降级**：未知取值返回 400。把 `always` 静默降级成 `once` 会让用户以为已经长期允许了。
 
@@ -473,6 +483,7 @@ npm run i18n:check
   - [ADR 0023 工作空间里只留一个 `.ngy-agent/`](decisions/0023-workspace-data-dir.md)
   - [ADR 0024 工具黑名单：命中即拒绝](decisions/0024-tool-denylist.md)
   - [ADR 0025 根目录只留 `main.py`，应用层拆进 `commons` / `dao` / `agent.runtime`](decisions/0025-root-only-main-py.md)
+  - [ADR 0026 `delete_file` 工具的设计](decisions/0026-delete-file-tool.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 

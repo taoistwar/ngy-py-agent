@@ -15,6 +15,7 @@ from agent.tools.bindings import ToolBindings
 from agent.tools.code_interpreter import spec as code_interpreter
 from agent.tools.computer_control import spec as computer_control
 from agent.tools.computer_observe import spec as computer_observe
+from agent.tools.delete_file import spec as delete_file
 from agent.tools.edit_file import spec as edit_file
 from agent.tools.exec_command import spec as exec_command
 from agent.tools.glob import spec as glob
@@ -34,6 +35,9 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     read_file.build_spec,
     edit_file.build_spec,
     write_file.build_spec,
+    # Removal sits next to the tools that produce content, not with the shell: it is
+    # the guarded way to make a file go away (ADR 0026).
+    delete_file.build_spec,
     exec_command.build_spec,
     write_stdin.build_spec,
     computer_observe.build_spec,

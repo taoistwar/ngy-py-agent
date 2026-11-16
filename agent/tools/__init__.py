@@ -7,18 +7,19 @@ The package is split so that reading one tool means reading one directory:
   ``ToolBindings`` tools are constructed with, and the list of built-in tools
 - ``<tool>/``: one package per model-visible tool, **named after that tool**
   (``exec_command/``, ``write_stdin/``, ``glob/``, ``grep/``, ``read_file/``,
-  ``edit_file/``, ``write_file/``, ``code_interpreter/``, ``computer_observe/``,
-  ``computer_control/``, ``ask_user_question/``). ``__init__.py`` holds the
-  package docstring and the public surface, ``spec.py`` declares the tool to the
-  registry, and the implementation is split by responsibility
-  (``description.py``, ``errors.py``, topic modules, ``tool.py``).
+  ``edit_file/``, ``write_file/``, ``delete_file/``, ``code_interpreter/``,
+  ``computer_observe/``, ``computer_control/``, ``ask_user_question/``).
+  ``__init__.py`` holds the package docstring and the public surface, ``spec.py``
+  declares the tool to the registry, and the implementation is split by
+  responsibility (``description.py``, ``errors.py``, topic modules, ``tool.py``).
 - the remaining modules (``denylist``, ``permissions``, ``permission_rules``, ``file_access``,
-  ``file_bytes``, ``file_patch``, ``file_walk``, ``glob_pattern``, ``read_ledger``,
-  ``text_encoding``, ``text_lines``, ``tokenizers``, ``token_budget``,
+  ``file_bytes``, ``file_limits``, ``file_patch``, ``file_walk``, ``glob_pattern``,
+  ``read_ledger``, ``text_encoding``, ``text_lines``, ``tokenizers``, ``token_budget``,
   ``process_group``, ``process_store``, ``shell_platform``, ``output_store``) are
   shared infrastructure and stay at the root. ``file_walk`` and ``glob_pattern``
-  are shared by ``glob`` and ``grep`` precisely because a tool package must not
-  import another tool package.
+  are shared by ``glob`` and ``grep``, and ``file_limits`` by ``read_file`` and
+  ``delete_file``, precisely because a tool package must not import another tool
+  package.
 
 Keep one tool per package, and name the package after the tool rather than after an
 old module name: ``file_read_tool`` is what the tool used to be called, not what the

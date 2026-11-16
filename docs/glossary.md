@@ -48,9 +48,10 @@
 | 术语 | 定义 | 位置 |
 | --- | --- | --- |
 | **EventSink** | 事件回调签名 `(task_id, TaskEvent) -> None`。工具本身拿不到它，所以结构化记录必须经 `ToolOutcome` 交回 `agent_loop` 发送。 | `agent/models.py` |
-| **TaskEvent / EventCategory** | 持久化的事件与其类别枚举。当前类别：`llm_request`、`llm_response`、`tool_call`、`tool_result`、`debug`、`error`、`file_edit`、`file_write`、`exec`、`permission_request`、`permission_decision`、`user_question`、`user_answer`。 | `agent/models.py` |
+| **TaskEvent / EventCategory** | 持久化的事件与其类别枚举。当前类别：`llm_request`、`llm_response`、`tool_call`、`tool_result`、`debug`、`error`、`file_edit`、`file_write`、`file_delete`、`exec`、`permission_request`、`permission_decision`、`user_question`、`user_answer`。 | `agent/models.py` |
 | **`file_edit` 事件** | 文件**局部替换**成功后发出的独立事件类别，承载 `original_file` / `structured_patch` / `gitDiff`，与 `tool_result` 解耦。 | [ADR 0001](decisions/0001-file-edit-tool.md) |
 | **`file_write` 事件** | 文件**整体写入**（新建或覆盖）发出的独立事件类别。不复用 `file_edit`：两者对 UI 是两件事。覆盖时带 `original_file` / `gitDiff`，新建时带 `created: true`。 | [ADR 0004](decisions/0004-file-write-tool.md) |
+| **`file_delete` 事件** | 文件**被删除**后发出的独立事件类别，承载 `file_path` / `file_bytes` / `content_verified`。不复用 `file_write`：标题会写成"写入了文件"，而文件刚刚消失。 | [ADR 0026](decisions/0026-delete-file-tool.md) |
 | **`exec` 事件** | 命令执行发出的独立事件类别，承载 `containment`、`exit_code`、`stdout`/`stderr`（超限截断）、`persistedOutputPath` 等。 | [ADR 0005](decisions/0005-exec-tool.md) |
 
 ## 文件访问策略
@@ -118,6 +119,16 @@
 | **`created`** | `file_write` 结果里区分"新建"与"覆盖"的标记；`created: true` 时不带 `original_file` 与 `gitDiff`。 | `agent/tools/write_file/` |
 | **`content_changed`** | 覆盖时新内容是否与旧内容不同。内容相同**仍然写入**（不做"没变就不写"的优化），此字段只是如实报告。 | [ADR 0004](decisions/0004-file-write-tool.md) |
 | **`write_bytes_atomic`** | 通过同目录临时文件 + `os.replace` 完成写入、并在交换前带上目标权限的共用实现。**硬链接不会跟随**。 | `agent/tools/file_bytes.py` |
+
+## 文件删除（`delete_file`）
+
+| 术语 | 定义 | 位置 |
+| --- | --- | --- |
+| **`delete_file`** | 删除**单个常规文件**的工具：参数只有 `file_path`，路径按写侧解析（工作空间天花板、全局策略、只读根全部生效）。目录报 `not_a_file` 并指向 `code_interpreter`；删除不存在的文件报 `not_found`（不静默成功）。 | [ADR 0026](decisions/0026-delete-file-tool.md) |
+| **删除前置（read-before-delete）** | 与写前置同一个账本、同一套判据：本 run 内有**完整读取**（第 1 行、不带 `limit`）且指纹未变，否则拒绝。例外：空文件不需要读；超过 `MAX_FULL_READ_BYTES` 的文件读不全，照删但标 `content_verified: false`。 | [ADR 0026](decisions/0026-delete-file-tool.md) |
+| **`content_verified`** | 删除结果里的标记：本次删除是否建立在"本 run 见过整份内容"之上。`false` 只出现在读不全的大文件上，此时保护来自用户确认与改动快照，而不是读前置。 | `agent/tools/delete_file/` |
+| **`not_found` / `not_a_file`** | 删除的两种前置失败：目标不存在（提示用 `glob` 定位）／目标不是常规文件（提示用 `code_interpreter` 删树）。 | `agent/tools/delete_file/` |
+| **`MAX_FULL_READ_BYTES`（共享上限）** | 256 KB，`read_file` 的整读上限，也是"这个文件的内容能不能被完整看过"的判据。放在工具包之外（`agent/tools/file_limits.py`），因为 `read_file` 与 `delete_file` 必须用同一个数，而工具包之间不许互相 import。 | `agent/tools/file_limits.py` |
 
 ## 命令执行（`exec_command`）
 

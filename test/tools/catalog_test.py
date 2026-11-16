@@ -29,6 +29,7 @@ EXPECTED_ORDER = (
     "read_file",
     "edit_file",
     "write_file",
+    "delete_file",
     "exec_command",
     "write_stdin",
     "computer_observe",

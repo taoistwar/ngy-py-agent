@@ -68,9 +68,15 @@ from agent.checkpoints.records import (
     status_of as _status_of,
 )
 
-# Tools whose single argument names the file they write, so the snapshot can be an
-# O(1) ``git add`` of that path instead of a full tree scan.
-FILE_TOOLS: Mapping[str, str] = {"write_file": "file_path", "edit_file": "file_path"}
+# Tools whose single argument names the file they change, so the snapshot can be an
+# O(1) ``git add -A`` of that path instead of a full tree scan. ``delete_file`` belongs
+# here for the same reason as the writers: ``git add -A`` stages the removal too, which
+# is what makes a deletion revertible (ADR 0020, ADR 0026).
+FILE_TOOLS: Mapping[str, str] = {
+    "write_file": "file_path",
+    "edit_file": "file_path",
+    "delete_file": "file_path",
+}
 
 # Tools that can change anything at all: the snapshot has to look at the whole tree.
 # ``write_stdin`` is here because typing into a shell session can do whatever that

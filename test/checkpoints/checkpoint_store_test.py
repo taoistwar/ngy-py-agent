@@ -19,7 +19,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from agent.checkpoints import STATUS_ADDED, STATUS_MODIFIED, CheckpointStore  # noqa: E402
+from agent.checkpoints import STATUS_ADDED, STATUS_DELETED, STATUS_MODIFIED, CheckpointStore  # noqa: E402
 from agent.checkpoints import git as git_module  # noqa: E402
 from agent.tools.registry import ToolRegistry  # noqa: E402
 
@@ -180,6 +180,23 @@ class CheckpointStoreTest(unittest.TestCase):
         self.store.begin(TASK, *SHELL_CALL)
         self.path.unlink()
         self.store.end(TASK, *SHELL_CALL)
+
+        result = self.store.revert(TASK)
+
+        self.assertEqual(result.restored, ["app.py"])
+        self.assertEqual(self.path.read_text(encoding="utf-8"), "v0\n")
+
+    def test_a_delete_file_call_is_recorded_as_a_deletion(self):
+        # The delete tool's own pathspec, not a whole-tree scan: one file, one status.
+        call = ("delete_file", {"file_path": "app.py"})
+        self.store.begin(TASK, *call)
+        self.path.unlink()
+        self.store.end(TASK, *call)
+
+        changes = self.changes()
+
+        self.assertEqual(list(changes), ["app.py"])
+        self.assertEqual(changes["app.py"].status, STATUS_DELETED)
 
         result = self.store.revert(TASK)
 

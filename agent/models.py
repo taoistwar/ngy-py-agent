@@ -20,6 +20,10 @@ class EventCategory(str, Enum):
     TOOL_RESULT = "tool_result"
     FILE_EDIT = "file_edit"
     FILE_WRITE = "file_write"
+    # Removing a file is neither an edit nor a write: a history that cannot tell
+    # "overwritten" from "gone" cannot answer what the task did. Its own category, for
+    # the same reason ``file_write`` did not reuse ``file_edit`` (ADR 0026).
+    FILE_DELETE = "file_delete"
     EXEC = "exec"
     # Host desktop interaction through cua-driver: observations, screenshots and
     # actions. Separate from ``exec`` because "the agent clicked a window" and
