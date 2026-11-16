@@ -2689,6 +2689,7 @@ export default function App() {
         ) : activeMenu === "denylist" ? (
           <DenyListManager
             denylist={denyList}
+            tools={tools}
             onCreate={createDenyRuleHandler}
             onDelete={deleteDenyRuleHandler}
             onRefresh={() =>

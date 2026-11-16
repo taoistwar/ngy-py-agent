@@ -20,7 +20,7 @@ function specLabel(spec) {
   return spec?.match === MATCH_REGEX ? `/${text}/` : text
 }
 
-export default function DenyListManager({ denylist, onCreate, onDelete, onRefresh, translate }) {
+export default function DenyListManager({ denylist, tools, onCreate, onDelete, onRefresh, translate }) {
   const [tool, setTool] = useState("")
   const [toolMatch, setToolMatch] = useState(MATCH_FIXED)
   const [reason, setReason] = useState("")
@@ -30,6 +30,13 @@ export default function DenyListManager({ denylist, onCreate, onDelete, onRefres
 
   const rules = denylist?.rules || []
   const problems = denylist?.problems || []
+
+  // Exact matches pick a registered tool from a list; a regex stays free text,
+  // and an exact value that is not registered (hand-edited file) is kept so the
+  // current input is never silently dropped from the select.
+  const toolNames = (tools || []).map((item) => item.name).filter(Boolean)
+  const exactChoices = tool && !toolNames.includes(tool) ? [tool, ...toolNames] : toolNames
+  const pickTool = toolMatch === MATCH_FIXED && exactChoices.length > 0
 
   const updateArg = (index, patch) => {
     setArgs((current) =>
@@ -116,12 +123,23 @@ export default function DenyListManager({ denylist, onCreate, onDelete, onRefres
           <div className="deny-form-row">
             <label>
               <span>{translate("denyListTool")}</span>
-              <input
-                type="text"
-                value={tool}
-                placeholder={translate("denyListToolPlaceholder")}
-                onChange={(event) => setTool(event.target.value)}
-              />
+              {pickTool ? (
+                <select value={tool} onChange={(event) => setTool(event.target.value)}>
+                  <option value="">{translate("denyListToolSelect")}</option>
+                  {exactChoices.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={tool}
+                  placeholder={translate("denyListToolPlaceholder")}
+                  onChange={(event) => setTool(event.target.value)}
+                />
+              )}
             </label>
             <label>
               <span>{translate("denyListToolMatch")}</span>
