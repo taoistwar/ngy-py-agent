@@ -28,6 +28,8 @@ cd ..
 - `TRANSCRIPT_MAX_MESSAGES=50`（对话窗口条数上限，超出后旧消息归档到 `<workspace>/.transcripts/`，`<= 0` 关闭，见 [ADR 0015](decisions/0015-snip-compact.md)）
 - `CONTEXT_CHAR_LIMIT`（整段上下文的字符上限，超出后缩短模型已读过的旧工具结果；未配置时取模型 `max_input_tokens × 4`，再退回 200,000，`<= 0` 关闭，见 [ADR 0016](decisions/0016-micro-compact.md)）
 - `CONTEXT_SUMMARY_ENABLED=0`（关闭压缩管线的第四步——历史摘要。该步是唯一会额外发起模型调用的压缩步骤，见 [ADR 0017](decisions/0017-compact-history.md)）
+- `AGENTS_MD_ENABLED=0`（关闭工作区 `AGENTS.md`（[agents.md](https://agents.md/) 格式）的读取，默认开启，见 [ADR 0022](decisions/0022-agents-md.md)）
+- `AGENTS_MD_MAX_BYTES`（单个 `AGENTS.md` 进入系统提示词的字节上限，默认 `32768`；超出部分按 UTF-8 字节截断并留提示）
 - 供应商相关：
   - `TOOL_SCHEMA_PROVIDER=openai`
   - `OLLAMA_BASE_URL`
@@ -466,6 +468,10 @@ npm run i18n:check
   - [ADR 0016 micro_compact（只缩短模型已读过的结果）](decisions/0016-micro-compact.md)
   - [ADR 0017 compact_history（用一次模型调用换掉旧历史）](decisions/0017-compact-history.md)
   - [ADR 0018 搜索的可见范围（glob 排序、grep 忽略规则）](decisions/0018-search-visibility.md)
+  - [ADR 0019 取消要能打断正在跑的命令](decisions/0019-cancel-interrupts-running-work.md)
+  - [ADR 0020 任务改动的快照与回退](decisions/0020-checkpoint-rewind.md)
+  - [ADR 0021 任务窗口的上下文占用读数](decisions/0021-context-usage-meter.md)
+  - [ADR 0022 AGENTS.md 进入系统提示词](decisions/0022-agents-md.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 

@@ -10,6 +10,7 @@
 | **`base_dir` / 工作空间根** | 当前会话绑定的本地根目录。相对路径以它为基准解析，且不得逃出该目录。为空表示**未绑定会话（unbound session）**。 | `agent/tools/file_access.py` |
 | **未绑定会话** | 没有 `base_dir` 的会话。此时只剩下全局 `file_access` 策略生效，文件工具默认可以访问工作空间之外；**相对路径以"会话默认目录"为起点**。 | `agent/tools/file_access.py` |
 | **会话默认目录（`default_workspace`）** | 未绑定会话里相对路径的起点：`<程序启动路径>/data/default_workspace`（`DEFAULT_WORKSPACE_DIR` 可覆盖）。**是基目录不是边界**——`..` 仍可离开，全局策略照旧生效。写入按需创建它，读取不创建。 | [ADR 0007](decisions/0007-default-workspace.md) |
+| **`AGENTS.md`** | 工作区自带的项目规则文件（[agents.md](https://agents.md/) 格式：纯 Markdown、无 schema）。根目录那份全文进入系统提示词，子目录的只列成索引（最近者优先）；仅已绑定工作区读取。 | `agent/agents_md.py`、[ADR 0022](decisions/0022-agents-md.md) |
 | **token 预算** | 单次工具输出允许占用的 token 上限，超限即报错而非截断。`read_file` 依赖它防止撑爆上下文。 | `agent/tools/token_budget.py` |
 | **行号前缀** | `read_file` 输出中每行开头的 `N<分隔符>`，分隔符是**制表符**。模型看不到真实行号，因此永远带前缀、不提供关闭开关。 | `agent/tools/read_file/lines.py` |
 | **provider** | 一个请求去处：协议（openai / anthropic / anthropic_compatible / gemini）+ `base_url` + `api_key` + `rpm_limit`。Web Admin「Provider 管理」页维护，`/api/providers` 读写。删除前必须先清空它下面的模型。 | [ADR 0014](decisions/0014-provider-model-split.md) |

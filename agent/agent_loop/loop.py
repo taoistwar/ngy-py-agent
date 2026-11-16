@@ -16,6 +16,7 @@ from agent.agent_loop.runtime import (
 )
 from agent.agent_loop.snip_compact import apply_snip_compact
 from agent.agent_loop.steps import run_tool
+from agent.agents_md import AgentsMdInstructions, append_project_instructions, load_instructions
 from agent.models import (
     EventCategory,
     EventSink,
@@ -99,7 +100,11 @@ def run_react_loop(
         print(f"Provider model: {provider.config.model}")
         print(f"Provider tool schemas: {(request_tools or [])[:1]}")
 
+    instructions: Optional[AgentsMdInstructions] = None
     if initial_messages is not None:
+        # A rebuilt transcript or a caller-owned conversation is used verbatim: its
+        # system prompt was composed by whoever built it, and re-adding the workspace
+        # instructions here would append them twice on every turn of the CLI REPL.
         messages = initial_messages
     else:
         if agent_config is not None:
@@ -109,6 +114,11 @@ def run_react_loop(
         else:
             system_prompt = "You are a helpful assistant. Answer the user request directly and clearly."
         system_prompt = _with_base_dir(system_prompt, base_dir)
+        # The workspace's own rules (https://agents.md/), after the generic ones: a
+        # project's build/test commands outrank an agent's defaults.
+        instructions = load_instructions(base_dir)
+        if instructions is not None:
+            system_prompt = append_project_instructions(system_prompt, instructions)
         messages = [
             {
                 "role": "system",
@@ -124,6 +134,21 @@ def run_react_loop(
 
     if append_user_query:
         messages.append({"role": "user", "content": user_query})
+
+    if instructions is not None:
+        # The same information is inside the system prompt below, but a task log that
+        # names the files is what lets a surprising instruction be traced to one.
+        _emit(
+            event_sink,
+            task_id,
+            TaskEvent(
+                task_id=task_id or "",
+                category=EventCategory.DEBUG,
+                title="Loaded AGENTS.md",
+                data=instructions.describe(),
+                collapsed=True,
+            ),
+        )
 
     _emit(
         event_sink,

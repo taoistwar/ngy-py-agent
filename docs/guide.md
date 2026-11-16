@@ -267,6 +267,20 @@ MCP 市场维护可复用的 MCP 服务预设（传输方式 + 命令/URL），�
 
 左侧列表展示顺序为：先列出工作空间（可展开显示其下会话），再列出任务（即没有工作空间的会话）。
 
+### 项目指令：AGENTS.md
+
+工作空间根目录下的 `AGENTS.md`（[agents.md](https://agents.md/) 格式：纯 Markdown、无 schema、无必填字段）会在该工作区的任务里自动进入系统提示词，不用每次在问题里重复交代构建与测试命令：
+
+- 根目录的 `AGENTS.md` **全文注入**，默认上限 32 KiB（`AGENTS_MD_MAX_BYTES` 可调）；超出部分截断，并提示模型用 `read_file` 读原文。
+- 子目录里的 `AGENTS.md`（monorepo 每个包一份）只列成**索引**，并说明"改到那个目录前先读它，最近的那份优先"。不在索引里的用 `glob`（`**/AGENTS.md`）找。
+- 旧名 `AGENT.md` 仍可读；同一目录同时存在两份时只用 `AGENTS.md`。
+- 扫描到第三层为止，跳过 `.git`、`.venv`、`node_modules`、`venv`、`dist`、`build`、`target`、`vendor`、`__pycache__`；索引最多列 20 个。
+- 优先级：用户在对话里的要求 > `AGENTS.md` > 智能体/模式的默认提示词。
+- 未绑定工作区的会话不读（它没有"项目"）；`AGENTS_MD_ENABLED=0` 全局关闭。
+- 每次读到文件，任务日志里会有一条 `Loaded AGENTS.md` 事件：文件名、字符数、是否截断、嵌套索引，不含正文。
+
+交互式 CLI（`--interactive`）的默认工作区是启动目录，同样会读该目录的 `AGENTS.md`。取舍与已知限制见 [ADR 0022](decisions/0022-agents-md.md)。
+
 ### Provider 与模型
 
 Web Admin 把过去的「模型连接」拆成两层：**Provider** 是请求的去处（协议 + 地址 + Key + RPM），**模型** 只有一个模型名和能力开关，挂到某个 Provider 下。地址、Key 与 **每分钟请求数（RPM）** 都记在 Provider 上，因此同一 Provider 下的所有模型共享一份配额；同一个协议配两个地址则是两个端点、两份配额。
