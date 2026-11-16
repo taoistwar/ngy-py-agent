@@ -1,12 +1,13 @@
-// Icon-only row actions for the task list: edit, re-run, undo what it changed,
-// and delete.
+// Icon-only row actions for the task list: edit, re-run, fork into a new session,
+// undo what it changed, and delete.
 
-import { EditIcon, RerunIcon, TrashIcon, UndoIcon } from "./icons"
+import { EditIcon, ForkIcon, RerunIcon, TrashIcon, UndoIcon } from "./icons"
 
 export default function TaskRowActions({
   running,
   onEdit,
   onRerun,
+  onFork,
   onRevert,
   onDelete,
   translate,
@@ -43,6 +44,20 @@ export default function TaskRowActions({
         }}
       >
         <RerunIcon />
+      </button>
+      <button
+        type="button"
+        className="icon-btn"
+        title={translate("taskFork")}
+        aria-label={translate("taskFork")}
+        // A fork copies the turn's log, and a running task is still writing it.
+        disabled={running}
+        onClick={(event) => {
+          event.stopPropagation()
+          onFork()
+        }}
+      >
+        <ForkIcon />
       </button>
       <button
         type="button"

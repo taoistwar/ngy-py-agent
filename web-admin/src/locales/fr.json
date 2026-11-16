@@ -115,6 +115,7 @@
   "taskStop": "Arrêter la tâche",
   "taskEdit": "Modifier la tâche",
   "taskRerun": "Relancer la tâche",
+  "taskFork": "Créer une nouvelle session à partir d'ici",
   "taskRevert": "Annuler les modifications de cette tâche",
   "revertTitle": "Annuler les modifications",
   "revertHint": "Fichiers modifiés par cette tâche. Annuler remet chacun dans l'état où il était avant la première modification de la tâche.",

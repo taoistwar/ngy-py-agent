@@ -16,6 +16,7 @@
   - `since`：按 `event_id` 增量拉取
   - `heartbeat`：心跳间隔（秒）
 - `POST /api/tasks/{task_id}/stop`：请求停止（见下面「停止与撤销」）。
+- `POST /api/tasks/{task_id}/fork`：以此任务为分叉点创建新会话（见下面「Fork」）。返回新会话 `session`、分支任务 `task_id`（副本，不是原任务）、来源 `source_session_id` / `source_task_id`，以及 `copied_task_count` / `event_count`。
 - `GET /api/tasks/{task_id}/changes`：这个任务改过哪些文件（`status` + 增删行数 + `conflict`）。`conflict: true` 表示任务之后该文件又被改过，撤销会覆盖别人的改动，因此不可撤销；`available: false` 时 `reason` 说明为什么不能撤销。
 - `GET /api/tasks/{task_id}/changes/diff?path=`：单个文件的补丁，按需取。
 - `POST /api/tasks/{task_id}/revert`：撤销改动。body 可带 `paths`（省略 = 全部）与 `force`（覆盖任务之后被改过的文件），返回逐文件的 `restored` / `conflicts` / `skipped`。
@@ -34,6 +35,16 @@
 - 撤销依赖本机的 `git`，但仓库在 `data/checkpoints/<workspace-key>/` 下，**不会碰你自己的 `.git`**；工作空间不是 git 仓库也能用。拿不到 git 时接口返回 409 并说明原因，前端把入口标为不可用。
 
 实现与已知限制（并发任务共享工作树时的归属重叠）见 [ADR 0020](../decisions/0020-checkpoint-rewind.md)。
+
+## Fork（分支会话）
+
+`POST /api/tasks/{task_id}/fork` 把**该任务及其之前的所有任务**复制到一个新会话，原会话完全不动，两条对话从此各自继续：
+
+- 任务按创建顺序复制，保留原来的 `created_at`、任务名、模型与结果，事件日志一并复制（事件 id 重新分配）。所以新会话的对话历史与分叉点一致，后续任务能接着它往下走。
+- 新会话名取自分叉任务：优先任务名 `name`，没有则用 `query` 折叠后截断到 120 字符。
+- 任务状态原样复制，但 `running` / `waiting` 会被记成 `stopped`：副本是历史快照，不能让启动恢复扫描把它当成未完成任务再跑一遍。
+- 目标任务仍在运行（`running` / `waiting`）时返回 `409`：它的日志还在写，复制出来只是半轮。
+- 新会话沿用原会话的 workspace，后续任务从同一个目录开始。
 
 ## 断点续跑（进程重启后）
 

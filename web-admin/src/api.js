@@ -303,6 +303,14 @@ export async function deleteTask(taskId) {
   })
 }
 
+// Branch a new session at this task: it is copied together with every task before
+// it in the same conversation, and the original session keeps its own turns.
+export async function forkTask(taskId) {
+  return requestJson(`${API_BASE}/api/tasks/${taskId}/fork`, {
+    method: "POST",
+  })
+}
+
 export async function fetchTask(taskId) {
   return requestJson(`${API_BASE}/api/tasks/${taskId}`)
 }

@@ -115,6 +115,7 @@
   "taskStop": "Stop task",
   "taskEdit": "Edit task",
   "taskRerun": "Re-run task",
+  "taskFork": "Fork into a new session",
   "taskRevert": "Undo this task's changes",
   "revertTitle": "Undo changes",
   "revertHint": "Files this task changed. Undoing puts each one back to how it was before the task first touched it.",

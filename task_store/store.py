@@ -14,6 +14,7 @@ from pathlib import Path
 from llm_store import LlmStore
 from task_store.agents import _AgentMixin
 from task_store.base import TASK_DB_PATH, _TaskStoreBase
+from task_store.forks import _ForkMixin
 from task_store.schema import _SchemaMixin
 from task_store.sessions import _SessionMixin
 from task_store.settings import _SettingsMixin
@@ -24,6 +25,7 @@ class _SqliteTaskStore(
     _TaskStoreBase,
     _SchemaMixin,
     _SessionMixin,
+    _ForkMixin,
     _AgentMixin,
     _SettingsMixin,
     _TaskMixin,

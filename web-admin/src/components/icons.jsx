@@ -35,6 +35,20 @@ export function RerunIcon() {
   )
 }
 
+// Branching a task: a turn splitting off into a session of its own. Read as a git
+// branch, because that is what the action does to the conversation.
+export function ForkIcon() {
+  return (
+    <Icon>
+      <circle cx="6" cy="5.5" r="2.5" />
+      <circle cx="6" cy="18.5" r="2.5" />
+      <circle cx="18" cy="10" r="2.5" />
+      <path d="M6 8v8" />
+      <path d="M18 12.5c0 2.8-2.2 4-5 4h-3" />
+    </Icon>
+  )
+}
+
 export function EditIcon() {
   return (
     <Icon>

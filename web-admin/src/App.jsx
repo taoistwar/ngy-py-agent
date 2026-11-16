@@ -104,6 +104,7 @@ import {
 } from "./utils/composerModelMemory"
 import { formatTime } from "./utils/format"
 import { buildTaskEditDraft, replaceTaskWithEdit } from "./utils/taskEditFlow"
+import { forkTaskSession } from "./utils/taskForkFlow"
 
 const EVENT_PAGE_SIZE = 30
 const TASK_PAGE_SIZE = 12
@@ -262,6 +263,7 @@ function TaskList({
   onSelect,
   onEdit,
   onRerun,
+  onFork,
   onRevert,
   onDelete,
   selectedTaskIds,
@@ -369,6 +371,7 @@ function TaskList({
                         running={isTaskRunningStatus(item.status)}
                         onEdit={() => onEdit(item)}
                         onRerun={() => onRerun(item)}
+                        onFork={() => onFork(item)}
                         onRevert={() => onRevert(item.task_id)}
                         onDelete={() => onDelete(item.task_id)}
                         translate={translate}
@@ -1749,6 +1752,22 @@ export default function App() {
     [createNewTask, models, refreshTasks, translate]
   )
 
+  // Forking branches a new session at this turn: it and every turn before it are
+  // copied there, and the branch becomes the conversation on screen. The original
+  // session keeps all of its turns, so the two conversations can diverge.
+  const forkTaskHandler = useCallback(
+    async (task) => {
+      if (!task?.task_id) return
+      try {
+        setError("")
+        await forkTaskSession(task, { refreshSessions, selectSession, selectTask })
+      } catch (forkError) {
+        setError(forkError?.message || translate("errorUnknown"))
+      }
+    },
+    [refreshSessions, selectSession, selectTask, translate]
+  )
+
   // Filling the composer from a task row: its prompt, agent and model come back so
   // the user can correct them and run the turn again.
   const editTaskHandler = useCallback(
@@ -2476,6 +2495,7 @@ export default function App() {
                 onSelect={selectTask}
                 onEdit={editTaskHandler}
                 onRerun={rerunTaskHandler}
+                onFork={forkTaskHandler}
                 onRevert={setRevertTaskId}
                 onDelete={deleteTaskItem}
                 selectedTaskIds={selectedTaskIds}

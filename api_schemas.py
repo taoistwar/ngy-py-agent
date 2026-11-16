@@ -413,6 +413,23 @@ class SessionListResponse(BaseModel):
     sessions: list[SessionItemResponse]
 
 
+class ForkTaskResponse(BaseModel):
+    """The session a fork created, and the task the branch starts from.
+
+    ``task_id`` is the copy of the forked task (not the original), so a client can
+    select it without a second lookup; ``copied_task_count`` says how many turns of
+    the original conversation the branch carries as history.
+    """
+
+    session_id: str
+    session: SessionItemResponse
+    task_id: str
+    source_session_id: str
+    source_task_id: str
+    copied_task_count: int
+    event_count: int
+
+
 class ContextUsageResponse(BaseModel):
     """How full the model's context window already is, for the composer's meter.
 

@@ -25,6 +25,7 @@ from agent.tools.permissions import SCOPES
 from agent.tools.user_question import STATUS_ANSWERED, validate_answers
 from api_schemas import (
     EventPageResponse,
+    ForkTaskResponse,
     PermissionDecisionRequest,
     PermissionDecisionResponse,
     QuestionAnswerRequest,
@@ -32,6 +33,7 @@ from api_schemas import (
     RevertTaskRequest,
     RunTaskRequest,
     RunTaskResponse,
+    SessionItemResponse,
     TaskDetailResponse,
     TaskListItemResponse,
     TaskListResponse,
@@ -164,6 +166,10 @@ _SETTLED_STATUSES = frozenset(
         TaskStatus.REVERTED.value,
     }
 )
+
+
+# A fork copies a turn's log, so a turn that is still writing is not history yet.
+_IN_FLIGHT_STATUSES = frozenset({TaskStatus.RUNNING.value, TaskStatus.WAITING.value})
 
 
 @router.post("/api/tasks/{task_id}/stop")
@@ -387,6 +393,43 @@ async def get_task(task_id: str) -> TaskDetailResponse:
         pending_permission=pending.to_payload() if pending is not None else None,
         pending_question=app_state.pending_question(task_id),
         events=trace["events"],
+    )
+
+
+@router.post("/api/tasks/{task_id}/fork", response_model=ForkTaskResponse)
+async def fork_task(task_id: str) -> ForkTaskResponse:
+    """Branch a new session at this task.
+
+    The new session carries a copy of this task and of every task before it in the
+    same session, so the branch continues from the same transcript while the original
+    conversation keeps its own turns untouched.
+
+    A task that is still in flight is refused: its event log is still being written,
+    so a copy of it would be a snapshot of half a turn.
+    """
+    trace = _stored_task(task_id)
+    if str(trace.get("status")) in _IN_FLIGHT_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail="Task is still running; wait for it to settle before forking.",
+        )
+    session_id = trace.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=409, detail="Task has no session to fork.")
+    forked = app_state.monitor_store.fork_session_through_task(task_id)
+    if forked is None:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    session = app_state.monitor_store.get_session(forked["session_id"])
+    if session is None:
+        raise HTTPException(status_code=500, detail="Failed to read forked session.")
+    return ForkTaskResponse(
+        session_id=forked["session_id"],
+        session=SessionItemResponse(**session),
+        task_id=forked["task_id"],
+        source_session_id=forked["source_session_id"],
+        source_task_id=forked["source_task_id"],
+        copied_task_count=forked["copied_task_count"],
+        event_count=forked["event_count"],
     )
 
 

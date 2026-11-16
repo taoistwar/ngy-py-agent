@@ -115,6 +115,7 @@
   "taskStop": "Aufgabe stoppen",
   "taskEdit": "Aufgabe bearbeiten",
   "taskRerun": "Aufgabe erneut starten",
+  "taskFork": "In einer neuen Sitzung ab hier verzweigen",
   "taskRevert": "Änderungen dieser Aufgabe rückgängig machen",
   "revertTitle": "Änderungen rückgängig machen",
   "revertHint": "Von dieser Aufgabe geänderte Dateien. Rückgängig machen setzt jede in den Zustand zurück, den sie vor der ersten Änderung hatte.",
