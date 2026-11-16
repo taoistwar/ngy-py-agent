@@ -1,9 +1,9 @@
 """``AGENTS.md`` reaches the request the model actually receives.
 
 The unit tests cover what a workspace contributes; this one covers the wiring into the
-ReAct loop, plus the case where it must *not* apply: a resumed or caller-owned
-conversation already carries its system prompt, and rewriting it would change history
-that the model has already answered.
+ReAct loop, plus the cases where it must *not* apply: a resumed or caller-owned
+conversation already carries its system prompt, and a run with no workspace must not
+adopt the repository it happens to be sitting in.
 
 Run from the repository root::
 
@@ -88,6 +88,17 @@ class AgentLoopAgentsMdTest(unittest.TestCase):
         self.run_loop(provider, user_query="do something", base_dir=str(self.workspace))
 
         self.assertNotIn("AGENTS.md", provider.requests[0][0]["content"])
+
+    def test_an_unbound_run_ignores_the_current_directory(self):
+        # No workspace: the process merely sits in this repository, whose own AGENTS.md
+        # is guidance for the people editing it. A run must not adopt it as its rules.
+        self.write_agents_md("Always run `uv run pytest`.")
+        provider = _FakeProvider()
+
+        with patch("os.getcwd", return_value=str(self.workspace)):
+            self.run_loop(provider, user_query="do something")
+
+        self.assertNotIn("Always run `uv run pytest`.", provider.requests[0][0]["content"])
 
     def test_a_resumed_transcript_is_not_rewritten(self):
         self.write_agents_md("Always run `uv run pytest`.")

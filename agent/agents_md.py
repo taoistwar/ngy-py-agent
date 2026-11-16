@@ -14,6 +14,10 @@ before editing inside that folder. Inlining every nested file would spend the co
 budget on packages the task never touches, and the "closest wins" rule means the model
 has to be pointed at the right file anyway.
 
+"Workspace" here always means the folder a task has been bound to, never this
+application's own source tree: the repository's ``AGENTS.md`` is guidance for the people
+editing it, and its rules have nothing to say about the user's project.
+
 Nothing here writes: the workspace is only read, so a task can never edit its own rules
 through this path.
 """
@@ -143,7 +147,11 @@ def append_project_instructions(prompt: str, instructions: AgentsMdInstructions)
 
 
 def with_agents_md(prompt: str, base_dir: Optional[str]) -> str:
-    """``prompt`` plus this workspace's instruction block, when it has one."""
+    """``prompt`` plus this workspace's instruction block, when it has one.
+
+    The one-call form, for a caller that owns its prompt. The loop composes the two
+    steps itself because it also logs which files were loaded.
+    """
     instructions = load_instructions(base_dir)
     if instructions is None:
         return prompt

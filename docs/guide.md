@@ -279,7 +279,7 @@ MCP 市场维护可复用的 MCP 服务预设（传输方式 + 命令/URL），�
 - 未绑定工作区的会话不读（它没有"项目"）；`AGENTS_MD_ENABLED=0` 全局关闭。
 - 每次读到文件，任务日志里会有一条 `Loaded AGENTS.md` 事件：文件名、字符数、是否截断、嵌套索引，不含正文。
 
-交互式 CLI（`--interactive`）的默认工作区是启动目录，同样会读该目录的 `AGENTS.md`。取舍与已知限制见 [ADR 0022](decisions/0022-agents-md.md)。
+交互式 CLI（`--interactive`）没有绑定工作区：它的路径基准是本应用源码树，因此不读任何 `AGENTS.md`——包括本仓库自己那份，那是写给维护者的开发约定，不是运行时规则。取舍与已知限制见 [ADR 0022](decisions/0022-agents-md.md)。
 
 ### Provider 与模型
 

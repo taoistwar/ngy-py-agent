@@ -31,7 +31,6 @@ import task_api
 import tool_api
 import workspace_api
 from agent.agent_loop import run_react_loop
-from agent.agents_md import with_agents_md
 from agent.provider import ProviderError
 from agent.telemetry import (
     active_provider,
@@ -281,12 +280,11 @@ def main() -> None:
         messages: List[Dict[str, Any]] = [
             {
                 "role": "system",
-                # The CLI runs against the repository it was started from, so that is the
-                # workspace whose AGENTS.md applies. Built once: this list is the whole
-                # conversation, and re-appending on every turn would duplicate the rules.
-                "content": with_agents_md(
-                    "You are a ReAct agent. Analyze first, call tools if needed, then output a clear and reproducible answer.",
-                    str(ROOT_DIR),
+                # ``ROOT_DIR`` is this app's own source tree, not a user workspace: its
+                # ``AGENTS.md`` is guidance for assistants editing this repository, so it
+                # must not become the runtime agent's rules (ADR 0022 D1).
+                "content": (
+                    "You are a ReAct agent. Analyze first, call tools if needed, then output a clear and reproducible answer."
                 ),
             }
         ]
