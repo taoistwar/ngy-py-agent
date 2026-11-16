@@ -324,6 +324,62 @@
   background: var(--danger-bg);
 }
 
+/* The session panel header keeps its icon actions grouped on the right so the
+   sort picker and the collapse button stay on one line. */
+.session-tabs-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.session-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.session-sort-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.session-sort-btn:hover,
+.session-sort-btn.active {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.session-sort-menu {
+  min-width: 148px;
+}
+
+.session-sort-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.session-sort-option.active {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.session-sort-option.active::after {
+  content: "✓";
+  font-weight: 600;
+}
+
 .session-history-overlay {
   position: fixed;
   inset: 0;

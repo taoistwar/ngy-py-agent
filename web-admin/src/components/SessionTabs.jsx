@@ -4,6 +4,15 @@ import { useEffect, useMemo, useState } from "react"
 
 const SESSION_PREVIEW_LIMIT = 10
 
+// The session list is client sorted, newest first: switching the field only
+// changes which timestamp the groups are ordered by.
+const SESSION_SORT_FIELDS = [
+  { key: "created_at", labelKey: "sessionSortCreated" },
+  { key: "updated_at", labelKey: "sessionSortUpdated" },
+]
+
+const sessionTime = (item, field) => new Date(item[field] || 0).getTime()
+
 export default function SessionTabs({
   workspaces,
   sessions,
@@ -30,6 +39,8 @@ export default function SessionTabs({
   const [expandedGroups, setExpandedGroups] = useState({})
   const [menu, setMenu] = useState(null)
   const [wsMenu, setWsMenu] = useState(null)
+  const [sortKey, setSortKey] = useState("updated_at")
+  const [sortMenu, setSortMenu] = useState(null)
 
   const orphanSessions = useMemo(
     () => sessions.filter((item) => !item.workspace_id),
@@ -61,10 +72,11 @@ export default function SessionTabs({
   }, [sessions])
 
   useEffect(() => {
-    if (!menu && !wsMenu) return undefined
+    if (!menu && !wsMenu && !sortMenu) return undefined
     const closeMenu = () => {
       setMenu(null)
       setWsMenu(null)
+      setSortMenu(null)
     }
     window.addEventListener("click", closeMenu)
     window.addEventListener("contextmenu", closeMenu)
@@ -74,7 +86,7 @@ export default function SessionTabs({
       window.removeEventListener("contextmenu", closeMenu)
       window.removeEventListener("scroll", closeMenu, true)
     }
-  }, [menu, wsMenu])
+  }, [menu, wsMenu, sortMenu])
 
   const toggleWorkspace = (workspaceId) => {
     setCollapsedWorkspaces((prev) => ({ ...prev, [workspaceId]: !prev[workspaceId] }))
@@ -125,6 +137,28 @@ export default function SessionTabs({
     })
   }
 
+  const toggleSortMenu = (event) => {
+    // Without this the window click listener would close the menu in the same
+    // event that opened it.
+    event.stopPropagation()
+    if (sortMenu) {
+      setSortMenu(null)
+      return
+    }
+    setMenu(null)
+    setWsMenu(null)
+    const rect = event.currentTarget.getBoundingClientRect()
+    setSortMenu({
+      left: Math.max(8, Math.min(rect.right - 148, window.innerWidth - 156)),
+      top: rect.bottom + 6,
+    })
+  }
+
+  const selectSortKey = (key) => {
+    setSortKey(key)
+    setSortMenu(null)
+  }
+
   const renderSessionRow = (item) => (
     <button
       key={item.session_id}
@@ -142,9 +176,7 @@ export default function SessionTabs({
     if (items.length === 0) {
       return <div className="session-group-empty">{emptyText}</div>
     }
-    const sorted = [...items].sort(
-      (a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
-    )
+    const sorted = [...items].sort((a, b) => sessionTime(b, sortKey) - sessionTime(a, sortKey))
     const expanded = expandedGroups[groupKey] === true
     const visible = expanded ? sorted : sorted.slice(0, SESSION_PREVIEW_LIMIT)
     const hidden = sorted.length - visible.length
@@ -168,24 +200,46 @@ export default function SessionTabs({
     <section className="panel session-tabs-panel">
       <div className="panel-titlebar session-tabs-titlebar">
         <h2>{translate("sessionTitle")}</h2>
-        <button
-          type="button"
-          className="session-collapse-btn"
-          onClick={onCollapse}
-          title={translate("sessionCollapse")}
-          aria-label={translate("sessionCollapse")}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M15 5l-7 7 7 7"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
+        <div className="session-tabs-actions">
+          <button
+            type="button"
+            className={`session-sort-btn ${sortMenu ? "active" : ""}`}
+            onClick={toggleSortMenu}
+            title={translate("sessionSort")}
+            aria-label={translate("sessionSort")}
+            aria-haspopup="menu"
+            aria-expanded={sortMenu ? "true" : "false"}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4 7h9M4 12h6M4 17h3M18 6v12m-4-4 4 4 4-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="session-collapse-btn"
+            onClick={onCollapse}
+            title={translate("sessionCollapse")}
+            aria-label={translate("sessionCollapse")}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M15 5l-7 7 7 7"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
       <div className="panel-body session-tabs-body">
         <div className="session-tree">
@@ -327,6 +381,27 @@ export default function SessionTabs({
           )}
         </div>
       </div>
+      {sortMenu && (
+        <div
+          className="session-menu session-sort-menu"
+          role="menu"
+          style={{ left: sortMenu.left, top: sortMenu.top }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {SESSION_SORT_FIELDS.map((field) => (
+            <button
+              key={field.key}
+              type="button"
+              role="menuitemradio"
+              aria-checked={sortKey === field.key ? "true" : "false"}
+              className={`session-sort-option ${sortKey === field.key ? "active" : ""}`}
+              onClick={() => selectSortKey(field.key)}
+            >
+              {translate(field.labelKey)}
+            </button>
+          ))}
+        </div>
+      )}
       {menu && (
         <div
           className="session-menu"
