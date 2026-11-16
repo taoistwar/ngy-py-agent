@@ -7,7 +7,7 @@ turns rather than the oldest.
 
 Run from the repository root::
 
-    uv run python test/session_history_test.py -v
+    uv run python test/agent/history_test.py -v
 """
 
 import sys
@@ -17,7 +17,7 @@ from pathlib import Path
 
 # ``test/`` is intentionally not a package, so the repository root is added to
 # the import path here instead of adding a ``test/__init__.py``.
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
