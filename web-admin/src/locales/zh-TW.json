@@ -157,7 +157,7 @@
   "maxStepsTitle": "全域最大步數",
   "maxStepsCurrentSource": "目前來源",
   "maxStepsSourceDb": "資料庫",
-  "maxStepsSourceEnv": "環境變數",
+  "maxStepsSourceDefault": "預設值",
   "maxStepsSet": "設定最大步數",
   "maxStepsSave": "儲存",
   "maxStepsSaving": "儲存中…",

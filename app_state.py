@@ -39,7 +39,7 @@ permission_rule_store = PermissionRuleStore()
 task_retention_days: int = TASK_RETENTION_DEFAULT_DAYS
 task_retention_source: str = "env"
 agent_max_steps: int = DEFAULT_MAX_STEPS
-agent_max_steps_source: str = "env"
+agent_max_steps_source: str = "default"
 permission_mode: PermissionMode = PermissionMode.ASK
 permission_mode_source: str = "env"
 # AGENTS.md instructions (ADR 0022): read the workspace's files, and how many bytes of

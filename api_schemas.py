@@ -33,7 +33,7 @@ class RunTaskRequest(BaseModel):
         default=None,
         ge=1,
         le=MAX_STEPS_LIMIT,
-        description="Optional override; omit to use the global REACT_MAX_STEPS config.",
+        description="Optional override; omit to use the global max-steps setting (default 9).",
     )
     agent_id: str | None = Field(
         default=None,

@@ -157,7 +157,7 @@
   "maxStepsTitle": "Global max steps",
   "maxStepsCurrentSource": "Current source",
   "maxStepsSourceDb": "database",
-  "maxStepsSourceEnv": "environment",
+  "maxStepsSourceDefault": "default",
   "maxStepsSet": "Set max steps",
   "maxStepsSave": "Save",
   "maxStepsSaving": "Saving...",

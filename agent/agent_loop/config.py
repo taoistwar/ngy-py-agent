@@ -9,4 +9,7 @@ from agent.provider import DEFAULT_PROVIDER
 # fallback is the provider module's default, so there is one place that says what
 # "not configured" means.
 TOOL_SCHEMA_PROVIDER = os.getenv("TOOL_SCHEMA_PROVIDER") or DEFAULT_PROVIDER
-DEFAULT_MAX_STEPS = int(os.getenv("REACT_MAX_STEPS", "8"))
+# The only override is the global setting in the settings table, so "not configured" has
+# exactly one answer: every caller falls back to this value. There is deliberately no
+# environment variable - a second source would mean "not configured" has two.
+DEFAULT_MAX_STEPS = 9

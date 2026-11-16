@@ -12,7 +12,7 @@ export function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }
 
   useEffect(() => {
     if (!maxStepsConfig) return
-    setValue(String(maxStepsConfig.max_steps ?? 8))
+    setValue(String(maxStepsConfig.max_steps ?? 9))
   }, [maxStepsConfig])
 
   const submit = async (event) => {
@@ -36,7 +36,7 @@ export function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }
             {translate("maxStepsCurrentSource")}:{" "}
             {maxStepsConfig?.source === "database"
               ? translate("maxStepsSourceDb")
-              : translate("maxStepsSourceEnv")}
+              : translate("maxStepsSourceDefault")}
           </span>
         </div>
         <button type="button" className="btn btn-compact" onClick={onRefresh}>

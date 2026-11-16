@@ -59,16 +59,10 @@ def _clamp_max_steps(value: int) -> int:
 
 
 def _load_agent_max_steps_config() -> tuple[int, str]:
-    env_raw = os.getenv("REACT_MAX_STEPS", str(DEFAULT_MAX_STEPS)).strip()
-    try:
-        env_steps = int(env_raw)
-    except ValueError:
-        env_steps = DEFAULT_MAX_STEPS
-    env_steps = _clamp_max_steps(env_steps)
-
+    """The global step limit: the database value, else the code default."""
     db_steps = app_state.monitor_store.get_agent_max_steps()
     if db_steps is None:
-        return env_steps, "env"
+        return DEFAULT_MAX_STEPS, "default"
     return _clamp_max_steps(db_steps), "database"
 
 

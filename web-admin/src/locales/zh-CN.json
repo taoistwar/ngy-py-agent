@@ -157,7 +157,7 @@
   "maxStepsTitle": "全局最大步数",
   "maxStepsCurrentSource": "当前来源",
   "maxStepsSourceDb": "数据库",
-  "maxStepsSourceEnv": "环境变量",
+  "maxStepsSourceDefault": "默认值",
   "maxStepsSet": "设置最大步数",
   "maxStepsSave": "保存",
   "maxStepsSaving": "保存中...",

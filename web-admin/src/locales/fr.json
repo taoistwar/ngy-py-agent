@@ -157,7 +157,7 @@
   "maxStepsTitle": "Nombre maximal d'étapes",
   "maxStepsCurrentSource": "Source actuelle",
   "maxStepsSourceDb": "base de données",
-  "maxStepsSourceEnv": "environnement",
+  "maxStepsSourceDefault": "valeur par défaut",
   "maxStepsSet": "Définir les étapes maximales",
   "maxStepsSave": "Enregistrer",
   "maxStepsSaving": "Enregistrement...",

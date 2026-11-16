@@ -157,7 +157,7 @@
   "maxStepsTitle": "Globale maximale Schritte",
   "maxStepsCurrentSource": "Aktuelle Quelle",
   "maxStepsSourceDb": "Datenbank",
-  "maxStepsSourceEnv": "Umgebung",
+  "maxStepsSourceDefault": "Standard",
   "maxStepsSet": "Maximale Schritte festlegen",
   "maxStepsSave": "Speichern",
   "maxStepsSaving": "Wird gespeichert...",

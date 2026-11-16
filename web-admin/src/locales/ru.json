@@ -157,7 +157,7 @@
   "maxStepsTitle": "Глобальный лимит шагов",
   "maxStepsCurrentSource": "Текущий источник",
   "maxStepsSourceDb": "база данных",
-  "maxStepsSourceEnv": "переменная окружения",
+  "maxStepsSourceDefault": "по умолчанию",
   "maxStepsSet": "Задать лимит шагов",
   "maxStepsSave": "Сохранить",
   "maxStepsSaving": "Сохранение...",

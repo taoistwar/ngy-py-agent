@@ -221,8 +221,9 @@ class PermissionApiTest(unittest.TestCase):
     def test_startup_load_takes_the_database_over_the_env_defaults(self):
         """Regression: ``--reload`` serves from a child process that never runs ``main``.
 
-        The persisted settings were reloaded as ``ask``/8 (env defaults) after every code
-        change because the load hung off ``main`` instead of the app's lifespan.
+        The persisted settings were reloaded as ``ask``/9 (the built-in defaults) after
+        every code change because the load hung off ``main`` instead of the app's
+        lifespan.
         """
         self.store.set_permission_mode("auto_approve")
         self.store.set_agent_max_steps(42)
