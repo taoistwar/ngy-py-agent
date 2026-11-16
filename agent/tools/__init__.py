@@ -12,7 +12,7 @@ The package is split so that reading one tool means reading one directory:
   package docstring and the public surface, ``spec.py`` declares the tool to the
   registry, and the implementation is split by responsibility
   (``description.py``, ``errors.py``, topic modules, ``tool.py``).
-- the remaining modules (``permissions``, ``permission_rules``, ``file_access``,
+- the remaining modules (``denylist``, ``permissions``, ``permission_rules``, ``file_access``,
   ``file_bytes``, ``file_patch``, ``file_walk``, ``glob_pattern``, ``read_ledger``,
   ``text_encoding``, ``text_lines``, ``tokenizers``, ``token_budget``,
   ``process_group``, ``process_store``, ``shell_platform``, ``output_store``) are

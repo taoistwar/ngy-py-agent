@@ -171,11 +171,12 @@
 | **决策粒度（scope）** | `once`（仅本次）/ `session`（本任务内同一**工具 + 同一目标**自动放行，内存随任务结束消失）/ `always`（写入规则文件，跨任务生效）。未知取值一律报错，**不降级**。 | `agent/tools/permissions.py` |
 | **权限规则（permission rule）** | 一条 `always` 决定的持久化记录，**刻意做窄**：一个工具 + 一个精确目标，不接受 `Bash(git push:*)` 这类模式。存在 `data/permission_rules.json`（`PERMISSION_RULES_CONFIG` 改路径）。文件缺失或损坏一律表示"没有规则"（即重新询问），**绝不表示"允许"**。 | `agent/tools/permission_rules.py` |
 | **`persistent_rule`** | 命中一条权限规则、因而无需询问的原因。 | `agent/tools/permissions.py` |
+| **工具黑名单（denylist）** | 静态硬拒绝：**工具 + 参数组合**命中即不执行、不询问，返回 `permission_decision` 事件（`reason: "denylist"`）。匹配分 `fixed`（整值相等）与 `regex`（`re.search`），多个参数是 AND。规则在 `data/tool_denylist.json`（`TOOL_DENYLIST_CONFIG` 改路径），按 stat 缓存即时生效；坏规则整条丢弃并记入 `problems`，求值异常一律拒绝。它是**策略不是沙箱**：只决定"拦不拦"，不限制放行后的能力。 | [ADR 0024](decisions/0024-tool-denylist.md) |
 | **规则写盘失败** | 调用照常放行，但 `scope` 退回 `once`：不声称一个并未写入的长期许可。 | `agent/tools/permissions.py` |
 | **预览（`preview` / dry run）** | `ToolSpec.preview`：接收调用参数、**无副作用**地返回给对话框用的补充 `details`。`edit_file` 用它给出**写入前**的 `gitDiff`（复用 `prepare_edit`，不需要第二条实现路径）。预览失败不构成拒绝，工具执行时会报准确错误。 | `agent/tools/spec.py`、`agent/tools/edit_file/` |
 | **待确认（pending permission）** | 正在被等待的请求。`GET /api/tasks/{id}` 的 `pendingPermission` 字段给出它，因此断线重连的客户端也能渲染弹窗。 | `main.py` |
 | **`WAITING`（任务状态）** | 任务被确认请求**或提问**阻塞。它**仍属"进行中"**：事件推流与前端轮询都必须继续，否则客户端恰恰收不到那条需要它答复的请求。 | `agent/models.py` |
-| **决策原因（reason）** | 审计用的判定结果：`not_required` / `auto_approved` / `deny_all` / `policy_denied` / `session_rule` / `user_allowed` / `user_denied` / `timeout` / `stopped` / `broker_error`。 | `agent/tools/permissions.py` |
+| **决策原因（reason）** | 审计用的判定结果：`not_required` / `auto_approved` / `deny_all` / `policy_denied` / `session_rule` / `user_allowed` / `user_denied` / `timeout` / `stopped` / `broker_error`，以及黑名单的 `denylist` / `denylist_error`。 | `agent/tools/permissions.py`、`agent/tools/denylist.py` |
 | **`broker_error`** | 权限层自身出错。此时**拒绝**该调用（fail closed）并在文案里说明这是权限层的缺陷、重试无用——安全提示坏掉时应当响亮地失败，而不是静默全部放行。 | `agent/tools/registry.py` |
 
 ## 提问通道（`ask_user_question`）

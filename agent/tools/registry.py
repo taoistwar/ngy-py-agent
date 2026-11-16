@@ -10,6 +10,11 @@ from agent.tools.bindings import ToolBindings
 from agent.tools.catalog import build_all_specs
 from agent.tools.code_interpreter import code_interpreter as _code_interpreter
 from agent.tools.convert_currency import convert_currency as _convert_currency
+from agent.tools.denylist import (
+    REASON_DENYLIST,
+    REASON_DENYLIST_ERROR,
+    ToolDenyList,
+)
 from agent.tools.get_current_temperature import (
     get_current_temperature as _get_current_temperature,
 )
@@ -84,6 +89,7 @@ class ToolRegistry:
         session_id: str = "",
         task_id: str = "",
         permission_broker: Optional[PermissionBroker] = None,
+        denylist: Optional[ToolDenyList] = None,
         user_question_broker: Optional[UserQuestionBroker] = None,
         should_stop: Optional[Callable[[], bool]] = None,
         checkpoint_store: Optional[Any] = None,
@@ -106,6 +112,11 @@ class ToolRegistry:
         # assigns the broker after building the registry, because the registry is
         # built before the task identity exists (see ADR 0006 D1).
         self.permission_broker = permission_broker
+        # Hard denials (ADR 0024): a listed tool + argument combination never runs
+        # and the permission gate never sees it. ``None`` means "the file the
+        # configuration points at", never "no deny-list", so the layer is only
+        # off when a caller passes an explicitly empty list.
+        self.denylist = denylist if denylist is not None else ToolDenyList()
         # Same late-binding trick for the question channel, and for the same reason:
         # ``ask_user`` below reads this per call, so a registry built before the task
         # existed still answers through the broker the task installed (ADR 0010 D1).
@@ -330,8 +341,9 @@ class ToolRegistry:
         """Execute a tool by name and return its raw result.
 
         This is the single choke point every tool call passes through, which is
-        why the permission gate lives here rather than inside the tools: coverage
-        is then "all of them", including tools added later (ADR 0006 D1).
+        why the deny-list (ADR 0024) and the permission gate live here rather
+        than inside the tools: coverage is then "all of them", including tools
+        added later (ADR 0006 D1).
 
         ``ToolOutcome`` results are passed through untouched so the caller can
         route the model-facing text and the UI-facing payload separately. Any
@@ -345,6 +357,17 @@ class ToolRegistry:
         """
         if name not in self.tools:
             return json.dumps({"error": f"Tool '{name}' not found"})
+
+        blocked = self._denylist_denial(name, arguments)
+        if blocked is not None:
+            # Same shape as a refused confirmation, but a different layer and a
+            # different title: this call was never a question.
+            return ToolOutcome(
+                model_text=blocked.model_text,
+                event_category=EventCategory.PERMISSION_DECISION,
+                event_title=f"Blocked by deny-list: {name}",
+                details=blocked.details,
+            )
 
         denial = self._permission_denial(name, arguments)
         if denial is not None:
@@ -386,6 +409,56 @@ class ToolRegistry:
         if broker is None:
             return QuestionResult(answers={}, status=STATUS_NO_CLIENT)
         return broker.ask(questions)
+
+    def _denylist_denial(
+        self, name: str, arguments: Dict[str, Any]
+    ) -> Optional[PermissionDenial]:
+        """Refuse a call the operator deny-listed (ADR 0024).
+
+        Deliberately checked before the permission gate: a deny-listed call is
+        not a question, so asking would imply "yes" is an answer the user could
+        give.
+
+        A deny-list that cannot be evaluated **denies** the call, for the same
+        reason a broken permission broker does: this is a safety layer, and
+        failing open would turn a configuration mistake into "everything runs".
+        """
+        try:
+            matched = self.denylist.match(name, arguments)
+        # Deliberately broad: see the fail-closed rule above.
+        except Exception as exc:  # noqa: BLE001
+            return PermissionDenial(
+                model_text=(
+                    f"The tool deny-list could not be evaluated for {name}: "
+                    f"{exc.__class__.__name__}: {exc}\n"
+                    "The call was blocked. This is a defect in the deny-list layer; "
+                    "retrying the same call will not help."
+                ),
+                details={
+                    "reason": REASON_DENYLIST_ERROR,
+                    "tool": name,
+                    "error": str(exc),
+                    "allowed": False,
+                },
+            )
+        if matched is None:
+            return None
+        reason = matched.reason or "this tool and argument combination is blocked by policy"
+        return PermissionDenial(
+            model_text=(
+                f"Tool call blocked: {name} matches deny rule {matched.rule_id!r}.\n"
+                f"reason: {reason}\n"
+                "This call is disabled by policy. Do not retry it and do not look for "
+                "a way around it; continue without it or ask the user what to do instead."
+            ),
+            details={
+                "reason": REASON_DENYLIST,
+                "tool": name,
+                "rule": matched.rule_id,
+                "matched_fields": list(matched.fields),
+                "allowed": False,
+            },
+        )
 
     def _permission_denial(
         self, name: str, arguments: Dict[str, Any]

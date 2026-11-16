@@ -36,6 +36,7 @@ cd ..
   - `ANTHROPIC_API_KEY`
   - `GEMINI_MODEL`
   - `GEMINI_API_KEY`
+- 工具黑名单：`TOOL_DENYLIST_CONFIG`（规则文件路径，默认 `data/tool_denylist.json`，见 [ADR 0024](decisions/0024-tool-denylist.md)）
 - 桌面操作：
   - `CUA_DRIVER_BIN`（`cua-driver` 可执行文件路径；默认从 PATH 或 Windows 安装目录查找）
   - `TOOL_IMAGE_MAX_BYTES`（工具截图附加到模型上下文的大小上限，默认 `8388608`，即 8 MiB）
@@ -381,6 +382,18 @@ npm run i18n:check
 - **新增界面语言是两处一起改**：`web-admin/src/i18n.js` 的 `LOCALES` 与 `agent/tools/spec.py` 的 `LOCALES`（后者决定工具的 `description_i18n` 键），另外要给 14 个工具包各补一套 `ToolText`，两处清单不一致时工具页会静默回退英文。
 - **`TaskStatus.WAITING` 仍属"进行中"**：`/events/stream`、WebSocket 循环与前端 `isTaskRunningStatus` 都必须把它当作在飞行中。否则事件流会在用户最需要看到确认请求的那一刻断掉（这个坑已踩过一次）。
 - **scope 不做降级**：未知取值返回 400。把 `always` 静默降级成 `once` 会让用户以为已经长期允许了。
+
+### 工具黑名单（denylist）
+
+详见 [ADR 0024](decisions/0024-tool-denylist.md)。改动这条链路时最容易踩的几个点：
+
+- **位置在权限门之前**：`ToolRegistry.execute_tool` 先问 `self.denylist`，命中就返回 `ToolOutcome`（`permission_decision` 事件，`details.reason = "denylist"`），工具函数不执行，确认框也不弹。理由与 `file_access` 硬拒绝一致：答案已经是"不"，问一次只会让模型以为再试试有用。
+- **规则 = 工具匹配 + 0..N 个参数匹配，全部命中才拒绝**。工具名与参数都支持 `fixed`（整值相等）与 `regex`（`re.search`）。非字符串参数按其 JSON 形态匹配（`json.dumps(..., sort_keys=True)`），所以 `{"timeout": 30}`、`{"urls": ["a"]}` 都按调用里的样子比较；dict 值必须写成 `{"match": "fixed", "value": {...}}`，因为对象位置留给匹配器。
+- 规则文件默认 `data/tool_denylist.json`（`TOOL_DENYLIST_CONFIG` 改路径）。`args` 缺省表示整个工具禁用；参数名可写 `a.b` 取嵌套字段，`a.0` 取列表元素。
+- **读盘走 stat 缓存**：改完文件下一次调用即生效，不必重启。文件缺失或不可解析 = 没有规则（只会"不拦截"，不会放宽任何访问）。
+- **写错的规则整条丢弃**，原因记在 `ToolDenyList.problems`：半解析的规则会匹配到写规则的人没看到的调用，所以绝不保留，也就绝不部分生效。
+- **求值异常一律拒绝**（fail closed），和权限门同一原则；`details.reason = "denylist_error"` 与配置写错（`problems`）是两回事。
+- 新增事件字段时别忘了前端：拒绝复用 `permission_decision` 类别，因此 `details` 里的 `rule` / `matched_fields` 会直接显示在事件详情里。
 
 ### ask_user_question：把决策交回用户（它不是权限）
 
