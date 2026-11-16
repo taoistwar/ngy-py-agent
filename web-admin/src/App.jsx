@@ -290,9 +290,9 @@ function TaskList({
     } else if (rowRect.bottom > containerRect.bottom) {
       container.scrollTop += rowRect.bottom - containerRect.bottom
     }
-    // A poll refresh keeps the same ids, so only a different selection or a
-    // longer/shorter list may move the scroll and not every five-second tick.
-  }, [selectedId, taskCount])
+    // A poll refresh keeps the same ids, so only a different selection, a
+    // longer/shorter list or another page may move the scroll - not every tick.
+  }, [selectedId, taskCount, page])
 
   return (
     <section className="panel session-task-panel">
@@ -1032,9 +1032,23 @@ export default function App() {
     return () => clearInterval(timer)
   }, [])
 
+  // A new search or another session opens on the first page. The page count is
+  // deliberately not a reset trigger: the clamp above already keeps the pointer
+  // in range, and resetting on every new task would fight the follow effect below.
   useEffect(() => {
     setTaskPage(1)
-  }, [taskSearchValue, totalTaskPages, activeSessionId])
+  }, [taskSearchValue, activeSessionId])
+
+  // The selected task has to be on screen, and a task created now sits on the
+  // last page, so the list follows the selection there. Only a changed selection
+  // or a changed number of rows may move the page: depending on the array itself
+  // would drag the user back on every five-second poll while they read older pages.
+  useEffect(() => {
+    if (!selectedId) return
+    const index = filteredTasks.findIndex((item) => item.task_id === selectedId)
+    if (index < 0) return
+    setTaskPage(Math.floor(index / TASK_PAGE_SIZE) + 1)
+  }, [selectedId, filteredTasks.length])
 
   useEffect(() => {
     const idSet = new Set(tasks.map((task) => task.task_id))
