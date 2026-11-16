@@ -171,6 +171,8 @@ const TEXT = {
   fileWriteFailed: "Impossible d'écrire le fichier {path}",
   fileEdit: "Fichier modifié : {path}",
   fileEditFailed: "Impossible de modifier le fichier {path}",
+  fileDelete: "Fichier supprimé : {path}",
+  fileDeleteFailed: "Impossible de supprimer le fichier {path}",
   exec: "Commande exécutée",
   execFailed: "La commande a échoué",
   execWithCommand: "Commande exécutée : {command}",

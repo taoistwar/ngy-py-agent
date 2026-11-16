@@ -16,6 +16,7 @@ const CATEGORY_ORDER = [
   "tool_result",
   "file_edit",
   "file_write",
+  "file_delete",
   "exec",
   "computer",
   "permission_request",

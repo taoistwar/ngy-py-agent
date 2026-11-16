@@ -91,6 +91,7 @@
   --tag-tool: #2f7a5f;
   --tag-edit: #4a3f7a;
   --tag-write: #2f5f7a;
+  --tag-delete: #7a3a3f;
   --tag-exec: #7a4a2f;
   --tag-computer: #3f6a4a;
   --tag-permission: #8a6d1f;
@@ -194,6 +195,7 @@
   --tag-tool: #e0f5eb;
   --tag-edit: #ece7fb;
   --tag-write: #e2f0fb;
+  --tag-delete: #fbe4e4;
   --tag-exec: #fdeee2;
   --tag-computer: #e5f6e5;
   --tag-permission: #fdf2d3;

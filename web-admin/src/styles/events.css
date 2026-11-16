@@ -343,6 +343,10 @@
   background: var(--tag-write);
 }
 
+.tag.file_delete {
+  background: var(--tag-delete);
+}
+
 .tag.exec {
   background: var(--tag-exec);
 }

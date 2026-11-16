@@ -171,6 +171,8 @@ const TEXT = {
   fileWriteFailed: "寫入檔案失敗：{path}",
   fileEdit: "修改了檔案：{path}",
   fileEditFailed: "修改檔案失敗：{path}",
+  fileDelete: "刪除了檔案：{path}",
+  fileDeleteFailed: "刪除檔案失敗：{path}",
   exec: "執行了一條命令",
   execFailed: "命令執行失敗",
   execWithCommand: "執行命令：{command}",

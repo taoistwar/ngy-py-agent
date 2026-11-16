@@ -545,9 +545,12 @@ function buildError({ data, dict }) {
 function buildFileEvent({ data, dict }, kind) {
   const path = data.file_path || data.path || ""
   const failed = data.success === false
-  const headline = failed
-    ? fillTemplate(kind === "write" ? dict.text.fileWriteFailed : dict.text.fileEditFailed, { path })
-    : fillTemplate(kind === "write" ? dict.text.fileWrite : dict.text.fileEdit, { path })
+  const templates = {
+    write: [dict.text.fileWrite, dict.text.fileWriteFailed],
+    edit: [dict.text.fileEdit, dict.text.fileEditFailed],
+    delete: [dict.text.fileDelete, dict.text.fileDeleteFailed],
+  }[kind] || [dict.text.fileWrite, dict.text.fileWriteFailed]
+  const headline = fillTemplate(failed ? templates[1] : templates[0], { path })
   const { fields, sections } = describeData(dict, data)
   return { tone: failed ? "danger" : "success", headline: path ? headline : dict.text.generic, fields, sections }
 }
@@ -625,6 +628,7 @@ const BUILDERS = {
   error: buildError,
   file_write: (ctx) => buildFileEvent(ctx, "write"),
   file_edit: (ctx) => buildFileEvent(ctx, "edit"),
+  file_delete: (ctx) => buildFileEvent(ctx, "delete"),
   exec: ({ data, dict }) => {
     const { fields, sections } = describeData(dict, data)
     const failed = data.success === false
