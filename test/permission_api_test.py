@@ -37,7 +37,7 @@ from agent.tools.permissions import (  # noqa: E402
     PermissionBroker,
     PermissionMode,
 )
-from task_store import _SqliteTaskStore  # noqa: E402
+from dao import _SqliteTaskStore  # noqa: E402
 
 WAIT_SECONDS = 30.0
 

@@ -125,7 +125,7 @@ class ProviderThrottle:
         """Configure one bucket per stored endpoint record.
 
         ``endpoints`` items name the protocol, the base URL and the limit, i.e. the
-        shape ``llm_store`` hands out, so every caller builds the keys the same way.
+        shape ``dao.llm`` hands out, so every caller builds the keys the same way.
         """
         limits: Dict[str, int] = {}
         for item in endpoints:

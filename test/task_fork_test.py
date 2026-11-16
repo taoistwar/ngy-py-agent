@@ -25,8 +25,8 @@ from fastapi import HTTPException  # noqa: E402
 import app_state  # noqa: E402
 import session_history  # noqa: E402
 from agent.models import EventCategory, TaskEvent, TaskStatus  # noqa: E402
+from dao import _SqliteTaskStore  # noqa: E402
 from routes import task_api  # noqa: E402
-from task_store import _SqliteTaskStore  # noqa: E402
 
 
 class ForkSessionTest(unittest.TestCase):

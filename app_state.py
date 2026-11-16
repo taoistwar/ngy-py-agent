@@ -15,7 +15,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import task_store
+import dao
 from agent.agent_loop import DEFAULT_MAX_STEPS
 from agent.agents_md import DEFAULT_MAX_BYTES as AGENTS_MD_DEFAULT_MAX_BYTES
 from agent.models import EventCategory, TaskStatus
@@ -23,15 +23,15 @@ from agent.tools.denylist import ToolDenyList
 from agent.tools.permission_rules import PermissionRuleStore
 from agent.tools.permissions import PermissionBroker, PermissionMode
 from agent.tools.user_question import UserQuestionBroker
-from task_store import TASK_RETENTION_DEFAULT_DAYS
+from dao import TASK_RETENTION_DEFAULT_DAYS
 
 # The repository root. Defined once because two modules need it (the frontend paths and
 # the default skills folder) and two answers to "where is the repo" is one too many.
 ROOT_DIR = Path(__file__).resolve().parent
 
-# The live task store. ``task_store`` builds it at import; keeping the reference here is
+# The live task store. ``dao`` builds it at import; keeping the reference here is
 # what makes ``app_state.monitor_store = temporary`` reach every reader.
-monitor_store = task_store.monitor_store
+monitor_store = dao.monitor_store
 
 # Persisted "always allow" rules, shared by every task (ADR 0006 D8).
 permission_rule_store = PermissionRuleStore()

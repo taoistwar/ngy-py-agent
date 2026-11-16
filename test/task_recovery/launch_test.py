@@ -23,7 +23,7 @@ if str(_REPO_ROOT) not in sys.path:
 import app_state  # noqa: E402
 import task_recovery.launch as launch  # noqa: E402
 from agent.models import EventCategory, TaskEvent, TaskStatus  # noqa: E402
-from task_store import _SqliteTaskStore  # noqa: E402
+from dao import _SqliteTaskStore  # noqa: E402
 
 SYSTEM = {"role": "system", "content": "you are an agent"}
 QUERY = {"role": "user", "content": "rename the file"}

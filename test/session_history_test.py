@@ -24,7 +24,7 @@ if str(_REPO_ROOT) not in sys.path:
 import app_state  # noqa: E402
 import session_history  # noqa: E402
 from agent.models import TaskStatus  # noqa: E402
-from task_store import _SqliteTaskStore  # noqa: E402
+from dao import _SqliteTaskStore  # noqa: E402
 
 
 class SessionHistoryTest(unittest.TestCase):

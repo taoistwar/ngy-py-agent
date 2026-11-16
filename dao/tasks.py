@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from agent.models import TaskEvent, TaskStatus
-from task_store.base import _USER_SETTLED_STATUSES
+from dao.base import _USER_SETTLED_STATUSES
 
 
 class _TaskMixin:

@@ -31,7 +31,7 @@ import main  # noqa: E402
 from agent.checkpoints import CheckpointStore  # noqa: E402
 from agent.checkpoints import git as git_module  # noqa: E402
 from agent.models import TaskStatus  # noqa: E402
-from task_store import _SqliteTaskStore  # noqa: E402
+from dao import _SqliteTaskStore  # noqa: E402
 
 
 class CheckpointApiTest(unittest.TestCase):

@@ -11,14 +11,14 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from llm_store import LlmStore
-from task_store.agents import _AgentMixin
-from task_store.base import TASK_DB_PATH, _TaskStoreBase
-from task_store.forks import _ForkMixin
-from task_store.schema import _SchemaMixin
-from task_store.sessions import _SessionMixin
-from task_store.settings import _SettingsMixin
-from task_store.tasks import _TaskMixin
+from dao.agents import _AgentMixin
+from dao.base import TASK_DB_PATH, _TaskStoreBase
+from dao.forks import _ForkMixin
+from dao.llm import LlmStore
+from dao.schema import _SchemaMixin
+from dao.sessions import _SessionMixin
+from dao.settings import _SettingsMixin
+from dao.tasks import _TaskMixin
 
 
 class _SqliteTaskStore(

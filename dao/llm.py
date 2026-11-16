@@ -9,9 +9,10 @@ The split is what makes the rate limit sit on the endpoint instead of on the mod
 (ADR 0014): two models behind one provider share one quota, and one protocol pointed at
 two URLs is two quotas. It also means a key or a URL is edited once, not once per model.
 
-This store shares the task store's connection and lock rather than opening a second one:
-both halves are the same SQLite file, and task queries join ``models`` for the display
-name. ``task_store`` owns the connection; this module owns what the two tables mean.
+This store shares the connection and lock owned by ``dao.store`` rather than opening a
+second one: both halves are the same SQLite file, and task queries join ``models`` for
+the display name. ``dao.store`` owns the connection; this module owns what the two
+tables mean.
 """
 
 from __future__ import annotations

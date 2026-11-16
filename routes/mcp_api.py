@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from mcp_store import MCP_TRANSPORTS, mcp_store
+from dao.mcp import MCP_TRANSPORTS, mcp_store
 
 router = APIRouter(prefix="/api/mcp-servers", tags=["mcp"])
 

@@ -9,7 +9,7 @@ providers plus models (ADR 0014): an existing database must keep working.
 
 Run from the repository root::
 
-    uv run python test/task_store_test.py -v
+    uv run python test/dao/store_test.py -v
 """
 
 import sqlite3
@@ -20,11 +20,11 @@ from pathlib import Path
 
 # ``test/`` is intentionally not a package, so the repository root is added to
 # the import path here instead of adding a ``test/__init__.py``.
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from task_store import _SqliteTaskStore  # noqa: E402
+from dao import _SqliteTaskStore  # noqa: E402
 
 # The models table as it was before providers existed (ADR 0014): the endpoint sat on
 # every model, so two models on one server were two rows with the same URL and key.

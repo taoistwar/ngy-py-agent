@@ -27,7 +27,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.models import TaskStatus  # noqa: E402
-from task_store import _SqliteTaskStore  # noqa: E402
+from dao import _SqliteTaskStore  # noqa: E402
 
 
 class TaskStopApiTest(unittest.TestCase):

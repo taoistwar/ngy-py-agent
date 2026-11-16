@@ -24,8 +24,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 import app_state  # noqa: E402
 from api_schemas import RunTaskRequest  # noqa: E402
+from dao import _SqliteTaskStore  # noqa: E402
 from routes import task_api  # noqa: E402
-from task_store import _SqliteTaskStore  # noqa: E402
 
 
 class TaskHistoryApiTest(unittest.TestCase):

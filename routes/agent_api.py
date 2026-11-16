@@ -28,7 +28,7 @@ from api_schemas import (
     SkillImportRequest,
     SkillsRootUpdateRequest,
 )
-from mcp_store import MCP_TRANSPORTS
+from dao.mcp import MCP_TRANSPORTS
 from task_runtime import resolve_skills_root
 
 router = APIRouter()

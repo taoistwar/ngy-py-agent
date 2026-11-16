@@ -26,8 +26,8 @@ import app_state  # noqa: E402
 import main  # noqa: E402
 import task_runtime  # noqa: E402
 from agent import agents_md  # noqa: E402
+from dao import _SqliteTaskStore  # noqa: E402
 from routes import admin_api  # noqa: E402
-from task_store import _SqliteTaskStore  # noqa: E402
 
 
 class AgentsMdSettingsTest(unittest.TestCase):

@@ -48,9 +48,9 @@ from api_schemas import (
     RetentionConfigRequest,
     RetentionConfigResponse,
 )
+from dao import TASK_RETENTION_DEFAULT_DAYS
 from routes import llm_api
 from task_runtime import purge_expired_tasks_with_log
-from task_store import TASK_RETENTION_DEFAULT_DAYS
 
 router = APIRouter()
 

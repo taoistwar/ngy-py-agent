@@ -2,7 +2,7 @@
 
 An MCP server is a reusable connection preset (transport + command/URL) that
 agents pick from when they are created or edited. The table lives in the same
-database file as the task store but is managed by this module so the MCP
+database file as the task tables but is managed by this module so the MCP
 feature stays self-contained.
 """
 
@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from task_store import TASK_DB_PATH
+from dao.base import TASK_DB_PATH
 
 MCP_TRANSPORTS = ["stdio", "sse"]
 DEFAULT_MCP_TRANSPORT = "stdio"

@@ -27,7 +27,7 @@ import app_state  # noqa: E402
 import main  # noqa: E402
 from agent.tools.permissions import PERMISSION_KINDS, SCOPES  # noqa: E402
 from agent.tools.spec import CATEGORY_KINDS, TRANSLATED_LOCALES  # noqa: E402
-from task_store import _SqliteTaskStore  # noqa: E402
+from dao import _SqliteTaskStore  # noqa: E402
 
 
 class ToolApiTest(unittest.TestCase):
