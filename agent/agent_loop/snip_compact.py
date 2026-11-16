@@ -2,8 +2,9 @@
 
 Every ReAct step appends an assistant message and its tool results, so a run with many
 steps (or a session with injected history) grows without bound. Once the list passes
-the limit, the conversation is written to ``<workspace>/.transcripts/`` and the live
-list keeps the first few messages, an archive marker, and the most recent ones.
+the limit, the conversation is written to ``<workspace>/.ngy-agent/.transcripts/``
+and the live list keeps the first few messages, an archive marker, and the most
+recent ones.
 
 The rule that cannot be broken: an assistant tool call and the tool messages that
 answer it are one unit. Cutting between them leaves an orphan ``tool_use`` (rejected by

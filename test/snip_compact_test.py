@@ -98,7 +98,7 @@ class SnipCompactTest(unittest.TestCase):
         return apply_snip_compact(messages, **kwargs)
 
     def transcript_dir(self) -> Path:
-        return self.workspace / ".transcripts"
+        return self.workspace / ".ngy-agent" / ".transcripts"
 
     def only_transcript(self) -> Path:
         files = sorted(self.transcript_dir().glob("*.jsonl"))
@@ -332,8 +332,9 @@ class SnipCompactTest(unittest.TestCase):
         with patch.dict(os.environ, {"DEFAULT_WORKSPACE_DIR": str(default_root)}):
             self.compact(messages, base_dir=None)
 
-        self.assertEqual(len(list((default_root / ".transcripts").glob("*.jsonl"))), 1)
-        self.assertIn((default_root / ".transcripts").as_posix(), messages[HEAD]["content"])
+        expected_dir = default_root / ".ngy-agent" / ".transcripts"
+        self.assertEqual(len(list(expected_dir.glob("*.jsonl"))), 1)
+        self.assertIn(expected_dir.as_posix(), messages[HEAD]["content"])
 
     def test_each_compaction_keeps_its_own_snapshot(self):
         messages = [_system(), _user()] + _alternating(58)
@@ -356,7 +357,7 @@ class TranscriptDirectoryIsReadOnlyTest(unittest.TestCase):
 
     def test_the_file_tools_can_read_but_not_rewrite_transcripts(self):
         registry = ToolRegistry(enabled_tools=[], base_dir=str(self.workspace))
-        target = ".transcripts/transcript-1.jsonl"
+        target = ".ngy-agent/.transcripts/transcript-1.jsonl"
 
         resolved, _ = file_access.resolve_read_path(
             target, base_dir=str(self.workspace), extra_read_roots=registry.read_only_roots
@@ -472,7 +473,8 @@ class LoopWiringTest(unittest.TestCase):
             and "messages archived to" in message["content"]
         ]
         self.assertTrue(markers, "no compaction marker reached the model")
-        self.assertEqual(len(list((self.workspace / ".transcripts").glob("*.jsonl"))), 1)
+        transcripts = self.workspace / ".ngy-agent" / ".transcripts"
+        self.assertEqual(len(list(transcripts.glob("*.jsonl"))), 1)
 
 
 if __name__ == "__main__":

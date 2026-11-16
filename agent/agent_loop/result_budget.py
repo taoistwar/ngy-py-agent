@@ -2,7 +2,8 @@
 
 A model turn can ask for several tools at once, and their results land in
 ``messages`` together. When that batch is larger than the budget, the biggest
-results move to ``<workspace>/.task_outputs/tool-results/<tool_call_id>.txt`` and
+results move to
+``<workspace>/.ngy-agent/.task_outputs/tool-results/<tool_call_id>.txt`` and
 the message keeps a path plus a preview, which the model reads back with
 ``read_file`` (see ``docs/decisions/0012-tool-result-budget.md``).
 

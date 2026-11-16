@@ -19,9 +19,12 @@ Files here are scratch. Nothing prunes them automatically; the OS temp cleaner
 does, and a runaway command is bounded by its timeout instead.
 
 The one exception is :func:`workspace_result_directory`: persisted *tool results*
-(``<workspace>/.task_outputs/tool-results``) live inside the workspace instead, so a
-later turn of the same session can still reach them by their absolute path
-(ADR 0012). They are registered as a read-only root, exactly like this tree.
+(``<workspace>/.ngy-agent/.task_outputs/tool-results``) live inside the workspace
+instead, so a later turn of the same session can still reach them by their absolute
+path (ADR 0012). They are registered as a read-only root, exactly like this tree.
+:func:`workspace_transcript_directory` follows the same layout (ADR 0015). Both sit
+under one dot-directory (:data:`WORKSPACE_DATA_DIRNAME`, ADR 0023), so a project
+gains a single entry instead of one per feature.
 """
 
 from __future__ import annotations
@@ -42,6 +45,10 @@ from agent.tools.text_lines import split_lines
 
 OUTPUT_DIR_ENV = "EXEC_OUTPUT_DIR"
 DEFAULT_OUTPUT_DIR_NAME = ("ngy-py-agent", "output")
+
+# One dot-directory per workspace for everything the app writes there (ADR 0023):
+# a project gains a single entry, and the tools' read-only roots share one parent.
+WORKSPACE_DATA_DIRNAME = ".ngy-agent"
 
 # Persisted tool results: workspace-relative, so they outlive the temp tree.
 RESULT_DIR_NAME = ".task_outputs"
@@ -102,7 +109,7 @@ def output_root(base_dir: Optional[str] = None, scope: Optional[str] = None) -> 
 
 
 def workspace_result_directory(base_dir: Optional[str] = None) -> Path:
-    """Where persisted *tool results* go: ``<workspace>/.task_outputs/tool-results``.
+    """Where persisted *tool results* go: ``<workspace>/.ngy-agent/.task_outputs/tool-results``.
 
     Inside the workspace on purpose (ADR 0012): a session keeps the absolute path of
     every result it moved out of the context, so the files must still be there when a
@@ -116,11 +123,13 @@ def workspace_result_directory(base_dir: Optional[str] = None) -> Path:
     Not created here - deciding where output would go must not leave a folder
     behind. Writers call :func:`ensure_dir` (or :func:`persist_text`).
     """
-    return _workspace_directory(base_dir, RESULT_DIR_NAME, RESULT_SUBDIR_NAME)
+    return _workspace_directory(
+        base_dir, WORKSPACE_DATA_DIRNAME, RESULT_DIR_NAME, RESULT_SUBDIR_NAME
+    )
 
 
 def workspace_transcript_directory(base_dir: Optional[str] = None) -> Path:
-    """Where archived conversations go: ``<workspace>/.transcripts``.
+    """Where archived conversations go: ``<workspace>/.ngy-agent/.transcripts``.
 
     The same reasoning as :func:`workspace_result_directory` (ADR 0015): the archive
     marker keeps an absolute path, and the message it replaced is gone from the
@@ -128,7 +137,7 @@ def workspace_transcript_directory(base_dir: Optional[str] = None) -> Path:
 
     Not created here; writers call :func:`ensure_result_directory`.
     """
-    return _workspace_directory(base_dir, TRANSCRIPT_DIR_NAME)
+    return _workspace_directory(base_dir, WORKSPACE_DATA_DIRNAME, TRANSCRIPT_DIR_NAME)
 
 
 def _workspace_directory(base_dir: Optional[str], *parts: str) -> Path:

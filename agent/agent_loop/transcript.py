@@ -38,7 +38,7 @@ def write_transcript(
     messages: List[Dict[str, Any]],
     base_dir: Optional[str] = None,
 ) -> Path:
-    """Write ``messages`` to a new ``.transcripts/transcript-<stamp>-<hex>.jsonl``.
+    """Write ``messages`` to a new ``.ngy-agent/.transcripts/transcript-<stamp>-<hex>.jsonl``.
 
     A new file per call, never an overwrite: the previous marker in the conversation
     still points at the previous file, and replacing it would delete the evidence that

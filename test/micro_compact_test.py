@@ -179,7 +179,7 @@ class MicroCompactTest(unittest.TestCase):
         return apply_micro_compact(messages, seen, target, **kwargs)
 
     def result_dir(self) -> Path:
-        return self.workspace / ".task_outputs" / "tool-results"
+        return self.workspace / ".ngy-agent" / ".task_outputs" / "tool-results"
 
     def test_the_oldest_consumed_results_become_paths(self):
         sizes = [5000] * 6
@@ -352,7 +352,7 @@ class PrepareContextTest(unittest.TestCase):
 
         self.assertEqual(messages, before)
         self.assertEqual(summary["micro"]["replaced"], [])
-        self.assertFalse((self.workspace / ".task_outputs").exists())
+        self.assertFalse((self.workspace / ".ngy-agent").exists())
 
     def test_micro_runs_before_fit(self):
         messages = _results([5000] * 4)
@@ -421,7 +421,7 @@ class ResultDirectoryIsReadOnlyTest(unittest.TestCase):
             base_dir=str(self.workspace),
         )
         registry = ToolRegistry(enabled_tools=[], base_dir=str(self.workspace))
-        target = ".task_outputs/tool-results/c0.txt"
+        target = ".ngy-agent/.task_outputs/tool-results/c0.txt"
 
         resolved, _ = file_access.resolve_read_path(
             target, base_dir=str(self.workspace), extra_read_roots=registry.read_only_roots
@@ -543,7 +543,9 @@ class LoopWiringTest(unittest.TestCase):
             and str(message.get("content", "")).startswith("[Earlier tool result saved at ")
         ]
         self.assertTrue(shortcuts, "no tool result was ever shortened")
-        files = list((self.workspace / ".task_outputs" / "tool-results").glob("*.txt"))
+        files = list(
+            (self.workspace / ".ngy-agent" / ".task_outputs" / "tool-results").glob("*.txt")
+        )
         self.assertTrue(files)
 
 

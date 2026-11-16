@@ -133,7 +133,7 @@ class _Base(unittest.TestCase):
         self._tmp.cleanup()
 
     def transcript_dir(self) -> Path:
-        return self.workspace / ".transcripts"
+        return self.workspace / ".ngy-agent" / ".transcripts"
 
     def compact(self, messages, **kwargs):
         kwargs.setdefault("provider", self.provider)
@@ -513,7 +513,9 @@ class LoopWiringTest(unittest.TestCase):
             and str(message.get("content", "")).startswith("[Compacted:")
         ]
         self.assertTrue(compacted, "the summary marker never reached a request")
-        transcripts = list((self.workspace / ".transcripts").glob("*.jsonl"))
+        transcripts = list(
+            (self.workspace / ".ngy-agent" / ".transcripts").glob("*.jsonl")
+        )
         self.assertEqual(len(transcripts), 1)
 
 

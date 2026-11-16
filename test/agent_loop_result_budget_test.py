@@ -6,8 +6,9 @@ Run from the repository root::
 
 The budget runs right after a ReAct step's tool calls, on the messages that step
 appended. Anything above the large-result limit is written to
-``<workspace>/.task_outputs/tool-results/<tool_call_id>.txt`` and replaced by a
-path plus a preview, so the model can read it back instead of carrying it.
+``<workspace>/.ngy-agent/.task_outputs/tool-results/<tool_call_id>.txt`` and
+replaced by a path plus a preview, so the model can read it back instead of carrying
+it.
 """
 
 import os
@@ -66,7 +67,9 @@ class ResultBudgetTest(unittest.TestCase):
         return result_budget.apply_result_budget(messages, batch_start, **kwargs)
 
     def result_path(self, call_id: str) -> Path:
-        return self.workspace / ".task_outputs" / "tool-results" / f"{call_id}.txt"
+        return (
+            self.workspace / ".ngy-agent" / ".task_outputs" / "tool-results" / f"{call_id}.txt"
+        )
 
     def test_results_within_budget_are_left_alone(self):
         messages = [_tool_message("call-a", "a" * 1000), _tool_message("call-b", "b" * 2000)]
@@ -172,7 +175,9 @@ class ResultBudgetTest(unittest.TestCase):
 
         self.run_budget(messages)
 
-        ignore = self.workspace / ".task_outputs" / "tool-results" / ".gitignore"
+        ignore = (
+            self.workspace / ".ngy-agent" / ".task_outputs" / "tool-results" / ".gitignore"
+        )
         self.assertEqual(ignore.read_text(encoding="utf-8"), "*\n")
 
     def test_a_failed_write_keeps_the_full_result(self):
@@ -206,7 +211,9 @@ class ResultBudgetTest(unittest.TestCase):
         with patch.dict(os.environ, {"DEFAULT_WORKSPACE_DIR": str(default_root)}):
             self.run_budget(messages, base_dir=None)
 
-        expected = default_root / ".task_outputs" / "tool-results" / "call-unbound.txt"
+        expected = (
+            default_root / ".ngy-agent" / ".task_outputs" / "tool-results" / "call-unbound.txt"
+        )
         self.assertTrue(expected.exists())
         self.assertIn(expected.as_posix(), messages[0]["content"])
 
@@ -244,7 +251,7 @@ class ResultDirectoryIsReadOnlyTest(unittest.TestCase):
 
     def test_the_file_tools_can_read_but_not_rewrite_persisted_results(self):
         registry = ToolRegistry(enabled_tools=[], base_dir=str(self.workspace))
-        target = ".task_outputs/tool-results/call-a.txt"
+        target = ".ngy-agent/.task_outputs/tool-results/call-a.txt"
 
         resolved, _ = file_access.resolve_read_path(
             target, base_dir=str(self.workspace), extra_read_roots=registry.read_only_roots
@@ -281,14 +288,18 @@ class PersistedResultReadBackTest(unittest.TestCase):
 
         result_budget.apply_result_budget(messages, 0, base_dir=str(self.workspace))
 
-        stored = self.workspace / ".task_outputs" / "tool-results" / "call-read.txt"
+        stored = (
+            self.workspace / ".ngy-agent" / ".task_outputs" / "tool-results" / "call-read.txt"
+        )
         self.assertTrue(stored.exists())
         read_file = make_read_file_tool(
             base_dir=str(self.workspace), extra_read_roots=registry.read_only_roots
         )
         payload = read_file(file_path=stored.as_posix(), encoding="utf-8", limit=3)
 
-        self.assertEqual(payload["path"], ".task_outputs/tool-results/call-read.txt")
+        self.assertEqual(
+            payload["path"], ".ngy-agent/.task_outputs/tool-results/call-read.txt"
+        )
         self.assertTrue(payload["token_budget"]["ok"])
         self.assertTrue(payload["truncated"])
         self.assertTrue(payload["content"].startswith("1\tline 0"))
@@ -385,12 +396,10 @@ class LoopWiringTest(unittest.TestCase):
         self.assertEqual(len(tool_messages), 1)
         self.assertIn("<persisted-output>", tool_messages[0]["content"])
         self.assertNotIn("L" * 2001, tool_messages[0]["content"])
-        self.assertEqual(
-            (self.workspace / ".task_outputs" / "tool-results" / "call-loop.txt").read_text(
-                encoding="utf-8"
-            ),
-            registry.result,
+        stored = (
+            self.workspace / ".ngy-agent" / ".task_outputs" / "tool-results" / "call-loop.txt"
         )
+        self.assertEqual(stored.read_text(encoding="utf-8"), registry.result)
 
 
 if __name__ == "__main__":

@@ -4,8 +4,8 @@ The first three steps are deterministic text surgery; this is the one that spend
 model call, so it runs last and only when the cheaper steps could not bring the
 conversation back under the limit:
 
-1. archive the **whole** conversation to ``.transcripts/`` (the only copy of what this
-   step is about to delete);
+1. archive the **whole** conversation to ``.ngy-agent/.transcripts/`` (the only copy of
+   what this step is about to delete);
 2. ask the model for a factual state summary of the messages that will disappear;
 3. replace those messages with one ``[Compacted]`` marker, keeping the most recent
    messages verbatim because they are the work in progress.
