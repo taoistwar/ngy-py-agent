@@ -13,6 +13,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from agent.agents_md import MAX_BYTES_LIMIT as AGENTS_MD_MAX_BYTES_LIMIT
+from agent.agents_md import MIN_MAX_BYTES as AGENTS_MD_MIN_BYTES
 from agent.modes import DEFAULT_MODE
 
 # One cap for the global setting and the per-task override. The ReAct loop is linear in
@@ -169,6 +171,27 @@ class MaxStepsConfigResponse(BaseModel):
     """Global ReAct max steps config response."""
 
     max_steps: int
+    source: str
+
+
+class AgentsMdConfigRequest(BaseModel):
+    """Global AGENTS.md instruction config request."""
+
+    enabled: bool = Field(
+        description="Read the workspace's AGENTS.md files into the system prompt."
+    )
+    max_bytes: int = Field(
+        ge=AGENTS_MD_MIN_BYTES,
+        le=AGENTS_MD_MAX_BYTES_LIMIT,
+        description="Byte cap for one AGENTS.md file; the rest is truncated.",
+    )
+
+
+class AgentsMdConfigResponse(BaseModel):
+    """Global AGENTS.md instruction config response."""
+
+    enabled: bool
+    max_bytes: int
     source: str
 
 

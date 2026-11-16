@@ -2,7 +2,7 @@
 
 - 状态：已接受（Accepted）
 - 日期：2026-11-16
-- 相关：`agent/agents_md.py`、`agent/agent_loop/loop.py`、`test/agents_md_test.py`、`test/agent_loop_agents_md_test.py`
+- 相关：`agent/agents_md.py`、`agent/agent_loop/loop.py`、`admin_api.py`、`task_runtime.py`、`app_state.py`、`task_store.py`、`web-admin/src/components/admin/SettingsPanels.jsx`、`test/agents_md_test.py`、`test/agents_md_config_test.py`、`test/agent_loop_agents_md_test.py`
 - 前置：[ADR 0007](0007-default-workspace.md)（未绑定会话的基目录）
 
 ## 背景
@@ -63,9 +63,13 @@
 
 只记文件名、字符数、是否截断、嵌套索引，**不记正文**（正文已经在那条 `initial_messages` 快照里）。一条"这次任务的规则来自哪里"的记录，是把"模型为什么这么做"从猜测变成核对的最小代价。
 
-### D9. 开关：`AGENTS_MD_ENABLED=0`
+### D9. 开关与上限：全局配置（数据库优先，环境变量兜底）
 
-不进管理页。理由同压缩链路的阈值（ADR 0015 D4）：它是提示词形状的参数，不是运维每天要调的旋钮。
+初版只有环境变量（`AGENTS_MD_ENABLED` / `AGENTS_MD_MAX_BYTES`），理由是"提示词形状的参数不该进管理页"。这个理由不成立：这两个值决定的是**项目规则进不进上下文**，用户改完工作区的 `AGENTS.md` 想立刻生效时，让人去改 `.env` 再重启，是把配置问题变成运维问题。
+
+现在它们是一项全局配置：Web Admin「全局配置 → AGENTS.md 项目指令」写入 `settings` 表的 `agents_md_config`，启动时 `admin_api.load_startup_config` 解析进 `app_state`，任务在 `task_runtime.resolve_agents_md_settings()` 读取并交给循环——**下一次任务生效，不需要重启**。环境变量降级为默认值。允许范围 1024–1048576 字节：请求超界由 API 拒绝（422），库里已有的超界值在加载时夹紧。
+
+两个字段存在**一行 JSON** 而不是两个键，是为了让"当前来源"只有一个答案：两个键就可能一半来自数据库、一半来自环境变量，而面板只能显示一个来源。
 
 ## 后果
 
@@ -74,6 +78,7 @@
 - 未绑定工作区的会话读不到 `AGENTS.md`，哪怕进程的 cwd 里有——本仓库自己那份就是例子。要规则就绑工作区。
 - 文件里的规则高于 agent 的默认提示词，因此一个写着"提交前必须跑测试"的 `AGENTS.md` 会让 `ask` 模式也去跑命令。这是有意的取舍：项目规则是用户自己写的，模式指令是我们写的；冲突时按上下文判断比按固定优先级硬裁更合理。ADR 不再加一层仲裁。
 - 依赖树里伪造的 `AGENTS.md` 不会被扫描到，但模型仍可以用 `read_file` 读到它——扫描只决定"自动进入提示词的内容"，不构成访问控制。
+- 改开关或上限不需要重启：API 写库并更新 `app_state`，**下一次任务**读新值；已经在跑的任务沿用启动时读到的设置。
 
 ## 备选方案（未采用）
 
@@ -82,4 +87,5 @@
 - **按最近编辑的文件动态注入**：最贴近"最近者优先"，但要在工具结果之后插入一条新的 system/user 消息，Anthropic 侧还要处理与 `tool_result` 的配对，改动面与收益不成比例。留作后续。
 - **启动时缓存内容**：`AGENTS.md` 通常稳定，但单次读取只有几十 KB，缓存换来的是"改文件不生效"的困惑。
 - **只认根目录一份**：monorepo 是规范明确支持的主场景（D2、D5）。
+- **只留环境变量、不进管理页**（本 ADR 初版）：改一次要改 `.env` 并重启，D9 已改为全局配置。
 - **把规则做成工具返回值**（例如一个 `read_agents_md` 工具）：模型必须先想到调用它，而"不知道有规则"正是当前的问题。

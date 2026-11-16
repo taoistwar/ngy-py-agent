@@ -466,4 +466,18 @@ export async function updateMaxStepsConfig(maxSteps) {
   })
 }
 
+export async function fetchAgentsMdConfig() {
+  return requestJson(`${API_BASE}/api/admin/agents-md`)
+}
+
+export async function updateAgentsMdConfig(enabled, maxBytes) {
+  return requestJson(`${API_BASE}/api/admin/agents-md`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ enabled, max_bytes: maxBytes }),
+  })
+}
+
 

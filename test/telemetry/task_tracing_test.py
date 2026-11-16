@@ -46,6 +46,8 @@ def _fake_app_state(store):
     return SimpleNamespace(
         monitor_store=store,
         agent_max_steps=8,
+        agents_md_enabled=True,
+        agents_md_max_bytes=32768,
         permission_mode="auto_approve",
         status_for_event=lambda category: None,
         permission_rule_store=None,

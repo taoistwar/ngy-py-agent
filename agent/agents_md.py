@@ -39,6 +39,10 @@ MAX_BYTES_ENV = "AGENTS_MD_MAX_BYTES"
 # Same ceiling Codex uses for its project document: large enough for real instructions,
 # small enough that a runaway file cannot eat the context on its own.
 DEFAULT_MAX_BYTES = 32 * 1024
+# The range the admin API accepts for the byte cap: below 1 KiB nothing useful fits,
+# above 1 MiB the cap is no longer protecting the context.
+MIN_MAX_BYTES = 1024
+MAX_BYTES_LIMIT = 1024 * 1024
 
 # How deep to look for nested files, and how many of them to name. A monorepo can hold
 # dozens (OpenAI's own repository had 88 at one point); the list is an index, not the
@@ -60,6 +64,18 @@ SKIPPED_DIRS = frozenset(
         "vendor",
     }
 )
+
+
+@dataclass(frozen=True)
+class AgentsMdSettings:
+    """How much of the workspace's instructions to read.
+
+    The web layer resolves these from env + database and hands the result to the loop;
+    passing ``None`` anywhere means "ask the environment" (:func:`settings_from_env`).
+    """
+
+    enabled: bool = True
+    max_bytes: int = DEFAULT_MAX_BYTES
 
 
 @dataclass(frozen=True)
@@ -112,7 +128,15 @@ def max_bytes() -> int:
     return value if value > 0 else DEFAULT_MAX_BYTES
 
 
-def load_instructions(base_dir: Optional[str]) -> Optional[AgentsMdInstructions]:
+def settings_from_env() -> AgentsMdSettings:
+    """The environment's defaults; the admin API layers database values on top."""
+    return AgentsMdSettings(enabled=enabled(), max_bytes=max_bytes())
+
+
+def load_instructions(
+    base_dir: Optional[str],
+    settings: Optional[AgentsMdSettings] = None,
+) -> Optional[AgentsMdInstructions]:
     """Read the workspace's instruction files, or ``None`` when there are none.
 
     Only a bound workspace is read: an unbound session has no project to speak for, and
@@ -120,7 +144,8 @@ def load_instructions(base_dir: Optional[str]) -> Optional[AgentsMdInstructions]
     treated as absent rather than as an error - a broken ``AGENTS.md`` must not stop a
     task from running.
     """
-    if not enabled():
+    settings = settings or settings_from_env()
+    if not settings.enabled:
         return None
     text = (base_dir or "").strip()
     if not text:
@@ -133,7 +158,7 @@ def load_instructions(base_dir: Optional[str]) -> Optional[AgentsMdInstructions]
     except OSError:
         return None
 
-    limit = max_bytes()
+    limit = settings.max_bytes
     document = _load_root(root, limit)
     nested, skipped = _nested_paths(root)
     if document is None and not nested:
@@ -146,13 +171,17 @@ def append_project_instructions(prompt: str, instructions: AgentsMdInstructions)
     return f"{prompt}\n\n{format_instructions(instructions)}"
 
 
-def with_agents_md(prompt: str, base_dir: Optional[str]) -> str:
+def with_agents_md(
+    prompt: str,
+    base_dir: Optional[str],
+    settings: Optional[AgentsMdSettings] = None,
+) -> str:
     """``prompt`` plus this workspace's instruction block, when it has one.
 
     The one-call form, for a caller that owns its prompt. The loop composes the two
     steps itself because it also logs which files were loaded.
     """
-    instructions = load_instructions(base_dir)
+    instructions = load_instructions(base_dir, settings)
     if instructions is None:
         return prompt
     return append_project_instructions(prompt, instructions)

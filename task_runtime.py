@@ -19,6 +19,7 @@ from typing import Any, Callable, Optional
 
 import app_state
 from agent.agent_loop import DEFAULT_MAX_STEPS, run_react_loop
+from agent.agents_md import AgentsMdSettings
 from agent.checkpoints import CheckpointStore
 from agent.models import EventCategory, EventSink, TaskEvent, TaskStatus
 from agent.provider import ProviderConfig, build_provider, canonicalize_provider
@@ -128,6 +129,14 @@ def resolve_permission_mode(request: RunTaskRequest) -> PermissionMode:
     if request.permission_mode:
         return normalize_mode(request.permission_mode)
     return app_state.permission_mode
+
+
+def resolve_agents_md_settings() -> AgentsMdSettings:
+    """AGENTS.md reading rules for one task: on/off and byte cap, already resolved."""
+    return AgentsMdSettings(
+        enabled=app_state.agents_md_enabled,
+        max_bytes=app_state.agents_md_max_bytes,
+    )
 
 
 def resolve_session_base_dir(session_id: str | None) -> str | None:
@@ -543,6 +552,7 @@ def _execute_task(
             mode=request.mode,
             base_dir=base_dir,
             agent_config=agent_config,
+            agents_md_settings=resolve_agents_md_settings(),
             should_stop=stop_event.is_set if stop_event is not None else None,
             permission_broker=permission_broker,
             user_question_broker=question_broker,

@@ -27,6 +27,8 @@ import {
   fetchRetentionConfig,
   fetchMaxStepsConfig,
   updateMaxStepsConfig,
+  fetchAgentsMdConfig,
+  updateAgentsMdConfig,
   fetchPermissionModeConfig,
   updatePermissionModeConfig,
   fetchPermissionRules,
@@ -76,6 +78,7 @@ import ModelManager from "./components/admin/ModelManager"
 import PermissionRulesManager from "./components/admin/PermissionRulesManager"
 import ProviderManager from "./components/admin/ProviderManager"
 import {
+  AgentsMdManager,
   MaxStepsManager,
   PermissionModeManager,
   RetentionManager,
@@ -899,6 +902,7 @@ export default function App() {
   const [error, setError] = useState("")
   const [retentionConfig, setRetentionConfig] = useState(null)
   const [maxStepsConfig, setMaxStepsConfig] = useState(null)
+  const [agentsMdConfig, setAgentsMdConfig] = useState(null)
   const [permissionModeConfig, setPermissionModeConfig] = useState(null)
   const [permissionRules, setPermissionRules] = useState(null)
   const [health, setHealth] = useState("unknown")
@@ -1908,6 +1912,24 @@ export default function App() {
     [translate]
   )
 
+  const refreshAgentsMd = useCallback(async () => {
+    const config = await fetchAgentsMdConfig()
+    setAgentsMdConfig(config)
+    return config
+  }, [])
+
+  const updateAgentsMd = useCallback(
+    async (enabledValue, maxBytesValue) => {
+      try {
+        const config = await updateAgentsMdConfig(enabledValue, maxBytesValue)
+        setAgentsMdConfig(config)
+      } catch (agentsMdError) {
+        setError(agentsMdError?.message || translate("errorUnknown"))
+      }
+    },
+    [translate]
+  )
+
   const refreshPermissionMode = useCallback(async () => {
     const config = await fetchPermissionModeConfig()
     setPermissionModeConfig(config)
@@ -2029,6 +2051,9 @@ export default function App() {
     refreshMaxSteps().catch((maxStepsError) =>
       setError(maxStepsError?.message || translate("errorLoadFailed"))
     )
+    refreshAgentsMd().catch((agentsMdError) =>
+      setError(agentsMdError?.message || translate("errorLoadFailed"))
+    )
     refreshPermissionMode().catch((permissionError) =>
       setError(permissionError?.message || translate("errorLoadFailed"))
     )
@@ -2084,6 +2109,7 @@ export default function App() {
       }
       if (activeMenu === "config") {
         refreshMaxSteps().catch(() => {})
+        refreshAgentsMd().catch(() => {})
         refreshPermissionMode().catch(() => {})
       }
       if (activeMenu === "permissions") {
@@ -2409,6 +2435,16 @@ export default function App() {
               maxStepsConfig={maxStepsConfig}
               onSave={updateMaxSteps}
               onRefresh={refreshMaxSteps}
+              translate={translate}
+            />
+            <AgentsMdManager
+              agentsMdConfig={agentsMdConfig}
+              onSave={updateAgentsMd}
+              onRefresh={() =>
+                refreshAgentsMd().catch((refreshError) =>
+                  setError(refreshError?.message || translate("errorLoadFailed"))
+                )
+              }
               translate={translate}
             />
             <PermissionModeManager

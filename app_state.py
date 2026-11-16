@@ -17,6 +17,7 @@ from typing import Any, Dict, Optional
 
 import task_store
 from agent.agent_loop import DEFAULT_MAX_STEPS
+from agent.agents_md import DEFAULT_MAX_BYTES as AGENTS_MD_DEFAULT_MAX_BYTES
 from agent.models import EventCategory, TaskStatus
 from agent.tools.permission_rules import PermissionRuleStore
 from agent.tools.permissions import PermissionBroker, PermissionMode
@@ -41,6 +42,11 @@ agent_max_steps: int = DEFAULT_MAX_STEPS
 agent_max_steps_source: str = "env"
 permission_mode: PermissionMode = PermissionMode.ASK
 permission_mode_source: str = "env"
+# AGENTS.md instructions (ADR 0022): read the workspace's files, and how many bytes of
+# one file may enter the system prompt. Both are one setting, so they share a source.
+agents_md_enabled: bool = True
+agents_md_max_bytes: int = AGENTS_MD_DEFAULT_MAX_BYTES
+agents_md_source: str = "env"
 
 # Requests-per-minute budgets are not stored here: they belong to the provider endpoint
 # records in the database and are pushed to ``agent.rate_limit.provider_throttle`` on

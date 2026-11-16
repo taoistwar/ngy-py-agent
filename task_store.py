@@ -651,6 +651,35 @@ class _SqliteTaskStore:
             )
         self._conn.commit()
 
+    def get_agents_md_config(self) -> dict[str, Any] | None:
+        row = self._conn.execute(
+            "SELECT value FROM settings WHERE key = ?",
+            ("agents_md_config",),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            payload = json.loads(row["value"])
+        except (TypeError, ValueError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def set_agents_md_config(self, enabled: bool, max_bytes: int) -> None:
+        # One row for both fields: "where did this setting come from" then has exactly
+        # one answer, which a pair of rows would not (ADR 0022 D9).
+        payload = json.dumps({"enabled": bool(enabled), "max_bytes": int(max_bytes)})
+        now = datetime.now(UTC).isoformat()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """,
+                ("agents_md_config", payload, now),
+            )
+        self._conn.commit()
+
     def get_permission_mode(self) -> str | None:
         row = self._conn.execute(
             "SELECT value FROM settings WHERE key = ?",

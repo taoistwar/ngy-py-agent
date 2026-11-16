@@ -16,7 +16,12 @@ from agent.agent_loop.runtime import (
 )
 from agent.agent_loop.snip_compact import apply_snip_compact
 from agent.agent_loop.steps import run_tool
-from agent.agents_md import AgentsMdInstructions, append_project_instructions, load_instructions
+from agent.agents_md import (
+    AgentsMdInstructions,
+    AgentsMdSettings,
+    append_project_instructions,
+    load_instructions,
+)
 from agent.models import (
     EventCategory,
     EventSink,
@@ -63,6 +68,9 @@ def run_react_loop(
     mode: str = "build",
     base_dir: Optional[str] = None,
     agent_config: Optional[Dict[str, Any]] = None,
+    # Global AGENTS.md rules (on/off and byte cap), resolved by the web layer from
+    # env + database. ``None`` means "ask the environment" (ADR 0022).
+    agents_md_settings: Optional[AgentsMdSettings] = None,
     should_stop: Optional[Callable[[], bool]] = None,
     permission_broker: Optional[PermissionBroker] = None,
     user_question_broker: Optional[UserQuestionBroker] = None,
@@ -116,7 +124,7 @@ def run_react_loop(
         system_prompt = _with_base_dir(system_prompt, base_dir)
         # The workspace's own rules (https://agents.md/), after the generic ones: a
         # project's build/test commands outrank an agent's defaults.
-        instructions = load_instructions(base_dir)
+        instructions = load_instructions(base_dir, agents_md_settings)
         if instructions is not None:
             system_prompt = append_project_instructions(system_prompt, instructions)
         messages = [

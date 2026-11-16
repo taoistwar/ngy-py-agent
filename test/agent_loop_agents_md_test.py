@@ -22,6 +22,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from agent.agent_loop import run_react_loop  # noqa: E402
+from agent.agents_md import AgentsMdSettings  # noqa: E402
 
 
 class _Registry:
@@ -88,6 +89,19 @@ class AgentLoopAgentsMdTest(unittest.TestCase):
         self.run_loop(provider, user_query="do something", base_dir=str(self.workspace))
 
         self.assertNotIn("AGENTS.md", provider.requests[0][0]["content"])
+
+    def test_the_global_setting_can_turn_the_block_off(self):
+        self.write_agents_md("Always run `uv run pytest`.")
+        provider = _FakeProvider()
+
+        self.run_loop(
+            provider,
+            user_query="do something",
+            base_dir=str(self.workspace),
+            agents_md_settings=AgentsMdSettings(enabled=False),
+        )
+
+        self.assertNotIn("Always run `uv run pytest`.", provider.requests[0][0]["content"])
 
     def test_an_unbound_run_ignores_the_current_directory(self):
         # No workspace: the process merely sits in this repository, whose own AGENTS.md

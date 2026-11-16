@@ -253,13 +253,20 @@ MCP 市场维护可复用的 MCP 服务预设（传输方式 + 命令/URL），�
 
 工作空间根目录下的 `AGENTS.md`（[agents.md](https://agents.md/) 格式：纯 Markdown、无 schema、无必填字段）会在该工作区的任务里自动进入系统提示词，不用每次在问题里重复交代构建与测试命令：
 
-- 根目录的 `AGENTS.md` **全文注入**，默认上限 32 KiB（`AGENTS_MD_MAX_BYTES` 可调）；超出部分截断，并提示模型用 `read_file` 读原文。
+- 根目录的 `AGENTS.md` **全文注入**，默认上限 32 KiB；上限与开关在 Web Admin「全局配置 → AGENTS.md 项目指令」里改（数据库优先，`AGENTS_MD_MAX_BYTES` / `AGENTS_MD_ENABLED` 只提供默认值，范围 1024–1048576 字节），下一次任务生效。超出部分截断，并提示模型用 `read_file` 读原文。
 - 子目录里的 `AGENTS.md`（monorepo 每个包一份）只列成**索引**，并说明"改到那个目录前先读它，最近的那份优先"。不在索引里的用 `glob`（`**/AGENTS.md`）找。
 - 旧名 `AGENT.md` 仍可读；同一目录同时存在两份时只用 `AGENTS.md`。
 - 扫描到第三层为止，跳过 `.git`、`.venv`、`node_modules`、`venv`、`dist`、`build`、`target`、`vendor`、`__pycache__`；索引最多列 20 个。
 - 优先级：用户在对话里的要求 > `AGENTS.md` > 智能体/模式的默认提示词。
-- 未绑定工作区的会话不读（它没有"项目"）；`AGENTS_MD_ENABLED=0` 全局关闭。
+- 未绑定工作区的会话不读（它没有"项目"）；全局开关关闭时一律不读。
 - 每次读到文件，任务日志里会有一条 `Loaded AGENTS.md` 事件：文件名、字符数、是否截断、嵌套索引，不含正文。
+
+配置接口（「全局配置」页用的就是这两个）：
+
+- `GET /api/admin/agents-md`：读取当前配置，返回 `{enabled, max_bytes, source}`，`source` 为 `env` 或 `database`。
+- `PUT /api/admin/agents-md`：设置开关与上限，下一次任务生效。
+  - 请求体：`{"enabled": true, "max_bytes": 32768}`
+  - `max_bytes` 允许 1024–1048576，超界返回 422。
 
 本仓库自己那份 `AGENTS.md` 是写给维护者的开发约定，不会成为运行时规则；只有绑定成工作区的目录才会被读取。取舍与已知限制见 [ADR 0022](decisions/0022-agents-md.md)。
 

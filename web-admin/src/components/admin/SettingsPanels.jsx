@@ -66,6 +66,93 @@ export function MaxStepsManager({ maxStepsConfig, onSave, onRefresh, translate }
   )
 }
 
+// Mirrors MIN_MAX_BYTES / MAX_BYTES_LIMIT in agent/agents_md.py so the field never
+// offers a value the API would reject.
+const AGENTS_MD_MIN_BYTES = 1024
+const AGENTS_MD_MAX_BYTES_LIMIT = 1024 * 1024
+
+export function AgentsMdManager({ agentsMdConfig, onSave, onRefresh, translate }) {
+  const [enabled, setEnabled] = useState(true)
+  const [maxBytes, setMaxBytes] = useState("")
+  const [busy, setBusy] = useState(false)
+  const currentEnabled = Boolean(agentsMdConfig?.enabled)
+  const currentBytes = agentsMdConfig ? String(agentsMdConfig.max_bytes ?? "") : ""
+  // Both fields are one setting, so either change means "save again".
+  const changed =
+    Boolean(agentsMdConfig) && (enabled !== currentEnabled || maxBytes !== currentBytes)
+
+  useEffect(() => {
+    if (!agentsMdConfig) return
+    setEnabled(Boolean(agentsMdConfig.enabled))
+    setMaxBytes(String(agentsMdConfig.max_bytes ?? AGENTS_MD_MIN_BYTES))
+  }, [agentsMdConfig])
+
+  const submit = async (event) => {
+    event.preventDefault()
+    const parsed = Number(maxBytes)
+    if (!Number.isFinite(parsed)) return
+    setBusy(true)
+    try {
+      await onSave(
+        enabled,
+        Math.max(AGENTS_MD_MIN_BYTES, Math.min(parsed, AGENTS_MD_MAX_BYTES_LIMIT)),
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="panel-titlebar">
+        <div>
+          <h2>{translate("agentsMdTitle")}</h2>
+          <span className="hint">
+            {translate("agentsMdCurrentSource")}:{" "}
+            {agentsMdConfig?.source === "database"
+              ? translate("agentsMdSourceDb")
+              : translate("agentsMdSourceEnv")}
+          </span>
+        </div>
+        <button type="button" className="btn btn-compact" onClick={onRefresh}>
+          {translate("sidebarQuickRefreshAgentsMd")}
+        </button>
+      </div>
+      <div className="panel-body">
+        <form className="form-grid" onSubmit={submit}>
+          <label>
+            <span>{translate("agentsMdEnabled")}</span>
+            <select
+              value={enabled ? "on" : "off"}
+              disabled={!agentsMdConfig}
+              onChange={(event) => setEnabled(event.target.value === "on")}
+            >
+              <option value="on">{translate("agentsMdEnabledOn")}</option>
+              <option value="off">{translate("agentsMdEnabledOff")}</option>
+            </select>
+          </label>
+          <label>
+            <span>{translate("agentsMdMaxBytes")}</span>
+            <input
+              type="number"
+              min={AGENTS_MD_MIN_BYTES}
+              max={AGENTS_MD_MAX_BYTES_LIMIT}
+              step="1024"
+              value={maxBytes}
+              disabled={!agentsMdConfig}
+              onChange={(event) => setMaxBytes(event.target.value)}
+            />
+          </label>
+          <button type="submit" className="btn btn-primary" disabled={busy || !changed}>
+            {busy ? translate("agentsMdSaving") : translate("agentsMdSave")}
+          </button>
+        </form>
+        <div className="hint">{translate("agentsMdHint")}</div>
+      </div>
+    </section>
+  )
+}
+
 export function PermissionModeManager({ permissionModeConfig, onSave, onRefresh, translate }) {
   const [mode, setMode] = useState("")
   const [busy, setBusy] = useState(false)

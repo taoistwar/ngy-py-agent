@@ -1,4 +1,4 @@
-"""Admin configuration: retention, step limit, permission mode and permission rules.
+"""Admin configuration: retention, step limit, AGENTS.md, permission mode and rules.
 
 Two things live here that are not routes: the startup loaders that resolve env + database
 into :mod:`app_state`, and the retention purge the task routes also call. Both belong to
@@ -19,9 +19,14 @@ from fastapi import APIRouter, HTTPException, Query
 import app_state
 import llm_api
 from agent.agent_loop import DEFAULT_MAX_STEPS
+from agent.agents_md import MAX_BYTES_LIMIT as AGENTS_MD_MAX_BYTES_LIMIT
+from agent.agents_md import MIN_MAX_BYTES as AGENTS_MD_MIN_BYTES
+from agent.agents_md import AgentsMdSettings, settings_from_env
 from agent.tools.permissions import PermissionMode, normalize_mode
 from api_schemas import (
     MAX_STEPS_LIMIT,
+    AgentsMdConfigRequest,
+    AgentsMdConfigResponse,
     MaxStepsConfigRequest,
     MaxStepsConfigResponse,
     PermissionModeConfigRequest,
@@ -67,6 +72,31 @@ def _load_agent_max_steps_config() -> tuple[int, str]:
     return _clamp_max_steps(db_steps), "database"
 
 
+def _clamp_agents_md_bytes(value: int) -> int:
+    """Keep the byte cap inside the range the API advertises."""
+    return max(AGENTS_MD_MIN_BYTES, min(int(value), AGENTS_MD_MAX_BYTES_LIMIT))
+
+
+def _load_agents_md_config() -> tuple[AgentsMdSettings, str]:
+    """AGENTS.md on/off and byte cap: environment defaults, database wins."""
+    env_settings = settings_from_env()
+    stored = app_state.monitor_store.get_agents_md_config()
+    if not stored:
+        return env_settings, "env"
+    raw_bytes = stored.get("max_bytes", env_settings.max_bytes)
+    try:
+        max_bytes = _clamp_agents_md_bytes(int(raw_bytes))
+    except (TypeError, ValueError):
+        max_bytes = env_settings.max_bytes
+    return (
+        AgentsMdSettings(
+            enabled=bool(stored.get("enabled", env_settings.enabled)),
+            max_bytes=max_bytes,
+        ),
+        "database",
+    )
+
+
 def _load_permission_mode_config() -> tuple[PermissionMode, str]:
     env_mode = normalize_mode(os.getenv("PERMISSION_MODE", PermissionMode.ASK.value))
     db_mode = app_state.monitor_store.get_permission_mode()
@@ -98,6 +128,10 @@ def load_startup_config() -> None:
     """Resolve env + database into the live state; called once before serving."""
     app_state.task_retention_days, app_state.task_retention_source = _load_task_retention_config()
     app_state.agent_max_steps, app_state.agent_max_steps_source = _load_agent_max_steps_config()
+    agents_md, agents_md_source = _load_agents_md_config()
+    app_state.agents_md_enabled = agents_md.enabled
+    app_state.agents_md_max_bytes = agents_md.max_bytes
+    app_state.agents_md_source = agents_md_source
     app_state.permission_mode, app_state.permission_mode_source = _load_permission_mode_config()
     # The limiter holds the policy itself: a task builds its provider per run, so
     # nothing else survives long enough to carry the budgets (ADR 0014).
@@ -153,6 +187,34 @@ async def set_max_steps_config(
     return MaxStepsConfigResponse(
         max_steps=app_state.agent_max_steps,
         source=app_state.agent_max_steps_source,
+    )
+
+
+# ------------------------------------------------------------------- agents md
+
+
+@router.get("/api/admin/agents-md", response_model=AgentsMdConfigResponse)
+async def get_agents_md_config() -> AgentsMdConfigResponse:
+    return AgentsMdConfigResponse(
+        enabled=app_state.agents_md_enabled,
+        max_bytes=app_state.agents_md_max_bytes,
+        source=app_state.agents_md_source,
+    )
+
+
+@router.put("/api/admin/agents-md", response_model=AgentsMdConfigResponse)
+async def set_agents_md_config(payload: AgentsMdConfigRequest) -> AgentsMdConfigResponse:
+    max_bytes = _clamp_agents_md_bytes(payload.max_bytes)
+    # Written and reported together: the panel edits one setting, and a task reads it
+    # from ``app_state`` on its next run rather than on its next restart.
+    app_state.monitor_store.set_agents_md_config(payload.enabled, max_bytes)
+    app_state.agents_md_enabled = payload.enabled
+    app_state.agents_md_max_bytes = max_bytes
+    app_state.agents_md_source = "database"
+    return AgentsMdConfigResponse(
+        enabled=app_state.agents_md_enabled,
+        max_bytes=app_state.agents_md_max_bytes,
+        source=app_state.agents_md_source,
     )
 
 
