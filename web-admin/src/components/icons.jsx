@@ -88,6 +88,18 @@ export function TrashIcon() {
   )
 }
 
+// Collapsed action menu trigger: three dots, the usual "more actions" affordance.
+// The dots are filled instead of stroked so they stay crisp at 14px.
+export function MoreIcon() {
+  return (
+    <Icon>
+      <circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none" />
+    </Icon>
+  )
+}
+
 export function ExternalLinkIcon() {
   return (
     <Icon>

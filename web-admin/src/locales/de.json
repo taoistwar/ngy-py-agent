@@ -117,6 +117,7 @@
   "taskRerun": "Aufgabe erneut starten",
   "taskFork": "In einer neuen Sitzung ab hier verzweigen",
   "taskRevert": "Änderungen dieser Aufgabe rückgängig machen",
+  "taskMoreActions": "Weitere Aktionen",
   "revertTitle": "Änderungen rückgängig machen",
   "revertHint": "Von dieser Aufgabe geänderte Dateien. Rückgängig machen setzt jede in den Zustand zurück, den sie vor der ersten Änderung hatte.",
   "revertLoading": "Geänderte Dateien werden geladen...",

@@ -117,6 +117,7 @@
   "taskRerun": "重新執行任務",
   "taskFork": "從此處建立新的分支工作階段",
   "taskRevert": "復原這個任務的改動",
+  "taskMoreActions": "更多操作",
   "revertTitle": "復原改動",
   "revertHint": "這裡列出該任務改過的檔案。復原會把每個檔案還原到該任務第一次改動之前的樣子。",
   "revertLoading": "正在讀取改動檔案...",

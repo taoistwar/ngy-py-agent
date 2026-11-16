@@ -117,6 +117,7 @@
   "taskRerun": "重新执行",
   "taskFork": "从此处创建新的分支会话",
   "taskRevert": "撤销这个任务的改动",
+  "taskMoreActions": "更多操作",
   "revertTitle": "撤销改动",
   "revertHint": "这里列出该任务改过的文件。撤销会把每个文件恢复到该任务第一次改动之前的样子。",
   "revertLoading": "正在读取改动文件...",
