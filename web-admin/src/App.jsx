@@ -273,6 +273,26 @@ function TaskList({
   translate,
 }) {
   const selectedCount = selectedTaskIds.size
+  const rowsRef = useRef(null)
+  const taskCount = tasks.length
+
+  // Tasks are listed oldest first, so a task created now lands at the bottom:
+  // follow the selection instead of leaving the scroll position on old rows.
+  useEffect(() => {
+    const container = rowsRef.current
+    if (!container || !selectedId) return
+    const activeRow = container.querySelector(".session-task-row.active")
+    if (!activeRow) return
+    const containerRect = container.getBoundingClientRect()
+    const rowRect = activeRow.getBoundingClientRect()
+    if (rowRect.top < containerRect.top) {
+      container.scrollTop -= containerRect.top - rowRect.top
+    } else if (rowRect.bottom > containerRect.bottom) {
+      container.scrollTop += rowRect.bottom - containerRect.bottom
+    }
+    // A poll refresh keeps the same ids, so only a different selection or a
+    // longer/shorter list may move the scroll and not every five-second tick.
+  }, [selectedId, taskCount])
 
   return (
     <section className="panel session-task-panel">
@@ -302,7 +322,7 @@ function TaskList({
           <div className="empty">{translate("taskNoTasks")}</div>
         ) : (
           <>
-            <div className="session-task-rows">
+            <div className="session-task-rows" ref={rowsRef}>
               {tasks.map((item) => (
                 <div
                   key={item.task_id}
