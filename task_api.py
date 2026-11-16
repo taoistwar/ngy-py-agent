@@ -46,6 +46,7 @@ from task_runtime import (
     resolve_session_base_dir,
     run_task,
 )
+from task_usage import task_usage_summary
 
 router = APIRouter()
 
@@ -364,6 +365,7 @@ async def get_task(task_id: str) -> TaskDetailResponse:
     if trace is None:
         raise HTTPException(status_code=404, detail="Task not found.")
     result = extract_task_result(trace.get("events"))
+    usage = task_usage_summary(trace)
     broker = app_state.get_task_permission_broker(task_id)
     pending = broker.pending() if broker is not None else None
     return TaskDetailResponse(
@@ -377,6 +379,10 @@ async def get_task(task_id: str) -> TaskDetailResponse:
         mode=trace.get("mode", DEFAULT_MODE),
         created_at=trace["created_at"],
         updated_at=trace["updated_at"],
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+        total_tokens=usage["total_tokens"],
+        duration_ms=usage["duration_ms"],
         result=result,
         pending_permission=pending.to_payload() if pending is not None else None,
         pending_question=app_state.pending_question(task_id),

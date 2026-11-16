@@ -107,6 +107,12 @@ class TaskDetailResponse(BaseModel):
     mode: str = DEFAULT_MODE
     created_at: datetime
     updated_at: datetime
+    # What the run cost, summed from the task's own ``llm_response`` events, and how
+    # long it took. The result pane prints them next to the answer.
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    duration_ms: int = 0
     result: str | None = None
     # Set while the task is blocked on a confirmation, so a client that (re)connects
     # late can still render the dialog without replaying the whole event stream.

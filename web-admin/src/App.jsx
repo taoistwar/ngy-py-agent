@@ -763,6 +763,14 @@ function TaskDetail({ task, result, agents, translate, onChangesReverted }) {
     return <div className="empty">{translate("taskSelectHint")}</div>
   }
 
+  // Tokens are settled once a turn has answered, so the backend's sum is final for a
+  // finished task. The clock is not: a running task appends nothing while the model
+  // thinks, so its stored ``updated_at`` would freeze mid-run - count from creation
+  // instead, which reads correctly on the parent's one-second poll.
+  const durationMs = isTaskRunningStatus(task.status)
+    ? Math.max(0, Date.now() - new Date(task.created_at).getTime())
+    : Number(task.duration_ms) || 0
+
   return (
     <div className="detail-grid">
       <section className="detail-section">
@@ -815,6 +823,12 @@ function TaskDetail({ task, result, agents, translate, onChangesReverted }) {
       <TaskPromptPanel query={task.query || ""} translate={translate} />
       <TaskResultPanel
         result={result}
+        usage={{
+          input_tokens: task.input_tokens,
+          output_tokens: task.output_tokens,
+          total_tokens: task.total_tokens,
+        }}
+        durationMs={durationMs}
         translate={translate}
         onOpenChanges={() => setChangesOpen(true)}
       />

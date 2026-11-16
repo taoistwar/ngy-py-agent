@@ -307,6 +307,79 @@
   height: 12px;
 }
 
+/* What the run cost, in the result header: total tokens (click for the input/output
+   split) and the wall-clock time. The tip opens under the chip, inside the pane that
+   already scrolls, so it never widens the header. */
+.task-result-usage {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-result-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface-code);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+button.task-result-stat {
+  cursor: pointer;
+}
+
+button.task-result-stat:hover,
+button.task-result-stat[aria-expanded="true"] {
+  border-color: var(--accent-border);
+  color: var(--text);
+}
+
+.task-result-usage-tip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 4px;
+  min-width: 148px;
+  padding: 8px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--surface-3);
+  box-shadow: var(--shadow-lg);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-result-usage-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.task-result-usage-row strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.task-result-usage-row.is-total {
+  padding-top: 4px;
+  border-top: 1px solid var(--line-soft);
+}
+
 /* No max-height: the whole answer is laid out and the detail pane scrolls. */
 .task-result-markdown {
   padding: 10px 12px;

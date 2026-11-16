@@ -1,5 +1,6 @@
 // The task result pane: the agent's final answer, rendered as Markdown, with the raw
-// text one click away and a full-screen reading mode.
+// text one click away and a full-screen reading mode. The header also prints what the
+// run cost - total tokens (click for the input/output split) and wall-clock time.
 //
 // The pane used to be a JSON editor only, which showed ``**bold**`` and list markers
 // as literal characters - the answer is Markdown, so it reads as Markdown by default.
@@ -7,11 +8,12 @@
 // The body is not a scroll box: the detail pane is the only scroll container, and
 // the title bar folds the result away when a long answer takes over the screen.
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { default as MonacoEditor } from "@monaco-editor/react"
 import { useTheme } from "../theme"
-import { safeStringify } from "../utils/format"
+import { formatTokenTotal } from "../utils/contextUsage"
+import { formatDuration, safeStringify } from "../utils/format"
 import AutoHeightMonaco from "./AutoHeightMonaco"
 import CollapsibleSectionTitle from "./CollapsibleSectionTitle"
 import MarkdownView from "./MarkdownView"
@@ -82,6 +84,75 @@ function ResultTabs({ view, onChange, translate }) {
   )
 }
 
+/**
+ * What this run spent, next to the result's controls.
+ *
+ * The total is the headline, because that is the figure a user compares across runs;
+ * the input/output split - the pair that actually explains the total - is one click
+ * away instead of taking two chips of the header for itself.
+ */
+function ResultUsage({ usage, durationMs, translate }) {
+  const [open, setOpen] = useState(false)
+  const wrapperRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return undefined
+    // Clicking anywhere else, or pressing Esc, closes the split: a panel that only
+    // closes from its own chip feels stuck once the eye has moved on.
+    const onPointerDown = (event) => {
+      if (!wrapperRef.current?.contains(event.target)) setOpen(false)
+    }
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setOpen(false)
+    }
+    document.addEventListener("mousedown", onPointerDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [open])
+
+  const input = Number(usage?.input_tokens) || 0
+  const output = Number(usage?.output_tokens) || 0
+  const total = Number(usage?.total_tokens) || input + output
+
+  return (
+    <div className="task-result-usage" ref={wrapperRef}>
+      <button
+        type="button"
+        className="task-result-stat"
+        aria-expanded={open}
+        title={translate("detailTokensHint")}
+        onClick={() => setOpen((previous) => !previous)}
+      >
+        {translate("detailTokens")}
+        {formatTokenTotal(total)}
+      </button>
+      <span className="task-result-stat">
+        {translate("detailDuration")}
+        {formatDuration(durationMs)}
+      </span>
+      {open ? (
+        <div className="task-result-usage-tip" role="tooltip">
+          <span className="task-result-usage-row">
+            <span>{translate("composerContextInput")}</span>
+            <strong>{input.toLocaleString()}</strong>
+          </span>
+          <span className="task-result-usage-row">
+            <span>{translate("composerContextOutput")}</span>
+            <strong>{output.toLocaleString()}</strong>
+          </span>
+          <span className="task-result-usage-row is-total">
+            <span>{translate("detailTokensTotal")}</span>
+            <strong>{total.toLocaleString()}</strong>
+          </span>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function ResultBody({ text, markdown, view, fullscreen }) {
   const { monacoTheme } = useTheme()
 
@@ -141,7 +212,7 @@ function ResultOverlay({ translate, view, onViewChange, markdown, onClose, child
   )
 }
 
-export default function TaskResultPanel({ result, translate, onOpenChanges }) {
+export default function TaskResultPanel({ result, usage, durationMs, translate, onOpenChanges }) {
   const hasResult = result !== undefined && result !== null
   // A structured result is JSON: rendering it as Markdown would only reflow the braces.
   const markdown = typeof result === "string"
@@ -173,6 +244,7 @@ export default function TaskResultPanel({ result, translate, onOpenChanges }) {
             translate={translate}
           />
           <div className="task-result-actions">
+            <ResultUsage usage={usage} durationMs={durationMs} translate={translate} />
             {showTabs ? <ResultTabs view={view} onChange={setView} translate={translate} /> : null}
             {open ? (
               <button

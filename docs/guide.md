@@ -116,6 +116,7 @@ http://127.0.0.1:8001
   - 未完成、失败、已停止的任务不算上下文；上下文有预算（最多 40 条消息、24000 字符，单条消息截断到 8000 字符），超出时整轮丢弃最旧的轮次，保留最近的对话。
 - `GET /api/tasks`：查询任务列表。
 - `GET /api/tasks/{task_id}`：查询单个任务详情。
+  - 额外返回本次运行的 `input_tokens` / `output_tokens` / `total_tokens`（对所有 `llm_response` 事件的 `usage` 求和，压缩摘要这类没有 `usage` 的事件不计）与 `duration_ms`（从任务创建到最后一次更新，即墙钟耗时）。结果区标题栏用它们显示「总 tokens」与「耗时」，点击总 tokens 可看输入/输出明细。
 - `GET /api/tasks/{task_id}/events`：分页查询任务事件。
   - `offset`：起始偏移（默认 `0`）
   - `limit`：每页数量（1-100，默认 `30`）
