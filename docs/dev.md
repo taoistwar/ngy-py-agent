@@ -24,7 +24,7 @@ cd ..
 - `WEB_MONITOR_HOST=127.0.0.1`
 - `WEB_MONITOR_PORT=8001`
 - `TASK_RETENTION_DAYS=36600`（默认 36600 天，约 100 年）
-- `TRANSCRIPT_MAX_MESSAGES=50`（对话窗口条数上限，超出后旧消息归档到 `<workspace>/.transcripts/`，`<= 0` 关闭，见 [ADR 0015](decisions/0015-snip-compact.md)）
+- `TRANSCRIPT_MAX_MESSAGES=50`（对话窗口条数上限，超出后旧消息归档到 `<workspace>/.ngy-agent/.transcripts/`，`<= 0` 关闭，见 [ADR 0015](decisions/0015-snip-compact.md)）
 - `CONTEXT_CHAR_LIMIT`（整段上下文的字符上限，超出后缩短模型已读过的旧工具结果；未配置时取模型 `max_input_tokens × 4`，再退回 200,000，`<= 0` 关闭，见 [ADR 0016](decisions/0016-micro-compact.md)）
 - `CONTEXT_SUMMARY_ENABLED=0`（关闭压缩管线的第四步——历史摘要。该步是唯一会额外发起模型调用的压缩步骤，见 [ADR 0017](decisions/0017-compact-history.md)）
 - 供应商相关：
