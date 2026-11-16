@@ -42,6 +42,8 @@
 
 ### D4. 落盘在 `<workspace>/.task_outputs/tool-results/`，这是对 ADR 0005 的显式例外
 
+> 位置已由 [ADR 0023](0023-workspace-data-dir.md) 移到 `<workspace>/.ngy-agent/.task_outputs/tool-results/`；本节其余理由（为什么在工作空间内、只读根、不自动清理）不变。
+
 - 位置：`<base_dir>/.task_outputs/tool-results/<tool_call_id>.txt`；未绑定会话时是 `<default_workspace>/.task_outputs/tool-results/`（ADR 0007），`data/default_workspace/` 已在根 `.gitignore` 里。
 - 为什么破例：会话历史保留这些绝对路径，下一轮追问仍要读得到；temp 树被清理后，历史里的路径就变成死链。
 - 不进 git 由工具自己保证：落盘目录里放一个只含 `*` 的 `.gitignore`，不改用户仓库根的那份文件。
@@ -90,7 +92,7 @@
 
 - 一步的工具结果总量有了可预测的上限（默认 200,000 字符，`TOOL_RESULT_BUDGET_CHARS` 可覆盖，`<= 0` 关闭）。
 - 模型看到大结果时要多一次 `read_file` 才能读全文。这是有意的：先看预览、需要时再读，比把 20 万字符塞进每一次请求便宜。
-- 工作空间里多了 `.task_outputs/`，且不会被自动回收。已知限制，写在 D4。
+- 工作空间里多了 `.task_outputs/`（ADR 0023 起位于 `.ngy-agent/` 下），且不会被自动回收。已知限制，写在 D4。
 - 现在有两套落盘树（temp 的 exec 输出、workspace 的工具结果），都以只读根的形式交给 `read_file`。它们形状相同、生命周期不同，术语表把两者分开命名。
 
 ## 备选方案（未采用）

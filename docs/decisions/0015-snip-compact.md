@@ -55,6 +55,8 @@ Anthropic 适配器会把每条 `tool` 转成一条 `user(tool_result)`（`provi
 
 ### D5. transcript 落在 `<workspace>/.transcripts/`，一次压缩一个快照
 
+> 位置已由 [ADR 0023](0023-workspace-data-dir.md) 移到 `<workspace>/.ngy-agent/.transcripts/`；本节其余理由（跨运行存在、只读根、不覆盖）不变。
+
 - 位置与 `.task_outputs` 一致（ADR 0012 D4）：标记里写绝对路径，被删掉的消息只能靠它找回，所以要跨运行存在。
 - 文件名 `transcript-<时间戳>-<随机>.jsonl`，**不覆盖**：第二次压缩写第二个文件。覆盖会让第一次的证据消失，而"上一条标记指向的文件"还在对话里。
 - 内容：**JSONL，一行一条消息**。不是一个大 JSON——`read_file` 按行切片，单行 JSON 读不回来（ADR 0012 的"回读契约"）。

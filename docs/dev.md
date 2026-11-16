@@ -468,6 +468,7 @@ npm run i18n:check
   - [ADR 0020 任务改动的快照与回退](decisions/0020-checkpoint-rewind.md)
   - [ADR 0021 任务窗口的上下文占用读数](decisions/0021-context-usage-meter.md)
   - [ADR 0022 AGENTS.md 进入系统提示词](decisions/0022-agents-md.md)
+  - [ADR 0023 工作空间里只留一个 `.ngy-agent/`](decisions/0023-workspace-data-dir.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 
