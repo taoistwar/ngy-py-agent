@@ -33,7 +33,7 @@
   max-width: none;
 }
 
-/* Extra dialog controls (e.g. the tool test button) sit to the right of close. */
+/* Close button row of a dialog titlebar. */
 .modal-titlebar-actions {
   display: flex;
   align-items: center;
@@ -253,6 +253,12 @@
   min-width: 0;
   padding-left: 16px;
   border-left: 1px solid var(--line);
+}
+
+/* Run action under the test inputs, right-aligned as the column's verb. */
+.tool-test-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Narrow screens stack the two columns; the divider turns horizontal. */

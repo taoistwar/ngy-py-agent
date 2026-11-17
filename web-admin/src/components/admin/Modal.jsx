@@ -13,7 +13,6 @@ export default function Modal({
   children,
   wide = false,
   dismissible = true,
-  actions = null,
   className = "",
 }) {
   const dialogClass = ["panel", "modal-dialog", wide ? "modal-dialog-wide" : "", className]
@@ -56,7 +55,6 @@ export default function Modal({
             <button type="button" className="btn btn-compact" onClick={onClose}>
               {closeLabel}
             </button>
-            {actions}
           </div>
         </div>
         <div className="panel-body modal-dialog-body">{children}</div>

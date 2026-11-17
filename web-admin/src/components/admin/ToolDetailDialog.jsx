@@ -74,11 +74,6 @@ export default function ToolDetailDialog({ tool, agents, locale, onClose, transl
       hint={translate("toolDetailHint")}
       closeLabel={translate("dialogClose")}
       onClose={onClose}
-      actions={
-        <button type="button" className="btn btn-compact btn-primary" onClick={runTest} disabled={testing}>
-          {testing ? translate("toolTestRunning") : translate("toolTest")}
-        </button>
-      }
     >
       {/* Schema on the left, test bench on the right. */}
       <div className="tool-detail-layout">
@@ -125,6 +120,8 @@ export default function ToolDetailDialog({ tool, agents, locale, onClose, transl
           onChange={setValue}
           translate={translate}
           inputError={inputError}
+          onRun={runTest}
+          testing={testing}
           result={result}
           resultRef={resultRef}
         />

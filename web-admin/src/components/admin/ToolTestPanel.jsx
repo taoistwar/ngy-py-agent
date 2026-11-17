@@ -89,6 +89,8 @@ export default function ToolTestPanel({
   onChange,
   translate,
   inputError,
+  onRun,
+  testing,
   result,
   resultRef,
 }) {
@@ -121,6 +123,12 @@ export default function ToolTestPanel({
         <p className="hint">{translate("toolTestNoParams")}</p>
       )}
       {inputError ? <div className="form-error">{inputError}</div> : null}
+      {/* Run action sits under the inputs, so the button is next to what it sends. */}
+      <div className="tool-test-actions">
+        <button type="button" className="btn btn-compact btn-primary" onClick={onRun} disabled={testing}>
+          {testing ? translate("toolTestRunning") : translate("toolTest")}
+        </button>
+      </div>
       <div ref={resultRef}>
         {result ? (
           <TestResult result={result} translate={translate} />
