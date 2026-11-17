@@ -31,7 +31,7 @@ from uuid import uuid4
 
 from agent.tools import file_access
 from agent.tools.permission_rules import PermissionRuleStore
-from agent.tools.web_urls import host_of
+from agent.tools.web_urls import host_of, https_authority_of
 
 # Permission kinds declared by tool specs (see ``agent/tools/specs.py``).
 PERMISSION_NONE = "none"
@@ -42,6 +42,11 @@ PERMISSION_EXEC = "exec"
 # ``exec`` so the dialog can say what is about to happen to which window, and so
 # the UI can label it as computer use rather than a command.
 PERMISSION_COMPUTER = "computer"
+# An outgoing request that carries a credential from the vault. Its own kind rather
+# than ``read``: the question is not "may this page be read" but "may THIS key go to
+# THIS host", the rule key is the pair, and the answer is asked even in
+# ``auto_approve`` (ADR 0030).
+PERMISSION_VAULT = "vault"
 
 PERMISSION_KINDS = (
     PERMISSION_NONE,
@@ -49,6 +54,7 @@ PERMISSION_KINDS = (
     PERMISSION_WRITE,
     PERMISSION_EXEC,
     PERMISSION_COMPUTER,
+    PERMISSION_VAULT,
 )
 
 # ``read`` tools whose target is a network host rather than a path. The filesystem
@@ -102,6 +108,9 @@ MAX_PREVIEW_CHARS = 8192
 # the list is "the answer is probably a secret".
 _SENSITIVE_NAMES = (
     r"\.env(\..+)?",
+    # The vault the ``vault_http`` tool reads keys from: reading it by hand hands the
+    # model exactly what the tool scrubs out of every result (ADR 0030).
+    r"vault(\..+)?",
     r"\.netrc",
     r"\.npmrc",
     r"\.pypirc",
@@ -262,11 +271,18 @@ class PermissionBroker:
         arguments: Dict[str, Any],
         preview: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
         scopes: Optional[Sequence[str]] = None,
+        always_ask: bool = False,
     ) -> Optional[PermissionDenial]:
         """Return a denial when the call must not run, else ``None``.
 
         ``None`` means "proceed" and covers two different situations that both end
         the same way: no confirmation was needed, or the confirmation was granted.
+
+        ``always_ask`` is the tool's ``ToolSpec.always_confirm``: a standing
+        "auto-approve everything" is not a decision about sending a particular
+        credential to a particular host, so that mode is skipped. ``deny_all`` still
+        refuses and a rule for the exact target still answers, which is the user
+        having decided about this call.
         """
         kind = kind or PERMISSION_NONE
         if kind == PERMISSION_NONE:
@@ -279,7 +295,7 @@ class PermissionBroker:
             # user is not asked about something that cannot be approved.
             return None
 
-        if self.mode is PermissionMode.AUTO_APPROVE:
+        if self.mode is PermissionMode.AUTO_APPROVE and not always_ask:
             self._decision_event(tool, target, allowed=True, reason=REASON_AUTO_APPROVED)
             return None
 
@@ -459,6 +475,13 @@ class PermissionBroker:
             action = str(arguments.get("action") or "").strip().lower() or "computer action"
             summary = _computer_summary(action, arguments)
             details.update(_computer_details(arguments))
+        elif kind == PERMISSION_VAULT:
+            # The reason is the line the user reads first: it is the only part of a
+            # credential-bearing call they can judge. The secret is not available
+            # here at all (the tool reads the vault after this decision), so the
+            # details cannot leak it even by accident.
+            details.update(_vault_details(arguments))
+            summary = _vault_summary(arguments)
         elif kind == PERMISSION_WRITE and tool == "delete_file":
             # Not an edit: there is no content to show, and the dialog has to say that
             # the file is about to be removed rather than changed.
@@ -567,6 +590,11 @@ class PermissionBroker:
 
         if kind == PERMISSION_COMPUTER:
             return _computer_target(arguments)
+
+        if kind == PERMISSION_VAULT:
+            # "key@host", not the host: approving gh-token for api.example.com is not
+            # approving it for anywhere else (ADR 0030).
+            return vault_target(arguments)
 
         if tool == "exec_command":
             command = arguments.get("command")
@@ -768,6 +796,60 @@ def _computer_summary(action: str, arguments: Dict[str, Any]) -> str:
     if window_id not in (None, ""):
         where += f" window {window_id}"
     return f"{action}{where}"
+
+
+def vault_target(arguments: Dict[str, Any]) -> Optional[str]:
+    """The permission target of a ``vault_http`` call: ``key@host[:port]``.
+
+    ``None`` when either half is unusable: a malformed URL or a missing key name
+    means the tool will refuse the call with its own error, and asking the user about
+    a call that cannot run would offer a decision that could not be honoured. The same
+    function is the tool's own rule key, so the dialog and the rule never disagree
+    about what was approved (ADR 0030).
+    """
+    key = arguments.get("vault_auth_key")
+    if not isinstance(key, str) or not key.strip():
+        return None
+    authority = https_authority_of(arguments.get("url"))
+    if not authority:
+        return None
+    return f"{key.strip()}@{authority}"
+
+
+def _vault_details(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """The dialog's detail block for a credential-bearing call.
+
+    Built from the arguments only - the secret is not read until after this decision,
+    so nothing here can contain it.
+    """
+    details: Dict[str, Any] = {"reason": "network_vault"}
+    url = arguments.get("url")
+    if isinstance(url, str) and url:
+        details["url"] = url
+    details["method"] = str(arguments.get("method") or "GET").strip().upper()
+    key = arguments.get("vault_auth_key")
+    if isinstance(key, str) and key.strip():
+        details["vault_auth_key"] = key.strip()
+    details["auth_scheme"] = str(arguments.get("auth_scheme") or "bearer").strip().lower()
+    header = arguments.get("auth_header_name")
+    if isinstance(header, str) and header.strip():
+        details["auth_header_name"] = header.strip()
+    purpose = arguments.get("reason")
+    if isinstance(purpose, str) and purpose.strip():
+        details["purpose"] = _truncate(purpose.strip())
+    body = arguments.get("body")
+    if isinstance(body, str) and body:
+        details["body"] = _truncate(body)
+        details["content_type"] = str(arguments.get("body_content_type") or "application/json")
+    return details
+
+
+def _vault_summary(arguments: Dict[str, Any]) -> str:
+    """One dialog line: which key is about to travel where, and how."""
+    key = str(arguments.get("vault_auth_key") or "").strip() or "a vault key"
+    method = str(arguments.get("method") or "GET").strip().upper()
+    where = https_authority_of(arguments.get("url")) or "an unparsed URL"
+    return f"Send {method} to {where} with vault key {key}"
 
 
 def _computer_details(arguments: Dict[str, Any]) -> Dict[str, Any]:

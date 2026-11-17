@@ -530,6 +530,7 @@
   "toolPermissionWrite": "Подтверждает запись",
   "toolPermissionExec": "Подтверждает выполнение команд",
   "toolPermissionComputer": "Подтверждает управление рабочим столом",
+  "toolPermissionVault": "Подтверждает запросы с ключом из хранилища",
   "toolScopeOnce": "этот вызов",
   "toolScopeSession": "эта задача",
   "toolScopeAlways": "всегда",

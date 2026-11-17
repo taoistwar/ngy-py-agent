@@ -530,6 +530,7 @@
   "toolPermissionWrite": "寫入需確認",
   "toolPermissionExec": "命令執行需確認",
   "toolPermissionComputer": "桌面控制需確認",
+  "toolPermissionVault": "攜帶保險箱密鑰的請求需確認",
   "toolScopeOnce": "這次呼叫",
   "toolScopeSession": "這個任務",
   "toolScopeAlways": "永遠",

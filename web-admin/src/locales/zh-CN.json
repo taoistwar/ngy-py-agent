@@ -530,6 +530,7 @@
   "toolPermissionWrite": "写入需确认",
   "toolPermissionExec": "命令执行需确认",
   "toolPermissionComputer": "桌面操作需确认",
+  "toolPermissionVault": "携带保险柜密钥的请求需确认",
   "toolScopeOnce": "仅本次",
   "toolScopeSession": "本任务",
   "toolScopeAlways": "永久",

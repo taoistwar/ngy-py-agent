@@ -29,6 +29,7 @@ EXPECTED_ORDER = (
     "web_search",
     "web_fetch",
     "web_browser",
+    "vault_http",
     "read_file",
     "edit_file",
     "write_file",

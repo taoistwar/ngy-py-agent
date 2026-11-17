@@ -530,6 +530,7 @@
   "toolPermissionWrite": "Bestätigt Schreibzugriffe",
   "toolPermissionExec": "Bestätigt Befehlsausführung",
   "toolPermissionComputer": "Bestätigt Desktop-Steuerung",
+  "toolPermissionVault": "Bestätigt Anfragen mit Tresor-Schlüssel",
   "toolScopeOnce": "dieser Aufruf",
   "toolScopeSession": "diese Aufgabe",
   "toolScopeAlways": "immer",

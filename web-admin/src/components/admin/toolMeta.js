@@ -33,6 +33,7 @@ const PERMISSION_LABEL_KEYS = {
   write: "toolPermissionWrite",
   exec: "toolPermissionExec",
   computer: "toolPermissionComputer",
+  vault: "toolPermissionVault",
 }
 
 // Answers a tool's confirmation dialog may offer, mirroring SCOPES in

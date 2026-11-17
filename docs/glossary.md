@@ -112,6 +112,17 @@
 | **`SearchHit`** | 后端中立的一条结果：`title` / `url` / `snippet`。四个后端的响应形状在这里收敛，渲染层不需要知道是哪个后端。 | `agent/tools/web_search/hits.py` |
 | **`provider_blocked`** | 默认（无密钥）后端遇到机器人校验时的原因码。它**不是**空结果：提示用户配置 `WEB_SEARCH_API_KEY` 换 API 后端，而不是换个词重试。 | `agent/tools/web_search/duckduckgo.py` |
 
+## 保险柜密钥请求（`vault_http`）
+
+| 术语 | 定义 | 位置 |
+| --- | --- | --- |
+| **`vault_http`** | 用保险柜里的密钥发一次 HTTPS 请求的工具。参数给的是**键名**（`vault_auth_key`），不是密钥本体；结果里的密钥会被擦除。只 `https`、不跟重定向、HTTP 4xx/5xx 不算工具失败（ADR 0030）。 | `agent/tools/vault_http/` |
+| **保险柜（vault）** | `data/vault.json`（`VAULT_SECRETS_PATH` 可改），`{"secrets": {"<键名>": "<值>"}}` 或裸映射。每次查询重读、不缓存；报错只列键名，绝不列值。 | `agent/tools/vault_store.py` |
+| **`key@host[:port]`** | `vault` 权限的目标：批准 `gh-token@api.example.com` **不等于**允许这把钥匙发往别的域名或别的端口。明文 `http` 不产生目标，因此不弹框。 | `agent/tools/permissions.py` |
+| **擦除（scrub）** | 把密钥的各种变形替换成 `[REDACTED]`：原值、URL 编码、base64（含去 padding）、JSON 转义，`user:password` 两半各自也算。作用于正文、响应头与异常文本。**不是安全边界**，只保证输出与事件流不含密钥。 | `agent/tools/vault_http/scrub.py` |
+| **`always_confirm`** | 工具级开关：即使权限模式是 `auto_approve` 也照样弹框询问。目前只有 `vault_http` 使用（`bypass-immune`）。`deny_all` 仍直接拒，`always` 规则仍命中即放行。 | `agent/tools/spec.py` |
+| **`redirect_to`** | 服务器要求重定向时的落点。工具**不跟随**：跟过去等于把密钥发给没批准过的域名；模型应另发一次调用，重新走 `key@host` 确认。 | `agent/tools/vault_http/tool.py` |
+
 ## 文件编辑（`edit_file`）
 
 | 术语 | 定义 | 位置 |

@@ -33,3 +33,5 @@ output/
 /learn-claude-code/
 /.codebuddy/
 /.playwright-cli/
+*.log
+/data/

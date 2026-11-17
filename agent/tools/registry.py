@@ -169,6 +169,7 @@ class ToolRegistry:
                 preview=spec.preview,
                 category=spec.category,
                 description_i18n=spec.description_i18n,
+                always_confirm=spec.always_confirm,
             )
 
         if enabled_tools is not None:
@@ -188,6 +189,7 @@ class ToolRegistry:
         preview: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
         category: str = CATEGORY_OTHER,
         description_i18n: Optional[Mapping[str, ToolText]] = None,
+        always_confirm: bool = False,
     ):
         """Register a new tool.
 
@@ -197,7 +199,8 @@ class ToolRegistry:
         dialog may offer. ``preview`` is an optional side-effect free dry run used
         to fill in the confirmation dialog. ``category`` groups the tool in the
         admin page, and ``description_i18n`` is the display-only text for other
-        languages; neither reaches the model.
+        languages; neither reaches the model. ``always_confirm`` asks even under
+        ``auto_approve`` (ADR 0030).
         """
         self.tools[name] = {
             "function": function,
@@ -208,6 +211,7 @@ class ToolRegistry:
             "preview": preview,
             "category": category or CATEGORY_OTHER,
             "description_i18n": dict(description_i18n or {}),
+            "always_confirm": bool(always_confirm),
         }
 
     def describe_tools(self) -> List[Dict[str, Any]]:
@@ -481,6 +485,7 @@ class ToolRegistry:
                 arguments,
                 preview=self.tools[name].get("preview"),
                 scopes=self.tools[name].get("scopes"),
+                always_ask=self.tools[name].get("always_confirm", False),
             )
         # Deliberately broad: any broker fault must deny the call, so narrowing this
         # would turn an unexpected error into a silent pass (ADR 0006 D1).

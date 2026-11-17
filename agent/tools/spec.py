@@ -106,6 +106,12 @@ class ToolSpec:
     # call arguments and returns extra ``details`` (no side effects). A tool that
     # can cheaply describe what it is about to do should provide one.
     preview: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
+    # Ask the user even when confirmations are otherwise auto-approved. For the few
+    # tools where a standing "yes to everything" cannot have been a decision about
+    # *this* call - an outgoing credential is the case that exists (ADR 0030).
+    # ``deny_all`` still refuses without asking, and a standing rule for the exact
+    # target still answers it.
+    always_confirm: bool = False
     # Which group the admin page lists the tool under (``CATEGORY_KINDS``).
     category: str = CATEGORY_OTHER
     # Locale -> text, for the admin page. Empty means "English only".

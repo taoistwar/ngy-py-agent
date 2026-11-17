@@ -530,6 +530,7 @@
   "toolPermissionWrite": "Confirms writes",
   "toolPermissionExec": "Confirms command execution",
   "toolPermissionComputer": "Confirms desktop control",
+  "toolPermissionVault": "Confirms requests carrying a vault key",
   "toolScopeOnce": "this call",
   "toolScopeSession": "this task",
   "toolScopeAlways": "always",

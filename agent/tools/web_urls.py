@@ -65,6 +65,10 @@ class FetchUrl:
     url: str
     scheme: str
     host: str
+    # ``host`` plus the port when it is not the scheme's default. Two ports are two
+    # services, so a permission rule keyed on an authority must keep the port:
+    # ``api.example.com:8443`` is not ``api.example.com`` (ADR 0030).
+    authority: str = ""
 
     @property
     def origin(self) -> str:
@@ -133,10 +137,9 @@ def parse_url(raw: Any) -> FetchUrl:
     except ValueError as exc:
         raise UrlError(f"Cannot parse the URL port: {exc}", reason="invalid_url") from exc
 
-    url = urlunsplit(
-        (scheme, _netloc(host, port, scheme), parts.path or "/", parts.query, "")
-    )
-    return FetchUrl(url=url, scheme=scheme, host=host)
+    authority = _netloc(host, port, scheme)
+    url = urlunsplit((scheme, authority, parts.path or "/", parts.query, ""))
+    return FetchUrl(url=url, scheme=scheme, host=host, authority=authority)
 
 
 def host_of(raw: Any) -> Optional[str]:
@@ -150,6 +153,21 @@ def host_of(raw: Any) -> Optional[str]:
         return parse_url(raw).host
     except UrlError:
         return None
+
+
+def https_authority_of(raw: Any) -> Optional[str]:
+    """``host[:port]`` for an https URL, else ``None``.
+
+    The permission target of ``vault_http`` (ADR 0030). https-only here on purpose:
+    a plaintext URL is refused by the tool itself, and asking the user about a call
+    that cannot run would offer a decision that could not be honoured. Never raises,
+    for the same reason as :func:`host_of`.
+    """
+    try:
+        target = parse_url(raw)
+    except UrlError:
+        return None
+    return target.authority if target.scheme == "https" else None
 
 
 def same_host(left: FetchUrl, right: FetchUrl) -> bool:

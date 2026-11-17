@@ -210,6 +210,16 @@ npm run i18n:check
 - **失败也带 `title`**（`HTTP 404` / `Error`），同时保留 `error` / `reason`：前者是浏览器语义，后者是 loop 与 UI 的约定。
 - 传输层（`web_browser/fetch.py`）与 `web_fetch/fetch.py` 是同域跳转规则的两次实现：工具包之间不许互相 import，先例是 `web_search/http.py`。改重定向规则时**两处都要改**。
 
+### vault_http：密钥只按名字引用
+
+- `web_fetch` 明确不能认证，"调一个需要 token 的接口"就只能靠 `exec_command`（`curl -H`）或 `code_interpreter`——密钥因此进入工具参数、`messages`、任务事件与会话记录。`vault_http`（`agent/tools/vault_http/`）把这条路改成"只给钥匙名"。取舍见 [ADR 0030](decisions/0030-vault-http-tool.md)。
+- **保险柜是文件**（`agent/tools/vault_store.py`，`data/vault.json` / `VAULT_SECRETS_PATH`）：每次查询重读、不缓存（轮换与新增下一步生效）；报错只列键名，绝不列值。工具包之间不许互相 import，所以它落在包根。
+- **权限种类 `vault`，目标是 `key@host[:port]`**（`permissions.vault_target` + `web_urls.https_authority_of`）。两处必须给同一个答案，否则弹框问的和规则记的对不上。明文 `http` 不产生目标 → 不弹框，让工具自己报 `https_required`。
+- **`always_confirm` 是 `auto_approve` 的例外**：`ToolSpec.always_confirm` → `ToolRegistry` 的 `always_ask` → `PermissionBroker.check`。`deny_all` 仍直接拒，`always` 规则仍命中即放行。**不要**为了"少弹一次"把它去掉：那是这个工具唯一阻止密钥随便外发的地方。
+- **擦除在先、报错在后**：`scrub.variants_of(secret)`（原值 / URL 编码 / base64（含去 padding）/ JSON 转义 / `user:password` 两半）用于正文、响应头与异常文本。新增任何输出字段前先想一遍它会不会带上密钥，然后跑 `vault_http_test.py` 的 `test_the_secret_never_comes_back_in_the_result`。
+- **不跟随重定向**（`allow_redirects=False`）是 D4 的全部实现，别为了"顺手"打开。传输层可注入（`transport=`），测试因此不需要网络与 TLS。
+- `data/vault.json` 在 `permissions._SENSITIVE_NAMES` 里：`read_file` 读它要先问用户，否则擦除会被"手工读一遍"绕过。
+
 ### web_search：先找页面，再去读
 
 - `web_search`（`agent/tools/web_search/`）回答"哪些页面在讲这件事"。`web_fetch` 只能读**已知 URL**，`exec_command`/`code_interpreter` 能搜但结果形态随方言漂移、失败只知道"命令退出了"。取舍见 [ADR 0028](decisions/0028-web-search-tool.md)。

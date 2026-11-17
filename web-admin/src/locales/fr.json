@@ -530,6 +530,7 @@
   "toolPermissionWrite": "Confirme les écritures",
   "toolPermissionExec": "Confirme les exécutions de commandes",
   "toolPermissionComputer": "Confirme le contrôle de l'ordinateur",
+  "toolPermissionVault": "Confirme les requêtes portant une clé du coffre",
   "toolScopeOnce": "cet appel",
   "toolScopeSession": "cette tâche",
   "toolScopeAlways": "toujours",

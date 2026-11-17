@@ -22,6 +22,7 @@ from agent.tools.glob import spec as glob
 from agent.tools.grep import spec as grep
 from agent.tools.read_file import spec as read_file
 from agent.tools.spec import ToolSpec
+from agent.tools.vault_http import spec as vault_http
 from agent.tools.web_browser import spec as web_browser
 from agent.tools.web_fetch import spec as web_fetch
 from agent.tools.web_search import spec as web_search
@@ -41,6 +42,10 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     web_search.build_spec,
     web_fetch.build_spec,
     web_browser.build_spec,
+    # An authenticated request belongs beside the public readers: same "reach a URL"
+    # family, and ``web_fetch``'s description says it cannot log in, so the tool that
+    # can is where the model looks next (ADR 0030).
+    vault_http.build_spec,
     read_file.build_spec,
     edit_file.build_spec,
     write_file.build_spec,

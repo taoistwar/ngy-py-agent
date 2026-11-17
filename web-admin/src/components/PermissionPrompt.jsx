@@ -33,6 +33,13 @@ const DETAIL_LABELS = {
   key: "key",
   keys: "keys",
   delivery_mode: "delivery",
+  purpose: "purpose",
+  url: "url",
+  method: "method",
+  vault_auth_key: "vault key",
+  auth_scheme: "auth",
+  auth_header_name: "header",
+  content_type: "content type",
 }
 
 export default function PermissionPrompt({ request, onDecided, translate }) {
