@@ -1,16 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 import { testTool } from "../../api"
-import { AgentToolDetail, normalizeParameters } from "./AgentDetail"
+import { normalizeParameters } from "./AgentDetail"
 import Modal from "./Modal"
-import ToolTestPanel from "./ToolTestPanel"
-import {
-  buildArguments,
-  initialValues,
-  localizedText,
-  permissionLabel,
-  resolveAgentNames,
-  scopeSummary,
-} from "./toolMeta"
+import ToolDetailBody from "./ToolDetailBody"
+import { buildArguments, initialValues, localizedText } from "./toolMeta"
 
 // Why an argument could not be turned into a value, keyed by buildArguments'
 // error kind.
@@ -29,14 +22,13 @@ export default function ToolDetailDialog({ tool, agents, locale, onClose, transl
   const [inputError, setInputError] = useState("")
   const resultRef = useRef(null)
 
-  // A tool with many arguments puts the result above the fold; scroll it into view
-  // once, so pressing Test looks like it did something.
+  // The result box sits above the inputs; scroll it into view so pressing Test
+  // looks like it did something.
   useEffect(() => {
     if (!result) return
     resultRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
   }, [result])
 
-  const agentNames = resolveAgentNames(tool.agent_ids, agents, translate)
   // The backend route runs without the confirmation gate, so a gated tool has to
   // be confirmed here instead.
   const gated = Boolean(tool.permission) && tool.permission !== "none"
@@ -75,58 +67,20 @@ export default function ToolDetailDialog({ tool, agents, locale, onClose, transl
       closeLabel={translate("dialogClose")}
       onClose={onClose}
     >
-      {/* Read-only schema on the left; the test bench, result above inputs, on
-          the right. */}
-      <div className="tool-detail-layout">
-        <div className="tool-detail-main">
-          <div className="agent-detail-meta">
-            <span className="agent-detail-label">{translate("toolDetailPermission")}</span>
-            <span className={`badge badge-permission-${tool.permission || "none"}`}>
-              {permissionLabel(tool.permission, translate)}
-            </span>
-          </div>
-          <div className="agent-detail-meta">
-            <span className="agent-detail-label">{translate("toolDetailScopes")}</span>
-            <span className="agent-detail-value">{scopeSummary(tool, translate)}</span>
-          </div>
-          <div className="agent-detail-meta">
-            <span className="agent-detail-label">{translate("toolDetailSource")}</span>
-            <code className="agent-detail-value">{tool.source || "-"}</code>
-          </div>
-          <div className="agent-detail-meta">
-            <span className="agent-detail-label">{translate("toolDetailPreview")}</span>
-            <span className="agent-detail-value">
-              {tool.has_preview ? translate("yes") : translate("no")}
-            </span>
-          </div>
-          <div className="agent-detail-meta">
-            <span className="agent-detail-label">{translate("toolDetailAgents")}</span>
-            {agentNames.length > 0 ? (
-              agentNames.map((agent) => (
-                <span className={`badge badge-mode-${agent.id}`} key={agent.id}>
-                  {agent.label}
-                </span>
-              ))
-            ) : (
-              <span className="hint">{translate("toolDetailNoAgents")}</span>
-            )}
-          </div>
-
-          <AgentToolDetail tool={tool} translate={translate} translation={translation} />
-        </div>
-
-        <ToolTestPanel
-          params={params}
-          values={values}
-          onChange={setValue}
-          translate={translate}
-          inputError={inputError}
-          onRun={runTest}
-          testing={testing}
-          result={result}
-          resultRef={resultRef}
-        />
-      </div>
+      <ToolDetailBody
+        tool={tool}
+        agents={agents}
+        translate={translate}
+        translation={translation}
+        params={params}
+        values={values}
+        onChange={setValue}
+        inputError={inputError}
+        onRun={runTest}
+        testing={testing}
+        result={result}
+        resultRef={resultRef}
+      />
     </Modal>
   )
 }

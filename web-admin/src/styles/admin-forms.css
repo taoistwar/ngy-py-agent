@@ -232,12 +232,14 @@
   color: var(--danger);
 }
 
-/* Tool detail: read-only schema on the left, the test bench on the right. */
-.tool-detail-layout {
+/* Tool detail: schema and test inputs share one grid. The metadata block and the
+   result box are the first row, so 参数 and 测试输入 start on the same line and
+   every parameter sits next to the field that feeds it. */
+.tool-detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
   align-items: start;
-  gap: 16px;
+  gap: 12px 16px;
 }
 
 .tool-detail-main {
@@ -246,23 +248,26 @@
   min-width: 0;
 }
 
-.tool-test-panel {
-  display: grid;
-  align-content: start;
-  gap: 12px;
+/* The heading stays outside the box, and the box fills the height of the
+   metadata block beside it instead of adding to it - size containment keeps the
+   content from deciding the row height, so 参数 and 测试输入 stay on one line
+   however long the output gets. */
+.tool-test-result-cell {
+  display: flex;
+  align-self: stretch;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
-  padding-left: 16px;
-  border-left: 1px solid var(--line);
+  min-height: 240px;
+  contain: size;
 }
 
-/* The result keeps its height across runs, so pressing Test never moves the
-   inputs below; long output scrolls inside this box. */
+/* Long output scrolls inside the box instead of stretching the dialog. */
 .tool-test-result {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 8px;
-  height: 240px;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 10px;
+  overflow: auto;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface-inset);
@@ -272,8 +277,6 @@
   display: grid;
   align-content: start;
   gap: 6px;
-  min-height: 0;
-  overflow: auto;
 }
 
 /* The box scrolls as a whole, so its blocks must not scroll on their own. */
@@ -287,21 +290,24 @@
   justify-content: flex-end;
 }
 
-/* Narrow screens stack the two columns; the divider turns horizontal. */
+/* Narrow screens collapse the grid into one stacked column. */
 @media (max-width: 820px) {
-  .tool-detail-layout {
+  .tool-detail-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .tool-test-panel {
-    padding-left: 0;
-    padding-top: 12px;
-    border-left: none;
-    border-top: 1px solid var(--line);
+  .tool-detail-spacer {
+    display: none;
+  }
+
+  /* Stacked, the box sizes to its own content instead of its neighbour. */
+  .tool-test-result-cell {
+    contain: none;
+    min-height: 0;
   }
 
   .tool-test-result {
-    height: 180px;
+    max-height: 260px;
   }
 }
 
