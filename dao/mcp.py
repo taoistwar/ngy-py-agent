@@ -139,5 +139,15 @@ class _SqliteMcpServerStore:
             self._conn.commit()
             return (cursor.rowcount or 0) > 0
 
+    def close(self) -> None:
+        """Release the SQLite handle.
+
+        Same reason as the task store's: the process keeps one store for its whole
+        life, so this exists for tests that point it at a temporary database and then
+        want to delete the directory (Windows refuses to unlink an open file).
+        """
+        with self._lock:
+            self._conn.close()
+
 
 mcp_store = _SqliteMcpServerStore()

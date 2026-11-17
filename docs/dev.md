@@ -444,13 +444,23 @@ npm run i18n:check
 
 ### 桌面操作：CLI 桥，不是 MCP 客户端
 
-- `computer_observe` / `computer_control` 通过 `subprocess` 调 `cua-driver <tool>`（JSON 从 stdin 进入），**没有**实现 MCP 客户端；`dao/mcp.py` 目前仍然只是集市存储。将来换 MCP 只替换 `agent/tools/computer_driver.py` 的 `call_tool`，工具面对模型不变。
+- `computer_observe` / `computer_control` 通过 `subprocess` 调 `cua-driver <tool>`（JSON 从 stdin 进入），**没有**复用 MCP 客户端；将来换 MCP 只替换 `agent/tools/computer_driver.py` 的 `call_tool`，工具面对模型不变。
 - **会话标签必须等于 `task_id`**（`make_observe_tool` / `make_control_tool` 的绑定）：driver 用它键控快照缓存，`element_token` 才能跨调用复用；如果每次调用换标签，所有 token 都会 stale。
 - **观察与操作拆成两个包**，因为门禁按工具：观察 `permission=none`，操作 `PERMISSION_COMPUTER` 且只给 `once` / `session`。不要为了少一个工具把两者合并。
 - **driver 的契约写在描述里，不要靠模型试错**：动作前后快照、优先 `element_token`、默认 `background`、`unverifiable` 先重新快照。错误码到指令的映射在 `computer_driver._HINTS` 与 `computer_control/tool.py::_render_result`。
 - **截图是否可见由模型配置决定**：`agent/tools/computer_state.py` 负责把 UIA 树压成文本并走 `token_budget`，超预算时把完整 JSON/文本写进 `output_store`。截图通过 `ToolOutcome.images` 交给 `agent/vision.py`：只有模型配置 `supports_image_input` 且 provider 是 OpenAI 兼容 wire format 时，才在工具消息之后追加一条带 `image_url`（base64 data URL）的 user 消息；其他 provider 只保留路径。别在工具描述里承诺模型一定看得到。
 - **运行前提**：`cua-driver` 必须在交互式会话（Session 1+）里；Session 0 下 UIA、截图、UWP 激活全部静默失败。错误处理用 `ToolOutcome(success=False)` 回给模型，不抛异常，任务不会因为没装 driver 而崩。
 - 取舍见 [ADR 0011](decisions/0011-computer-use.md)。
+
+### MCP：先有连接测试，还没有工具桥
+
+- `agent/mcp/` 只做一件事：按预设启动服务端、`initialize`、`tools/list`、关掉（`probe_server`），供集市页的「测试连接」用（`POST /api/mcp-servers/{id}/probe`）。**远端工具没有注册进 `ToolRegistry`**，所以智能体勾了 MCP 也拿不到它的工具——模型回答"没有 MCP"是事实，不是它不肯说。
+- 协议是手写的 JSON-RPC 2.0 行分隔实现（`jsonrpc.py` + `stdio.py`），不引 SDK：与 `computer_driver` 一样按子进程说话，省一个依赖，也便于自己处理 Windows 的 `.cmd` shim。
+- 三根管道用**两种编码**解码（`stdio.py::_wrap_pipes`）：stdout 是协议消息，按规范 UTF-8；stderr 是 `cmd.exe` / npm 的诊断，Windows 上是控制台代码页（中文系统 GBK）。统一按 UTF-8 解会把最常见的「'npx' 不是内部或外部命令」变成乱码。
+- `target` 写成绝对路径时，其所在目录会被放到子进程 `PATH` 最前（`_child_env`）：`npx.cmd` 这类 shim 会按名字调 `node`，不这么做就会"包装好了也起不来"。写成裸 `npx` 则要求后端进程自己能在 `PATH` 里找到它（fnm 管理的 Node 要先激活）。
+- 失败一律是 `200 + ok: false + error`：连不上、超时、服务端报错、非 JSON 输出都算"这次没连上"，不是接口错误；只有预设不存在才 404。错误信息里带 stderr 尾部，因为 npm 的 404 / 缺 `node` 只会说在 stderr 上。
+- 关停走 `taskkill /F /T`（Windows）或 `killpg`（POSIX）：`npx` 后面还有 `node` 子进程，只杀 `Popen` 返回的那个会留下孤儿。
+- 待办（下一步）：把连上的服务端工具以 `mcp__<server>__<tool>` 注册进 `ToolRegistry` 并走权限门禁。届时会话代码可以复用，但生命周期要从"一次探测"变成"任务级"。
 
 ## 13. 后端模块划分（`main.py` 拆分后）
 
@@ -464,6 +474,7 @@ npm run i18n:check
 | `agent/history.py` | 会话上下文：把同一会话中**已完成**任务的 `query` / `result` 重建成 `user` / `assistant` messages，并按消息数 / 字符预算裁剪（只留最近的轮次） | 不注入、不运行任务 |
 | `agent/usage.py` | 两处读数：任务的 token 总和与墙钟耗时；会话的上下文占用（最近一次模型请求的 `usage`，回溯最多 5 个任务 / 5 条响应，分母取模型 `max_input_tokens`，缺失时回退到循环自己的字符预算 ÷ 4） | 不估算文本、不改上下文 |
 | `agent/runtime/` | "一个任务是什么"：`config`（provider / 工作目录 / 步数 / 确认模式的解析）、`naming`（会话标题与任务名）、`purge`（保留期清理）、`events`（事件构造）、`runner`（`run_task`：跑 ReAct 循环并把两个 broker 注册进 `commons.state`） | HTTP 细节 |
+| `agent/mcp/` | MCP 客户端的**连接测试**：`jsonrpc`（行分隔消息编解码）、`stdio`（起进程、读写管道、关停进程树）、`probe`（握手 + 拉工具清单）、`models`（结果类型） | 不注册工具、不读 `commons` / `dao` |
 | `routes/task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
 | `dao/` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁；按职责拆成 `base`（常量与行工具）/ `schema`（建表与迁移）/ `sessions`（会话、工作空间）/ `forks`（Fork 复制）/ `agents` / `settings` / `tasks`（任务与事件）/ `store`（组合类） | provider、模型与 MCP（各自独立模块） |
 | `dao/llm.py` | provider 端点与模型两张表的 SQL、旧 `models` 表的一次性迁移；共用 `dao.store` 的连接与锁 | 限流策略 |
@@ -472,7 +483,7 @@ npm run i18n:check
 | `routes/llm_api.py` | provider 与模型路由、写入时把 RPM 推给 `provider_throttle`（`sync_provider_throttle`） | 限流的窗口算法 |
 | `routes/agent_api.py` | 模式、智能体、技能库路由 | |
 | `routes/admin_api.py` | 管理配置路由（保留期 / 步数 / 确认模式 / 权限规则）、启动时把 env + 数据库读进 `commons.state` 的 loader、`.env` 加载 | 业务路由 |
-| `routes/mcp_api.py` | MCP 集市路由（`/api/mcp-servers`） | 存储实现（在 `dao/mcp.py`） |
+| `routes/mcp_api.py` | MCP 集市路由（`/api/mcp-servers`，含连接测试 `POST /{mcp_id}/probe`） | 存储实现（在 `dao/mcp.py`）与协议细节（在 `agent/mcp/`） |
 
 两条必须守住的规则：
 
