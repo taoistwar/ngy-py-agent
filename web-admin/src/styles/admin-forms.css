@@ -232,27 +232,34 @@
   color: var(--danger);
 }
 
-/* Tool detail: read-only schema on the left, test bench on the right. */
-.tool-detail-layout {
+/* Tool detail: metadata spans the dialog, then the parameter schema and its
+   test inputs share one row per parameter so both columns line up. */
+.tool-detail-head {
+  display: grid;
+  gap: 12px;
+}
+
+.tool-detail-desc {
+  max-width: 760px;
+}
+
+.tool-detail-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.tool-detail-row {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
   align-items: start;
   gap: 16px;
 }
 
-.tool-detail-main {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-}
-
-.tool-test-panel {
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  min-width: 0;
-  padding-left: 16px;
-  border-left: 1px solid var(--line);
+.tool-detail-head-cell {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
 }
 
 /* Run action under the test inputs, right-aligned as the column's verb. */
@@ -261,17 +268,14 @@
   justify-content: flex-end;
 }
 
-/* Narrow screens stack the two columns; the divider turns horizontal. */
+/* Narrow screens collapse the rows into one stacked list. */
 @media (max-width: 820px) {
-  .tool-detail-layout {
+  .tool-detail-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .tool-test-panel {
-    padding-left: 0;
-    padding-top: 12px;
-    border-left: none;
-    border-top: 1px solid var(--line);
+  .tool-detail-spacer {
+    display: none;
   }
 }
 

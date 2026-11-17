@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import { testTool } from "../../api"
-import { AgentToolDetail, normalizeParameters } from "./AgentDetail"
+import { normalizeParameters } from "./AgentDetail"
 import Modal from "./Modal"
-import ToolTestPanel from "./ToolTestPanel"
+import ToolTestGrid from "./ToolTestGrid"
 import {
   buildArguments,
   initialValues,
@@ -75,57 +75,64 @@ export default function ToolDetailDialog({ tool, agents, locale, onClose, transl
       closeLabel={translate("dialogClose")}
       onClose={onClose}
     >
-      {/* Schema on the left, test bench on the right. */}
-      <div className="tool-detail-layout">
-        <div className="tool-detail-main">
-          <div className="agent-detail-meta">
-            <span className="agent-detail-label">{translate("toolDetailPermission")}</span>
-            <span className={`badge badge-permission-${tool.permission || "none"}`}>
-              {permissionLabel(tool.permission, translate)}
-            </span>
-          </div>
-          <div className="agent-detail-meta">
-            <span className="agent-detail-label">{translate("toolDetailScopes")}</span>
-            <span className="agent-detail-value">{scopeSummary(tool, translate)}</span>
-          </div>
-          <div className="agent-detail-meta">
-            <span className="agent-detail-label">{translate("toolDetailSource")}</span>
-            <code className="agent-detail-value">{tool.source || "-"}</code>
-          </div>
-          <div className="agent-detail-meta">
-            <span className="agent-detail-label">{translate("toolDetailPreview")}</span>
-            <span className="agent-detail-value">
-              {tool.has_preview ? translate("yes") : translate("no")}
-            </span>
-          </div>
-          <div className="agent-detail-meta">
-            <span className="agent-detail-label">{translate("toolDetailAgents")}</span>
-            {agentNames.length > 0 ? (
-              agentNames.map((agent) => (
-                <span className={`badge badge-mode-${agent.id}`} key={agent.id}>
-                  {agent.label}
-                </span>
-              ))
-            ) : (
-              <span className="hint">{translate("toolDetailNoAgents")}</span>
-            )}
-          </div>
-
-          <AgentToolDetail tool={tool} translate={translate} translation={translation} />
+      {/* Tool metadata and description span the dialog; the parameter schema and
+          the test inputs share one grid below, so both columns line up. */}
+      <div className="tool-detail-head">
+        <div className="agent-detail-meta">
+          <span className="agent-detail-label">{translate("toolDetailPermission")}</span>
+          <span className={`badge badge-permission-${tool.permission || "none"}`}>
+            {permissionLabel(tool.permission, translate)}
+          </span>
         </div>
-
-        <ToolTestPanel
-          params={params}
-          values={values}
-          onChange={setValue}
-          translate={translate}
-          inputError={inputError}
-          onRun={runTest}
-          testing={testing}
-          result={result}
-          resultRef={resultRef}
-        />
+        <div className="agent-detail-meta">
+          <span className="agent-detail-label">{translate("toolDetailScopes")}</span>
+          <span className="agent-detail-value">{scopeSummary(tool, translate)}</span>
+        </div>
+        <div className="agent-detail-meta">
+          <span className="agent-detail-label">{translate("toolDetailSource")}</span>
+          <code className="agent-detail-value">{tool.source || "-"}</code>
+        </div>
+        <div className="agent-detail-meta">
+          <span className="agent-detail-label">{translate("toolDetailPreview")}</span>
+          <span className="agent-detail-value">
+            {tool.has_preview ? translate("yes") : translate("no")}
+          </span>
+        </div>
+        <div className="agent-detail-meta">
+          <span className="agent-detail-label">{translate("toolDetailAgents")}</span>
+          {agentNames.length > 0 ? (
+            agentNames.map((agent) => (
+              <span className={`badge badge-mode-${agent.id}`} key={agent.id}>
+                {agent.label}
+              </span>
+            ))
+          ) : (
+            <span className="hint">{translate("toolDetailNoAgents")}</span>
+          )}
+        </div>
+        <p className="agent-detail-desc tool-detail-desc">
+          {tool.description || translate("agentToolNoDescription")}
+        </p>
+        {translation?.description ? (
+          <p className="agent-detail-desc agent-desc-i18n tool-detail-desc">
+            {translation.description}
+          </p>
+        ) : null}
       </div>
+
+      <ToolTestGrid
+        params={params}
+        parameters={tool.parameters}
+        values={values}
+        onChange={setValue}
+        translate={translate}
+        translatedParams={translation?.parameters}
+        inputError={inputError}
+        onRun={runTest}
+        testing={testing}
+        result={result}
+        resultRef={resultRef}
+      />
     </Modal>
   )
 }

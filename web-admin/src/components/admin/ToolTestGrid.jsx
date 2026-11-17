@@ -1,6 +1,8 @@
-// Test bench of the tool detail dialog: one input per argument plus the result
-// of the last run. It sits in the right column so the schema on the left can
-// stay a read-only description.
+// Tool detail body: the read-only parameter schema on the left and its test
+// inputs on the right. Both live in one row-per-parameter grid, so every
+// parameter lines up with the field that feeds it.
+
+import { ParamSchema } from "./AgentDetail"
 
 const TEXTUAL_TYPES = new Set(["string", "any", "null"])
 
@@ -50,6 +52,19 @@ function ParameterInput({ param, value, onChange, translate }) {
   )
 }
 
+/** Name and type of a parameter above its test input. */
+function ParamInputHead({ param, translate }) {
+  return (
+    <div className="agent-param-head">
+      <code className="agent-param-name">{param.name}</code>
+      <span className="agent-param-type">{param.type}</span>
+      {param.required ? (
+        <span className="badge badge-builtin">{translate("agentToolRequired")}</span>
+      ) : null}
+    </div>
+  )
+}
+
 function TestResult({ result, translate }) {
   const ok = Boolean(result.ok)
 
@@ -83,33 +98,40 @@ function TestResult({ result, translate }) {
   )
 }
 
-export default function ToolTestPanel({
+export default function ToolTestGrid({
   params,
+  parameters,
   values,
   onChange,
   translate,
+  translatedParams,
   inputError,
   onRun,
   testing,
   result,
   resultRef,
 }) {
+  const hasSchema = Boolean(parameters) && Object.keys(parameters).length > 0
+
   return (
-    <aside className="tool-test-panel">
-      <div className="agent-section-head">
-        <span>{translate("toolTestPanel")}</span>
+    <div className="tool-detail-grid">
+      <div className="tool-detail-row">
+        <div className="tool-detail-head-cell">{translate("agentToolParams")}</div>
+        <div className="tool-detail-head-cell">{translate("toolTestPanel")}</div>
       </div>
+
       {params.length > 0 ? (
-        <div className="agent-param-list">
-          {params.map((param) => (
-            <div className="agent-param" key={param.name}>
-              <div className="agent-param-head">
-                <code className="agent-param-name">{param.name}</code>
-                <span className="agent-param-type">{param.type}</span>
-                {param.required ? (
-                  <span className="badge badge-builtin">{translate("agentToolRequired")}</span>
-                ) : null}
-              </div>
+        params.map((param) => (
+          <div className="tool-detail-row" key={param.name}>
+            <div className="agent-param">
+              <ParamSchema
+                param={param}
+                translate={translate}
+                translatedDescription={translatedParams?.[param.name]}
+              />
+            </div>
+            <div className="agent-param">
+              <ParamInputHead param={param} translate={translate} />
               <ParameterInput
                 param={param}
                 value={values?.[param.name]}
@@ -117,25 +139,50 @@ export default function ToolTestPanel({
                 translate={translate}
               />
             </div>
-          ))}
-        </div>
+          </div>
+        ))
       ) : (
-        <p className="hint">{translate("toolTestNoParams")}</p>
+        <div className="tool-detail-row">
+          <div className="agent-param">
+            {hasSchema ? (
+              <pre className="agent-detail-block">{JSON.stringify(parameters, null, 2)}</pre>
+            ) : (
+              <p className="hint">{translate("agentToolNoParams")}</p>
+            )}
+          </div>
+          <div className="agent-param">
+            <p className="hint">{translate("toolTestNoParams")}</p>
+          </div>
+        </div>
       )}
-      {inputError ? <div className="form-error">{inputError}</div> : null}
-      {/* Run action sits under the inputs, so the button is next to what it sends. */}
-      <div className="tool-test-actions">
-        <button type="button" className="btn btn-compact btn-primary" onClick={onRun} disabled={testing}>
-          {testing ? translate("toolTestRunning") : translate("toolTest")}
-        </button>
+
+      {inputError ? (
+        <div className="tool-detail-row">
+          <div className="tool-detail-spacer" />
+          <div className="form-error">{inputError}</div>
+        </div>
+      ) : null}
+
+      {/* The run action stays under the inputs, next to what it sends. */}
+      <div className="tool-detail-row">
+        <div className="tool-detail-spacer" />
+        <div className="tool-test-actions">
+          <button type="button" className="btn btn-compact btn-primary" onClick={onRun} disabled={testing}>
+            {testing ? translate("toolTestRunning") : translate("toolTest")}
+          </button>
+        </div>
       </div>
-      <div ref={resultRef}>
-        {result ? (
-          <TestResult result={result} translate={translate} />
-        ) : (
-          <p className="hint">{translate("toolTestEmpty")}</p>
-        )}
+
+      <div className="tool-detail-row">
+        <div className="tool-detail-spacer" />
+        <div ref={resultRef}>
+          {result ? (
+            <TestResult result={result} translate={translate} />
+          ) : (
+            <p className="hint">{translate("toolTestEmpty")}</p>
+          )}
+        </div>
       </div>
-    </aside>
+    </div>
   )
 }

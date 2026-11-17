@@ -16,6 +16,28 @@ export function normalizeParameters(parameters) {
   }))
 }
 
+/** One parameter's schema text: name, type, required flag, descriptions. */
+export function ParamSchema({ param, translate, translatedDescription }) {
+  return (
+    <>
+      <div className="agent-param-head">
+        <code className="agent-param-name">{param.name}</code>
+        <span className="agent-param-type">{param.type}</span>
+        {param.required && (
+          <span className="badge badge-builtin">{translate("agentToolRequired")}</span>
+        )}
+      </div>
+      <span className="agent-param-desc">
+        {param.description || translate("agentToolNoDescription")}
+      </span>
+      {translatedDescription ? (
+        <span className="agent-param-desc agent-desc-i18n">{translatedDescription}</span>
+      ) : null}
+    </>
+  )
+}
+
+/** Tool description plus the read-only parameter list. */
 export function AgentToolDetail({ tool, translate, translation }) {
   const params = normalizeParameters(tool.parameters)
   const hasSchema = Boolean(tool.parameters) && Object.keys(tool.parameters).length > 0
@@ -36,21 +58,11 @@ export function AgentToolDetail({ tool, translate, translation }) {
           <div className="agent-param-list">
             {params.map((param) => (
               <div className="agent-param" key={param.name}>
-                <div className="agent-param-head">
-                  <code className="agent-param-name">{param.name}</code>
-                  <span className="agent-param-type">{param.type}</span>
-                  {param.required && (
-                    <span className="badge badge-builtin">{translate("agentToolRequired")}</span>
-                  )}
-                </div>
-                <span className="agent-param-desc">
-                  {param.description || translate("agentToolNoDescription")}
-                </span>
-                {translatedParams[param.name] ? (
-                  <span className="agent-param-desc agent-desc-i18n">
-                    {translatedParams[param.name]}
-                  </span>
-                ) : null}
+                <ParamSchema
+                  param={param}
+                  translate={translate}
+                  translatedDescription={translatedParams[param.name]}
+                />
               </div>
             ))}
           </div>
