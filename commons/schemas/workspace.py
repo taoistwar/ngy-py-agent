@@ -51,6 +51,10 @@ class McpServerConfig(BaseModel):
     """
 
     name: str = Field(min_length=1, max_length=120, description="MCP server name.")
-    transport: str = Field(default="stdio", max_length=32, description="stdio or sse.")
-    target: str = Field(default="", max_length=1024, description="Command (stdio) or URL (sse).")
+    transport: str = Field(
+        default="stdio", max_length=32, description="stdio, sse or http (Streamable HTTP)."
+    )
+    target: str = Field(
+        default="", max_length=1024, description="Command (stdio) or URL (sse/http)."
+    )
     mcp_id: str | None = Field(default=None, max_length=64, description="Marketplace entry id.")

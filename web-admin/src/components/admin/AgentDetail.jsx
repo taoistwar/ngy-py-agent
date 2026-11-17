@@ -1,5 +1,7 @@
 // Read-only detail views for the agent editor: tool schema and skill instruction.
 
+import { mcpTransportLabel } from "./shared"
+
 export function normalizeParameters(parameters) {
   if (!parameters || typeof parameters !== "object") return []
   const properties = parameters.properties
@@ -81,7 +83,9 @@ export function AgentMcpDetail({ server, translate }) {
     <div className="agent-detail">
       <div className="agent-detail-meta">
         <span className="agent-detail-label">{translate("mcpListTransport")}</span>
-        <span className="agent-detail-value">{server.transport || "-"}</span>
+        <span className="agent-detail-value">
+          {server.transport ? mcpTransportLabel(server.transport) : "-"}
+        </span>
       </div>
       <div className="agent-detail-meta">
         <span className="agent-detail-label">{translate("mcpListTarget")}</span>

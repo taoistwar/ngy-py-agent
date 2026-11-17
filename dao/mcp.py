@@ -17,7 +17,11 @@ from uuid import uuid4
 
 from dao.base import TASK_DB_PATH
 
-MCP_TRANSPORTS = ["stdio", "sse"]
+# ``http`` is Streamable HTTP: one URL, POST for requests, optional SSE for streaming.
+# The names match ``agent.mcp.transport.SUPPORTED_TRANSPORTS`` so a preset stored here
+# can always be opened at runtime; the runtime also accepts the ``streamable-http``
+# spellings, but a new marketplace entry is stored as plain ``http``.
+MCP_TRANSPORTS = ["stdio", "sse", "http"]
 DEFAULT_MCP_TRANSPORT = "stdio"
 
 

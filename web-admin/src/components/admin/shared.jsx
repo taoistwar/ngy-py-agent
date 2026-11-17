@@ -33,8 +33,17 @@ export const PROVIDER_PROTOCOL_OPTIONS = [
   "gemini",
 ]
 
-// Mirrors MCP_TRANSPORTS in mcp_store.py; the backend rejects anything else.
-export const MCP_TRANSPORT_OPTIONS = ["stdio", "sse"]
+// Mirrors MCP_TRANSPORTS in dao/mcp.py; the backend rejects anything else.
+export const MCP_TRANSPORT_OPTIONS = ["stdio", "sse", "http"]
+
+// ``http`` is Streamable HTTP: one URL, POST requests and optional SSE streaming. The
+// label spells the protocol out because a bare "http" reads like the older ``sse``.
+const MCP_TRANSPORT_LABELS = { http: "http (Streamable HTTP)" }
+
+export function mcpTransportLabel(transport) {
+  const name = String(transport || "")
+  return MCP_TRANSPORT_LABELS[name] || name || "stdio"
+}
 
 export const INPUT_TOKEN_PRESETS = [32768, 65536, 131072, 262144]
 export const OUTPUT_TOKEN_PRESETS = [8192, 16384, 32768, 65536]

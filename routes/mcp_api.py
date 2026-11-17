@@ -24,7 +24,9 @@ class McpServerUpsertRequest(BaseModel):
 
     name: str = Field(min_length=1, max_length=200, description="Display name.")
     description: str = Field(default="", max_length=1024, description="What the server provides.")
-    transport: str = Field(default="stdio", max_length=32, description="stdio or sse.")
+    transport: str = Field(
+        default="stdio", max_length=32, description="stdio, sse or http (Streamable HTTP)."
+    )
     target: str = Field(default="", max_length=1024, description="Command line or URL.")
 
 

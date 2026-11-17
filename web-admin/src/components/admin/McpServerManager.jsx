@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react"
 import Modal from "./Modal"
 import McpProbeDialog from "./McpProbeDialog"
-import { MCP_TRANSPORT_OPTIONS, ManagerSearch, matchesKeyword } from "./shared"
+import {
+  MCP_TRANSPORT_OPTIONS,
+  ManagerSearch,
+  matchesKeyword,
+  mcpTransportLabel,
+} from "./shared"
 
 function emptyMcpForm() {
   return { mcp_id: "", name: "", description: "", transport: MCP_TRANSPORT_OPTIONS[0], target: "" }
@@ -168,7 +173,7 @@ export default function McpServerManager({
                   <tr key={server.mcp_id}>
                     <td className="model-name">{server.name}</td>
                     <td>
-                      <code>{server.transport}</code>
+                      <code>{mcpTransportLabel(server.transport)}</code>
                     </td>
                     <td className="mono">{server.target || "-"}</td>
                     <td>{server.description || "-"}</td>
@@ -232,7 +237,7 @@ export default function McpServerManager({
               >
                 {MCP_TRANSPORT_OPTIONS.map((transport) => (
                   <option value={transport} key={transport}>
-                    {transport}
+                    {mcpTransportLabel(transport)}
                   </option>
                 ))}
               </select>
@@ -242,7 +247,11 @@ export default function McpServerManager({
               <input
                 value={form.target}
                 onChange={(event) => setField("target", event.target.value)}
-                placeholder={translate("mcpFormTargetPlaceholder")}
+                placeholder={
+                  form.transport === "stdio"
+                    ? translate("mcpFormTargetPlaceholder")
+                    : "https://example.com/mcp"
+                }
               />
             </label>
             {error && <div className="form-error">{error}</div>}

@@ -5,6 +5,8 @@
 // entries that no longer exist in the marketplace as "legacy" rows so editing an
 // agent never drops configuration silently.
 
+import { mcpTransportLabel } from "./shared"
+
 export const LEGACY_MCP_PREFIX = "legacy::"
 
 function legacyId(name) {
@@ -12,7 +14,7 @@ function legacyId(name) {
 }
 
 function describe(transport, target) {
-  return `${transport || "stdio"} · ${target || "-"}`
+  return `${mcpTransportLabel(transport)} · ${target || "-"}`
 }
 
 /** Split an agent's stored MCP entries into marketplace ids plus orphaned ones. */

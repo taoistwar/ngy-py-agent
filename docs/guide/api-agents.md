@@ -22,14 +22,14 @@ MCP 市场维护可复用的 MCP 服务预设（传输方式 + 命令/URL），�
 - `GET /api/mcp-servers`：返回 `{servers}`。
 - `POST /api/mcp-servers`：新增。
   - 请求体：`{"name": "filesystem", "description": "", "transport": "stdio", "target": "npx -y @modelcontextprotocol/server-filesystem"}`
-  - `transport` 仅支持 `stdio` / `sse`，其它取值返回 400。
+  - `transport` 支持 `stdio` / `sse` / `http`（Streamable HTTP），其它取值返回 400。`sse` 与 `http` 的 `target` 是 URL。
 - `PUT /api/mcp-servers/{mcp_id}`：部分更新。
 - `DELETE /api/mcp-servers/{mcp_id}`：删除。
 - `POST /api/mcp-servers/{mcp_id}/probe`：连接测试。按预设启动服务端、握手并拉取工具清单，返回 `{ok, transport, server_name, server_version, protocol_version, tools, error, duration_ms}`；`tools` 每项为 `{name, description, input_schema}`。
   - 连得上但服务端没有工具时 `ok` 为 `true`、`tools` 为空；连不上是 `200` + `ok: false` + `error`（含服务端 stderr 的尾部），只有预设不存在才返回 404。
-  - 目前只有 `stdio` 能测；`sse` 预设返回 `ok: false` 并说明尚未支持。
+  - 三种传输方式都能测：`stdio` 起本地进程并握手，`sse` / `http` 连远端 URL 并握手。
   - 单次请求超时 60 秒（冷启动 `npx` 要下载包），命令在独立子进程里跑，超时或测试结束会连同子进程一起结束。
-  - `target` 用绝对路径时，其所在目录会被放到子进程 `PATH` 最前；写成 `npx ...` 则要求运行后端的进程本身能在 `PATH` 里找到 `npx`（fnm 管理的 Node 需要先激活）。
+  - `stdio` 的 `target` 用绝对路径时，其所在目录会被放到子进程 `PATH` 最前；写成 `npx ...` 则要求运行后端的进程本身能在 `PATH` 里找到 `npx`（fnm 管理的 Node 需要先激活）。
 
 删除市场条目不会影响已引用它的智能体：智能体保存的是选中条目的一份快照（含 `mcp_id`），因此编辑智能体时即使市场条目已被删除或改名，原配置仍会以“不在市场中”的标记保留。
 
@@ -41,7 +41,7 @@ MCP 市场维护可复用的 MCP 服务预设（传输方式 + 命令/URL），�
 - 「本任务允许」只覆盖这一个远端工具；「一直允许」写进规则时同样是「这个工具 + 这个服务端」的组合。
 - 某个服务端连不上不会让任务失败：它的工具直接缺席，`mcp_status` 记录原因（任务详情的「Starting ReAct loop」事件里有 `mcp_status`，系统提示词的 `## MCP servers` 一节也会写明哪些连上、哪些没连上）。
 - 服务端只在这一次任务里存活，任务结束（或停止）时连同子进程一起关闭。任务跑完不会留下后台进程。
-- 目前只有 `stdio` 会真正加载工具；`sse` 会被记为未连接。远端工具返回的 `image` 块会写成截图，随下一条消息交给支持图片输入的模型（不支持的模型只看到 `[image image/png]` 这一行）；`audio` 只留标记。
+- 三种传输方式都会真正加载工具。远端工具返回的 `image` 块会写成截图，随下一条消息交给支持图片输入的模型（不支持的模型只看到 `[image image/png]` 这一行）；`audio` 只留标记。
 
 ## 技能（Skills）库
 

@@ -3,6 +3,7 @@
 // marketplace page stays a list with a form.
 
 import Modal from "./Modal"
+import { mcpTransportLabel } from "./shared"
 
 function MetaRow({ label, children }) {
   return (
@@ -78,7 +79,9 @@ function ProbeBody({ result, translate }) {
 export default function McpProbeDialog({ server, state, onClose, translate }) {
   const running = state?.status === "running"
   const result = state?.result || null
-  const hint = server ? `${server.name} · ${server.transport} · ${server.target}` : ""
+  const hint = server
+    ? `${server.name} · ${mcpTransportLabel(server.transport)} · ${server.target}`
+    : ""
 
   return (
     <Modal

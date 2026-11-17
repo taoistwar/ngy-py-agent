@@ -67,6 +67,25 @@ class McpApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(self.client.get("/api/mcp-servers").json()["servers"], [])
 
+    def test_streamable_http_transport_is_stored_and_listed(self):
+        created = self.create_server(
+            name="remote", transport="http", target="https://example.com/mcp"
+        )
+
+        listed = self.client.get("/api/mcp-servers").json()["servers"]
+        self.assertEqual([item["transport"] for item in listed], ["http"])
+        self.assertEqual(listed[0]["target"], "https://example.com/mcp")
+        self.assertEqual(created["transport"], "http")
+
+    def test_an_unknown_transport_is_rejected(self):
+        response = self.client.post(
+            "/api/mcp-servers",
+            json={"name": "weird", "transport": "websocket", "target": "ws://example.com"},
+        )
+
+        self.assertEqual(response.status_code, 400, response.text)
+        self.assertIn("http", response.json()["detail"])
+
     def test_probe_returns_the_tools_a_server_offers(self):
         created = self.create_server()
         probed = []
@@ -127,15 +146,15 @@ class McpApiTest(unittest.TestCase):
         self.assertIn("exited before answering", body["error"])
         self.assertEqual(body["tools"], [])
 
-    def test_probe_refuses_a_transport_the_client_cannot_speak(self):
-        created = self.create_server(transport="sse", target="https://example.com/sse")
+    def test_probe_reports_a_preset_it_cannot_open(self):
+        created = self.create_server(transport="stdio", target="")
 
         response = self.client.post(f"/api/mcp-servers/{created['mcp_id']}/probe")
 
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertFalse(body["ok"])
-        self.assertIn("only stdio is supported", body["error"])
+        self.assertIn("empty", body["error"])
 
 
 if __name__ == "__main__":
