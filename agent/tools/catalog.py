@@ -22,6 +22,7 @@ from agent.tools.glob import spec as glob
 from agent.tools.grep import spec as grep
 from agent.tools.read_file import spec as read_file
 from agent.tools.spec import ToolSpec
+from agent.tools.web_browser import spec as web_browser
 from agent.tools.web_fetch import spec as web_fetch
 from agent.tools.web_search import spec as web_search
 from agent.tools.write_file import spec as write_file
@@ -32,11 +33,14 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     code_interpreter.build_spec,
     # Find before read: ``glob`` locates a file by name, ``grep`` locates the code
     # inside it, ``web_search`` finds the page that documents it, ``web_fetch``
-    # reads that page, and only then does ``read_file`` need to run.
+    # reads that page, and only then does ``read_file`` need to run. ``web_browser``
+    # sits next to ``web_fetch`` because both open a URL; theirs is the simple
+    # reading view, and it is listed second so the richer contract comes first.
     glob.build_spec,
     grep.build_spec,
     web_search.build_spec,
     web_fetch.build_spec,
+    web_browser.build_spec,
     read_file.build_spec,
     edit_file.build_spec,
     write_file.build_spec,

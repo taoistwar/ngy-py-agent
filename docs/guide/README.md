@@ -14,6 +14,7 @@
 - [工具：`exec_command`](tool-exec-command.md)
 - [工具：`web_search`](tool-web-search.md)
 - [工具：`web_fetch`](tool-web-fetch.md)
+- [工具：`web_browser`](tool-web-browser.md)
 - [工具：`ask_user_question`](tool-ask-user-question.md)
 - [工具：`computer_observe` / `computer_control`](tool-computer.md)
 - [工具黑名单（denylist）](tool-denylist.md)

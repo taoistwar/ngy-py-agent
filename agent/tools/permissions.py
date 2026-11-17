@@ -55,12 +55,19 @@ PERMISSION_KINDS = (
 # heuristics below cannot decide anything about them: every call is a question until
 # the user allows that host for the task, and the rule is keyed on the host so a
 # second page from the same site is not asked about again (ADR 0027).
-NETWORK_READ_TOOLS = ("web_fetch", "web_search")
+NETWORK_READ_TOOLS = ("web_fetch", "web_browser", "web_search")
 
 # A search has no URL to key a rule on, and a per-query rule would ask again for the
 # next thing the user wants to know. The decision is therefore "may this task search
 # the web at all", stored under the tool's own name (ADR 0028).
 SEARCH_PERMISSION_TARGET = "web_search"
+
+# The page reader whose dialog says "Browse" rather than "Fetch". Same host
+# granularity and the same rule shape as ``web_fetch`` - only the wording differs,
+# because "browse example.com" is what the user is being asked to allow. The two
+# tools keep separate rules on purpose: approving one page reader for a site is not
+# the same sentence as approving every way of reading it.
+BROWSE_PERMISSION_TARGET = "web_browser"
 
 # Decision reasons. Kept as plain strings so they can travel in event payloads
 # without a translation step, and so the UI can branch on them.
@@ -474,6 +481,10 @@ class PermissionBroker:
                 details["query"] = query
                 details["reason"] = "network_search"
                 summary = f"Search the web: {query}"
+            elif tool == BROWSE_PERMISSION_TARGET:
+                details["url"] = str(arguments.get("url") or "")
+                details["reason"] = "network_browse"
+                summary = f"Browse {target}"
             else:
                 details["url"] = str(arguments.get("url") or "")
                 details["reason"] = "network_fetch"

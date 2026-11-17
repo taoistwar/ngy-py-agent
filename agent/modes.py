@@ -68,6 +68,9 @@ MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
             # Reading a page is read-only, and "look it up" is the most common way an
             # answer is verified. The fetch cannot change local state (ADR 0027).
             "web_fetch",
+            # The plain reading view of the same capability: title plus text, with no
+            # receipt to interpret. Also read-only, also network-gated.
+            "web_browser",
             # Searching is read-only too, and it is how the page worth fetching is
             # found in the first place (ADR 0028).
             "web_search",

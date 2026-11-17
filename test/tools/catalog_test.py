@@ -28,6 +28,7 @@ EXPECTED_ORDER = (
     "grep",
     "web_search",
     "web_fetch",
+    "web_browser",
     "read_file",
     "edit_file",
     "write_file",

@@ -7,9 +7,9 @@ The package is split so that reading one tool means reading one directory:
   ``ToolBindings`` tools are constructed with, and the list of built-in tools
 - ``<tool>/``: one package per model-visible tool, **named after that tool**
   (``exec_command/``, ``write_stdin/``, ``glob/``, ``grep/``, ``web_search/``,
-  ``web_fetch/``, ``read_file/``, ``edit_file/``, ``write_file/``, ``delete_file/``,
-  ``code_interpreter/``, ``computer_observe/``, ``computer_control/``,
-  ``ask_user_question/``).
+  ``web_fetch/``, ``web_browser/``, ``read_file/``, ``edit_file/``, ``write_file/``,
+  ``delete_file/``, ``code_interpreter/``, ``computer_observe/``,
+  ``computer_control/``, ``ask_user_question/``).
   ``__init__.py`` holds the package docstring and the public surface, ``spec.py``
   declares the tool to the registry, and the implementation is split by
   responsibility (``description.py``, ``errors.py``, topic modules, ``tool.py``).
@@ -20,8 +20,9 @@ The package is split so that reading one tool means reading one directory:
   ``web_urls``) are
   shared infrastructure and stay at the root. ``file_walk`` and ``glob_pattern``
   are shared by ``glob`` and ``grep``, ``file_limits`` by ``read_file`` and
-  ``delete_file``, and ``web_urls`` by ``web_fetch`` and the permission gate,
-  precisely because a tool package must not import another tool package.
+  ``delete_file``, and ``web_urls`` by the URL-reading tools (``web_fetch``,
+  ``web_browser``) and the permission gate, precisely because a tool package must
+  not import another tool package.
   ``web_search`` deliberately reuses only this root layer: it needs URLs
   (``web_urls``), the output budget (``token_budget``/``output_store``) and text
   decoding (``text_encoding``), never ``web_fetch``'s internals.

@@ -200,6 +200,16 @@ npm run i18n:check
 - **HTML 转换只用标准库**（`web_fetch/html_text.py`）：标题/列表/链接/代码块/表格行保留，`script`/`style`/`hidden`/表单控件丢弃，`nav`/`footer`/`role=navigation` 这类站点框架也丢——参考实现靠小模型过滤这部分噪音，这里没有那一步。解析异常回退到"正则去标签"，抓取已经成功就不该在转换上失败。
 - 新增分类 `network`：`spec.CATEGORY_NETWORK`、`toolMeta.js` 的 `CATEGORY_ORDER` / 标签键、六份 `locales/*.json` 要一起改（`test/tool_api_test.py` 会校验分类在 `CATEGORY_KINDS` 里）。
 
+### web_browser：同一件事，简单视图
+
+- `web_browser`（`agent/tools/web_browser/`）不是 `web_fetch` 的替代品，是**另一种结果形状**：`title` + 最终 `url` + 纯文本 `content`，没有回执字段。分工写进两份 `description`。取舍见 [ADR 0029](decisions/0029-web-browser-tool.md)。
+- **权限键按工具分开**：`permissions.NETWORK_READ_TOOLS` 里有它，目标同样是主机名，但规则键是 `(web_browser, example.com)`，不会继承 `web_fetch` 的批准（反之亦然）。确认框文案 "Browse \<主机\>" 在 `_build_request` 的 `network_browse` 分支。**不要**为了少点一次框合并两边的规则键。
+- **纯文本不是第二份 Markdown**（`web_browser/snapshot.py`）：块间空行、列表 `- ` + 缩进、`<pre>` 保留缩进；链接地址、代码围栏、表格竖线都丢——那是 `web_fetch` 的职责。丢掉的噪声集合（`script`/`style`/`hidden`/`nav`/`footer`/`role=navigation`）与 `web_fetch` 同源，别再分叉一套。
+- **两层上限**：50,000 字符截断并标 `[truncated]`（参考实现的上限），再叠输出 token 预算落盘（`browse-*.txt`）。任何一层都不要改成静默截断。
+- **`action=screenshot` 不假装**：它返回同一份文本快照 + 一句"没有截取画面"。不要把它接到 `computer_observe`——那是桌面截图，不是网页渲染。
+- **失败也带 `title`**（`HTTP 404` / `Error`），同时保留 `error` / `reason`：前者是浏览器语义，后者是 loop 与 UI 的约定。
+- 传输层（`web_browser/fetch.py`）与 `web_fetch/fetch.py` 是同域跳转规则的两次实现：工具包之间不许互相 import，先例是 `web_search/http.py`。改重定向规则时**两处都要改**。
+
 ### web_search：先找页面，再去读
 
 - `web_search`（`agent/tools/web_search/`）回答"哪些页面在讲这件事"。`web_fetch` 只能读**已知 URL**，`exec_command`/`code_interpreter` 能搜但结果形态随方言漂移、失败只知道"命令退出了"。取舍见 [ADR 0028](decisions/0028-web-search-tool.md)。
