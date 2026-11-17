@@ -286,14 +286,14 @@ class BridgeTest(unittest.TestCase):
         self.assertIn("it broke", str(caught.exception))
 
     def test_an_unsupported_transport_is_reported_and_skipped(self):
-        bridge = self.open_bridge(self.preset(transport="sse", target="https://example.com/sse"))
+        bridge = self.open_bridge(self.preset(transport="websocket", target="ws://example.com/s"))
         registry = self.registry()
 
         added = bridge.register(registry)
 
         self.assertEqual(added, 0)
         self.assertFalse(bridge.statuses[0]["ok"])
-        self.assertIn("only stdio", bridge.statuses[0]["error"])
+        self.assertIn("not supported", bridge.statuses[0]["error"])
         self.assertEqual(registry.tools, {})
 
     def test_a_broken_preset_does_not_cost_the_other_servers(self):

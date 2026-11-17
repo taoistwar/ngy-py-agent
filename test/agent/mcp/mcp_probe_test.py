@@ -222,11 +222,12 @@ class ProbeServerTest(unittest.TestCase):
         self.assertIn("exited before answering", result.error)
         self.assertIn("fake server crashed", result.error)
 
-    def test_transport_other_than_stdio_is_refused(self):
-        result = probe_server({"transport": "sse", "target": "https://example.com/sse"})
+    def test_an_unknown_transport_is_refused(self):
+        result = probe_server({"transport": "websocket", "target": "ws://example.com/socket"})
 
         self.assertFalse(result.ok)
-        self.assertIn("only stdio is supported", result.error)
+        self.assertIn("is not supported", result.error)
+        self.assertEqual(result.tools, ())
 
     def test_empty_target_is_refused(self):
         result = probe_server({"transport": "stdio", "target": "   "})

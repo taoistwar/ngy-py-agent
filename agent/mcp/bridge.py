@@ -20,7 +20,9 @@ from agent.mcp import session as mcp_session
 from agent.mcp.jsonrpc import McpProtocolError
 from agent.mcp.models import McpToolInfo
 from agent.mcp.names import tool_name
-from agent.mcp.stdio import McpSessionError, StdioSession
+from agent.mcp.protocol import McpSession
+from agent.mcp.stdio import McpSessionError
+from agent.mcp.transport import SUPPORTED_TRANSPORTS, normalize_transport, open_session
 from agent.models import ToolOutcome
 from agent.tools.permissions import PERMISSION_MCP
 from agent.tools.spec import CATEGORY_OTHER
@@ -30,7 +32,6 @@ DEFAULT_START_TIMEOUT_SECONDS = 60.0
 # A remote tool may be slower than a built-in one (it is a network call in the best
 # case), but the loop is blocked while it runs, so the budget stays finite.
 DEFAULT_CALL_TIMEOUT_SECONDS = 120.0
-SUPPORTED_TRANSPORTS = ("stdio",)
 
 
 @dataclass(frozen=True)
@@ -57,7 +58,7 @@ class _ConnectedServer:
 
     label: str
     server_name: str
-    session: StdioSession
+    session: McpSession
     tools: Sequence[McpToolInfo]
 
 
@@ -97,22 +98,18 @@ class McpBridge:
 
     def _open_one(self, preset: Mapping[str, Any]) -> McpServerStatus:
         label = str(preset.get("name") or preset.get("target") or "mcp").strip() or "mcp"
-        transport = str(preset.get("transport") or "stdio").strip().lower()
-        target = str(preset.get("target") or "").strip()
+        transport = normalize_transport(preset.get("transport"))
         if transport not in SUPPORTED_TRANSPORTS:
             return McpServerStatus(
                 name=label,
                 ok=False,
-                error=f"The '{transport}' transport is not supported yet; only stdio is.",
+                error=f"The '{transport}' transport is not supported; use stdio, sse or http.",
             )
-        if not target:
-            return McpServerStatus(
-                name=label,
-                ok=False,
-                error="The MCP target is empty, so there is no command to run.",
-            )
+        try:
+            session = open_session(preset)
+        except McpSessionError as exc:
+            return McpServerStatus(name=label, ok=False, error=str(exc))
 
-        session = StdioSession(target)
         try:
             session.start()
             info = mcp_session.initialize(session, self.start_timeout)
