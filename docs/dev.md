@@ -452,15 +452,19 @@ npm run i18n:check
 - **运行前提**：`cua-driver` 必须在交互式会话（Session 1+）里；Session 0 下 UIA、截图、UWP 激活全部静默失败。错误处理用 `ToolOutcome(success=False)` 回给模型，不抛异常，任务不会因为没装 driver 而崩。
 - 取舍见 [ADR 0011](decisions/0011-computer-use.md)。
 
-### MCP：先有连接测试，还没有工具桥
+### MCP：连接测试 + 任务级工具桥
 
-- `agent/mcp/` 只做一件事：按预设启动服务端、`initialize`、`tools/list`、关掉（`probe_server`），供集市页的「测试连接」用（`POST /api/mcp-servers/{id}/probe`）。**远端工具没有注册进 `ToolRegistry`**，所以智能体勾了 MCP 也拿不到它的工具——模型回答"没有 MCP"是事实，不是它不肯说。
+- `agent/mcp/` 有两条用途，共用同一套协议代码：集市页的「测试连接」（`probe_server`，`POST /api/mcp-servers/{id}/probe`）和任务运行时（`bridge` + `live`）。见 ADR 0031。
+- 任务开始时 `_build_runtime` 调 `live.start_for_task(task_id, agent_config["mcp_servers"])`：逐个服务端起进程、`initialize`、`tools/list`，把每个远端工具注册成 `mcp__<服务端>__<工具名>`（`names.py` 负责清洗、截断到 64 字符、撞名加 `_2`）。注册发生在 `get_tool_schemas` **之前**，否则模型看不到就不会调用。
+- 这些工具就是普通的 `ToolRegistry` 条目：同样的 deny 名单、同样的 `permission_request`、同样的结果预算与事件。权限种类是 `mcp`，目标从工具名里解析出服务端（`server_of`），摘要形如 `Run echo on MCP server filesystem`。没有第二条分发路径。
+- 一个服务端起不来不算任务失败：`bridge.statuses` 记下原因，工具缺席，`registry.mcp_status` 带进「Starting ReAct loop」事件和系统提示词的 `## MCP servers` 一节（`prompt.py`）——否则"连不上"和"没配置"在模型看来是一样的，它会直接回答"没有 MCP"。
+- 生命周期是任务级：`live` 按 task_id 记桥，`_reaps_task_sessions` 在循环的任何出口都调 `stop_task`，与 `process_store.stop_task` 同一个位置、同一个理由。空 task_id（CLI）也是一个键，所以 REPL 不会每轮攒一套进程。
 - 协议是手写的 JSON-RPC 2.0 行分隔实现（`jsonrpc.py` + `stdio.py`），不引 SDK：与 `computer_driver` 一样按子进程说话，省一个依赖，也便于自己处理 Windows 的 `.cmd` shim。
 - 三根管道用**两种编码**解码（`stdio.py::_wrap_pipes`）：stdout 是协议消息，按规范 UTF-8；stderr 是 `cmd.exe` / npm 的诊断，Windows 上是控制台代码页（中文系统 GBK）。统一按 UTF-8 解会把最常见的「'npx' 不是内部或外部命令」变成乱码。
 - `target` 写成绝对路径时，其所在目录会被放到子进程 `PATH` 最前（`_child_env`）：`npx.cmd` 这类 shim 会按名字调 `node`，不这么做就会"包装好了也起不来"。写成裸 `npx` 则要求后端进程自己能在 `PATH` 里找到它（fnm 管理的 Node 要先激活）。
-- 失败一律是 `200 + ok: false + error`：连不上、超时、服务端报错、非 JSON 输出都算"这次没连上"，不是接口错误；只有预设不存在才 404。错误信息里带 stderr 尾部，因为 npm 的 404 / 缺 `node` 只会说在 stderr 上。
-- 关停走 `taskkill /F /T`（Windows）或 `killpg`（POSIX）：`npx` 后面还有 `node` 子进程，只杀 `Popen` 返回的那个会留下孤儿。
-- 待办（下一步）：把连上的服务端工具以 `mcp__<server>__<tool>` 注册进 `ToolRegistry` 并走权限门禁。届时会话代码可以复用，但生命周期要从"一次探测"变成"任务级"。
+- 探测失败一律是 `200 + ok: false + error`：连不上、超时、服务端报错、非 JSON 输出都算"这次没连上"，不是接口错误；只有预设不存在才 404。错误信息里带 stderr 尾部，因为 npm 的 404 / 缺 `node` 只会说在 stderr 上。
+- 远端工具报错（`isError`）抛 `McpToolError`，于是那一步是失败而不是成功；图片/音频块只留一行占位（`[image image/png - not shown to the model]`），字节对模型没有意义。
+- `sse` 还没实现：探测会明说，运行时把它记为未连接。关停走 `taskkill /F /T`（Windows）或 `killpg`（POSIX）：`npx` 后面还有 `node` 子进程，只杀 `Popen` 返回的那个会留下孤儿。
 
 ## 13. 后端模块划分（`main.py` 拆分后）
 
@@ -474,7 +478,7 @@ npm run i18n:check
 | `agent/history.py` | 会话上下文：把同一会话中**已完成**任务的 `query` / `result` 重建成 `user` / `assistant` messages，并按消息数 / 字符预算裁剪（只留最近的轮次） | 不注入、不运行任务 |
 | `agent/usage.py` | 两处读数：任务的 token 总和与墙钟耗时；会话的上下文占用（最近一次模型请求的 `usage`，回溯最多 5 个任务 / 5 条响应，分母取模型 `max_input_tokens`，缺失时回退到循环自己的字符预算 ÷ 4） | 不估算文本、不改上下文 |
 | `agent/runtime/` | "一个任务是什么"：`config`（provider / 工作目录 / 步数 / 确认模式的解析）、`naming`（会话标题与任务名）、`purge`（保留期清理）、`events`（事件构造）、`runner`（`run_task`：跑 ReAct 循环并把两个 broker 注册进 `commons.state`） | HTTP 细节 |
-| `agent/mcp/` | MCP 客户端的**连接测试**：`jsonrpc`（行分隔消息编解码）、`stdio`（起进程、读写管道、关停进程树）、`probe`（握手 + 拉工具清单）、`models`（结果类型） | 不注册工具、不读 `commons` / `dao` |
+| `agent/mcp/` | MCP 客户端与工具桥：`jsonrpc`（行分隔消息编解码）、`stdio`（起进程、读写管道、关停进程树）、`session`（握手 / 工具清单 / 工具调用）、`probe`（集市的一次性连接测试）、`bridge`（把远端工具注册成 `mcp__<server>__<tool>`）、`live`（任务级开关与关停）、`names`（命名与反解）、`prompt`（提示词里的服务端列表）、`models`（结果类型） | 不读 `commons` / `dao`，不碰路由 |
 | `routes/task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
 | `dao/` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁；按职责拆成 `base`（常量与行工具）/ `schema`（建表与迁移）/ `sessions`（会话、工作空间）/ `forks`（Fork 复制）/ `agents` / `settings` / `tasks`（任务与事件）/ `store`（组合类） | provider、模型与 MCP（各自独立模块） |
 | `dao/llm.py` | provider 端点与模型两张表的 SQL、旧 `models` 表的一次性迁移；共用 `dao.store` 的连接与锁 | 限流策略 |

@@ -19,6 +19,7 @@ either useless or infuriating:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import threading
@@ -29,6 +30,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 from uuid import uuid4
 
+from agent.mcp.names import remote_of, server_of
 from agent.tools import file_access
 from agent.tools.permission_rules import PermissionRuleStore
 from agent.tools.web_urls import host_of, https_authority_of
@@ -42,6 +44,10 @@ PERMISSION_EXEC = "exec"
 # ``exec`` so the dialog can say what is about to happen to which window, and so
 # the UI can label it as computer use rather than a command.
 PERMISSION_COMPUTER = "computer"
+# A tool a connected MCP server provides. Its own kind rather than ``exec``: the
+# question is "may this server run a tool", the target is the server, and the dialog
+# should name both instead of showing a command line (ADR 0031).
+PERMISSION_MCP = "mcp"
 # An outgoing request that carries a credential from the vault. Its own kind rather
 # than ``read``: the question is not "may this page be read" but "may THIS key go to
 # THIS host", the rule key is the pair, and the answer is asked even in
@@ -54,6 +60,7 @@ PERMISSION_KINDS = (
     PERMISSION_WRITE,
     PERMISSION_EXEC,
     PERMISSION_COMPUTER,
+    PERMISSION_MCP,
     PERMISSION_VAULT,
 )
 
@@ -475,6 +482,17 @@ class PermissionBroker:
             action = str(arguments.get("action") or "").strip().lower() or "computer action"
             summary = _computer_summary(action, arguments)
             details.update(_computer_details(arguments))
+        elif kind == PERMISSION_MCP:
+            # The remote name and the server are read back out of the registered tool
+            # name: the arguments belong to the remote tool, so they cannot carry it.
+            server = server_of(tool) or "unknown server"
+            remote = remote_of(tool) or tool
+            summary = f"Run {remote} on MCP server {server}"
+            details["server"] = server
+            details["tool"] = remote
+            details["arguments"] = _truncate(
+                json.dumps(arguments, ensure_ascii=False, default=str)
+            )
         elif kind == PERMISSION_VAULT:
             # The reason is the line the user reads first: it is the only part of a
             # credential-bearing call they can judge. The secret is not available
@@ -590,6 +608,12 @@ class PermissionBroker:
 
         if kind == PERMISSION_COMPUTER:
             return _computer_target(arguments)
+
+        if kind == PERMISSION_MCP:
+            # The server, not the remote tool: one answer means "may this server work
+            # in this task". A standing ``always`` rule is already per tool and target,
+            # so it stays narrower on its own (ADR 0031).
+            return server_of(tool)
 
         if kind == PERMISSION_VAULT:
             # "key@host", not the host: approving gh-token for api.example.com is not

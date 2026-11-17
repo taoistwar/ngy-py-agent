@@ -2,11 +2,13 @@
 
 「工具管理」页面把 `agent/tools/catalog.py` 注册的工具按分类分组，一类一张表（文件读写 / 命令与进程 / 桌面操作 / 计算与代码 / 用户交互），可搜索工具名、描述或智能体；点「详情」查看权限门禁、确认框可提供的答复、实现文件与参数结构（参数渲染与智能体编辑里的工具详情一致）。
 
+这里的「工具」是内置工具集（`agent/tools/catalog.py`）。MCP 服务端提供的工具不在其中：它们由每个任务按智能体勾选的服务端动态注册（见 `api-agents.md` 的「MCP 工具如何进入一次任务」），因此 `/api/tools` 与「工具管理」页面都不列出它们。
+
 - `GET /api/tools`：返回 `{tools}`，每个工具包含：
   - `name` / `description` / `parameters`：与模型看到的工具声明一致；
   - `category`：列表分组，取值见 `agent/tools/spec.py` 的 `CATEGORY_KINDS`；页面认识的分类用本地化名称，不认识的直接显示原值；
   - `description_i18n`：`{语言: {description, parameters}}`，只用于页面展示，不会进入模型看到的 schema；
-  - `permission`：权限门禁种类 `none` / `read` / `write` / `exec` / `computer`（见 `agent/tools/permissions.py`），`none` 表示永不询问；
+  - `permission`：权限门禁种类 `none` / `read` / `write` / `exec` / `computer` / `mcp` / `vault`（见 `agent/tools/permissions.py`），`none` 表示永不询问；
   - `scopes`：确认框可以给出的答复（`once` / `session` / `always`），只包含该工具实际接受的范围；
   - `has_preview`：是否提供确认前的无副作用预演；
   - `source`：实现文件，相对仓库根目录；

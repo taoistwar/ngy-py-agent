@@ -7,6 +7,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 from agent.agent_loop.config import TOOL_SCHEMA_PROVIDER
 from agent.checkpoints import CheckpointStore
+from agent.mcp.live import start_for_task as start_mcp_for_task
+from agent.mcp.live import stop_task as stop_mcp_task
 from agent.models import EventSink, TaskEvent
 from agent.modes import (
     build_tool_registry,
@@ -82,6 +84,14 @@ def _build_runtime(
         )
     else:
         registry = build_tool_registry(mode, **registry_options)
+    if enable_tools and agent_config is not None:
+        # The servers this agent selected become ordinary tools, registered before the
+        # schemas are built: a tool the model never sees is a tool it will not call.
+        # A server that fails to start is recorded, not raised - the task still runs.
+        bridge = start_mcp_for_task(task_id, agent_config.get("mcp_servers") or ())
+        if bridge is not None:
+            bridge.register(registry)
+            registry.mcp_status = bridge.statuses
     tool_schemas: Optional[List[Dict[str, Any]]] = None
     if enable_tools:
         try:
@@ -144,6 +154,9 @@ def _reaps_task_sessions(func):
         finally:
             bound = inspect.signature(func).bind_partial(*args, **kwargs)
             task_id = str(bound.arguments.get("task_id") or "")
+            # Before the background sessions: an MCP server may be mid-call for this
+            # run, and both teardowns follow the same "however the loop returns" rule.
+            stop_mcp_task(task_id)
             if task_id:
                 process_store.stop_task(task_id)
 

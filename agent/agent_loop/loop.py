@@ -22,6 +22,7 @@ from agent.agents_md import (
     append_project_instructions,
     load_instructions,
 )
+from agent.mcp.prompt import append_server_status
 from agent.models import (
     EventCategory,
     EventSink,
@@ -122,6 +123,11 @@ def run_react_loop(
         else:
             system_prompt = "You are a helpful assistant. Answer the user request directly and clearly."
         system_prompt = _with_base_dir(system_prompt, base_dir)
+        # Which servers this run asked for, and whether they answered: without it a
+        # server that failed to start looks exactly like one that was never configured.
+        system_prompt = append_server_status(
+            system_prompt, getattr(registry, "mcp_status", [])
+        )
         # The workspace's own rules (https://agents.md/), after the generic ones: a
         # project's build/test commands outrank an agent's defaults.
         instructions = load_instructions(base_dir, agents_md_settings)
@@ -178,6 +184,9 @@ def run_react_loop(
                 "base_dir": base_dir,
                 "agent_id": (agent_config or {}).get("agent_id"),
                 "mcp_servers": (agent_config or {}).get("mcp_servers"),
+                # Per server: connected, how many tools it contributed, or why it did
+                # not. Without this a missing MCP tool is only visible as its absence.
+                "mcp_status": getattr(registry, "mcp_status", []),
                 "history_messages": len(history_messages or []),
                 "first_step": first_step,
                 # The conversation this run started from. Everything that happens next

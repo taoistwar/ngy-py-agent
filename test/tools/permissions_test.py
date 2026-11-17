@@ -30,6 +30,7 @@ from agent.tools.file_access import DEFAULT_WORKSPACE_ENV, FileAccessConfig  # n
 from agent.tools.permission_rules import PermissionRuleStore  # noqa: E402
 from agent.tools.permissions import (  # noqa: E402
     PERMISSION_EXEC,
+    PERMISSION_MCP,
     PERMISSION_NONE,
     PERMISSION_READ,
     PERMISSION_WRITE,
@@ -783,6 +784,102 @@ class PermissionScopeTest(unittest.TestCase):
         self.assertEqual(self.decisions()[-1][2]["scope"], SCOPE_ONCE)
         # ...and the refused "always" must not have written a standing rule.
         self.assertEqual(self.rules.list(), [])
+
+
+class McpPermissionTest(unittest.TestCase):
+    """A remote MCP tool is asked about as "this server", not as a command (ADR 0031)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.events = []
+        self.rules = PermissionRuleStore(self.root / "rules.json")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def make_broker(self, **overrides):
+        options = {
+            "task_id": "task-mcp",
+            "base_dir": str(self.root),
+            "rules": self.rules,
+            "emit": lambda category, title, data: self.events.append((category, title, data)),
+            "wait_seconds": 0.3,
+        }
+        options.update(overrides)
+        return PermissionBroker(**options)
+
+    def requests(self):
+        return [event for event in self.events if event[0] == "permission_request"]
+
+    def decisions(self):
+        return [event for event in self.events if event[0] == "permission_decision"]
+
+    def ask(self, broker, name="mcp__filesystem__echo", **kwargs):
+        """Run one check on its own thread and hand back the pending request."""
+        box = {}
+
+        def runner():
+            box["result"] = broker.check(name, PERMISSION_MCP, {"text": "hi"}, **kwargs)
+
+        thread = threading.Thread(target=runner)
+        thread.start()
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            pending = broker.pending()
+            if pending is not None:
+                return thread, box, pending
+            time.sleep(0.01)
+        raise AssertionError("the broker never asked")
+
+    def test_the_question_names_the_server_and_the_remote_tool(self):
+        broker = self.make_broker()
+
+        thread, box, pending = self.ask(broker)
+
+        self.assertEqual(pending.kind, PERMISSION_MCP)
+        self.assertEqual(pending.target, "filesystem")
+        self.assertIn("echo", pending.summary)
+        self.assertIn("filesystem", pending.summary)
+        self.assertEqual(pending.details["server"], "filesystem")
+        self.assertEqual(pending.details["tool"], "echo")
+        self.assertIn("hi", pending.details["arguments"])
+        broker.resolve(pending.request_id, True, SCOPE_ONCE)
+        thread.join(timeout=5.0)
+        self.assertIsNone(box["result"])
+
+    def test_a_session_answer_covers_this_tool_only(self):
+        broker = self.make_broker()
+        thread, _box, pending = self.ask(broker)
+        broker.resolve(pending.request_id, True, SCOPE_SESSION)
+        thread.join(timeout=5.0)
+
+        # Another tool on the same server is a different function, so it asks again:
+        # "run echo" was never a decision about writing files.
+        thread, _box2, second = self.ask(broker, name="mcp__filesystem__write")
+
+        self.assertEqual(second.target, "filesystem")
+        broker.resolve(second.request_id, True, SCOPE_ONCE)
+        thread.join(timeout=5.0)
+        self.assertEqual(len(self.requests()), 2)
+
+    def test_auto_approve_runs_a_remote_tool_without_asking(self):
+        broker = self.make_broker(mode=PermissionMode.AUTO_APPROVE)
+
+        self.assertIsNone(broker.check("mcp__filesystem__echo", PERMISSION_MCP, {"text": "hi"}))
+
+        self.assertEqual(self.requests(), [])
+        self.assertEqual(self.decisions()[-1][2]["reason"], REASON_AUTO_APPROVED)
+        self.assertEqual(self.decisions()[-1][2]["target"], "filesystem")
+
+    def test_deny_all_refuses_a_remote_tool(self):
+        broker = self.make_broker(mode=PermissionMode.DENY_ALL)
+
+        denial = broker.check("mcp__filesystem__echo", PERMISSION_MCP, {"text": "hi"})
+
+        self.assertIsNotNone(denial)
+        self.assertEqual(denial.details["reason"], REASON_DENY_ALL)
+        self.assertEqual(self.decisions()[-1][2]["target"], "filesystem")
 
 
 if __name__ == "__main__":

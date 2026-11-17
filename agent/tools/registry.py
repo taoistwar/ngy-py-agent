@@ -136,6 +136,10 @@ class ToolRegistry:
             self.transcript_directory.as_posix(),
         )
         self.tools = {}
+        # What this run's MCP servers turned out to be, filled in by the loop's runtime
+        # after it opens them: one entry per configured server, so the task log can say
+        # why a tool is missing instead of only that it is. Empty without MCP.
+        self.mcp_status: List[Dict[str, Any]] = []
         self._register_default_tools(enabled_tools)
 
     def _register_default_tools(self, enabled_tools: list[str] | None = None):
