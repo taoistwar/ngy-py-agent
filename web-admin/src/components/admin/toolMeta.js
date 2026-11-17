@@ -7,6 +7,7 @@ import { agentDisplayName } from "./shared"
 // agent/tools/spec.py.
 export const CATEGORY_ORDER = [
   "file",
+  "network",
   "shell",
   "computer",
   "compute",
@@ -16,6 +17,7 @@ export const CATEGORY_ORDER = [
 
 const CATEGORY_LABEL_KEYS = {
   file: "toolCategoryFile",
+  network: "toolCategoryNetwork",
   shell: "toolCategoryShell",
   computer: "toolCategoryComputer",
   compute: "toolCategoryCompute",

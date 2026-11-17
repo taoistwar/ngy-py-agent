@@ -17,6 +17,7 @@ from agent.tools.permissions import PERMISSION_NONE, SCOPES
 # so a tool can declare a new one without a migration; the page labels the ones it
 # knows and falls back to the raw name for anything else.
 CATEGORY_FILE = "file"
+CATEGORY_NETWORK = "network"
 CATEGORY_SHELL = "shell"
 CATEGORY_COMPUTER = "computer"
 CATEGORY_COMPUTE = "compute"
@@ -25,6 +26,7 @@ CATEGORY_OTHER = "other"
 
 CATEGORY_KINDS = (
     CATEGORY_FILE,
+    CATEGORY_NETWORK,
     CATEGORY_SHELL,
     CATEGORY_COMPUTER,
     CATEGORY_COMPUTE,

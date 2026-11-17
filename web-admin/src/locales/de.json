@@ -503,6 +503,7 @@
   "menuSkills": "Skills",
   "toolManagerTitle": "Werkzeuge",
   "toolCategoryFile": "Dateien",
+  "toolCategoryNetwork": "Webzugriff",
   "toolCategoryShell": "Befehle & Prozesse",
   "toolCategoryComputer": "Desktop-Steuerung",
   "toolCategoryCompute": "Rechnen & Code",

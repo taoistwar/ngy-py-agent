@@ -31,6 +31,7 @@ from uuid import uuid4
 
 from agent.tools import file_access
 from agent.tools.permission_rules import PermissionRuleStore
+from agent.tools.web_urls import host_of
 
 # Permission kinds declared by tool specs (see ``agent/tools/specs.py``).
 PERMISSION_NONE = "none"
@@ -49,6 +50,12 @@ PERMISSION_KINDS = (
     PERMISSION_EXEC,
     PERMISSION_COMPUTER,
 )
+
+# ``read`` tools whose target is a network host rather than a path. The filesystem
+# heuristics below cannot decide anything about them: every fetch is a question
+# until the user allows that host for the task, and the rule is keyed on the host so
+# a second page from the same site is not asked about again (ADR 0027).
+NETWORK_READ_TOOLS = ("web_fetch",)
 
 # Decision reasons. Kept as plain strings so they can travel in event payloads
 # without a translation step, and so the UI can branch on them.
@@ -268,7 +275,11 @@ class PermissionBroker:
             self._decision_event(tool, target, allowed=False, reason=REASON_DENY_ALL)
             return self._denial(tool, kind, target, REASON_DENY_ALL)
 
-        if kind == PERMISSION_READ and not self._read_needs_confirmation(target):
+        if (
+            kind == PERMISSION_READ
+            and tool not in NETWORK_READ_TOOLS
+            and not self._read_needs_confirmation(target)
+        ):
             return None
 
         rule = (tool, target)
@@ -452,6 +463,10 @@ class PermissionBroker:
             details["old_string"] = _truncate(old)
             details["new_string"] = _truncate(new)
             summary = f"Edit {target}"
+        elif kind == PERMISSION_READ and tool in NETWORK_READ_TOOLS:
+            details["url"] = str(arguments.get("url") or "")
+            details["reason"] = "network_fetch"
+            summary = f"Fetch {target}"
         elif kind == PERMISSION_READ:
             details["reason"] = "sensitive_path"
             summary = f"Read {target}"
@@ -481,6 +496,13 @@ class PermissionBroker:
 
     def _target(self, tool: str, kind: str, arguments: Dict[str, Any]) -> Optional[str]:
         """The thing being acted on, or ``None`` when it must not be asked about."""
+        if kind == PERMISSION_READ and tool in NETWORK_READ_TOOLS:
+            # The host, not the whole URL: "allow this site for this task" is the
+            # granularity a user can reason about, and one dialog per page would make
+            # the tool unusable. A malformed URL returns ``None`` so the tool answers
+            # with its own error instead of asking about something it cannot fetch.
+            return host_of(arguments.get("url"))
+
         if kind in (PERMISSION_READ, PERMISSION_WRITE):
             raw = arguments.get("file_path")
             if kind == PERMISSION_READ and (not isinstance(raw, str) or not raw.strip()):

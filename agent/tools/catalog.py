@@ -22,6 +22,7 @@ from agent.tools.glob import spec as glob
 from agent.tools.grep import spec as grep
 from agent.tools.read_file import spec as read_file
 from agent.tools.spec import ToolSpec
+from agent.tools.web_fetch import spec as web_fetch
 from agent.tools.write_file import spec as write_file
 from agent.tools.write_stdin import spec as write_stdin
 
@@ -29,9 +30,11 @@ from agent.tools.write_stdin import spec as write_stdin
 _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     code_interpreter.build_spec,
     # Find before read: ``glob`` locates a file by name, ``grep`` locates the code
-    # inside it, and only then does ``read_file`` need to run.
+    # inside it, ``web_fetch`` reads the page that documents it, and only then does
+    # ``read_file`` need to run.
     glob.build_spec,
     grep.build_spec,
+    web_fetch.build_spec,
     read_file.build_spec,
     edit_file.build_spec,
     write_file.build_spec,

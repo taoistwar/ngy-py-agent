@@ -65,6 +65,9 @@ MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
             "glob",
             "grep",
             "read_file",
+            # Reading a page is read-only, and "look it up" is the most common way an
+            # answer is verified. The fetch cannot change local state (ADR 0027).
+            "web_fetch",
             "ask_user_question",
         ],
         "skills": ["cite_sources"],

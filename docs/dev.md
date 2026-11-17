@@ -189,6 +189,17 @@ npm run i18n:check
 - **没有开关**。不给 `include_ignored` 之类的参数：`.gitignore` 是仓库自己对“什么算源码”的声明，模型想越过它就显式指 `path`。省一个开关，也省掉“两套行为都要测”。
 - **性能约束**：忽略层是每个条目都要过的热路径。`Rule.name_only` 让绝大多数规则只比文件名、需要相对路径的按 base 缓存一次——在本仓库 900 个文件上，不做这一步是 1.2 秒，做了是 0.13 秒。新增规则语法时先看这条。
 
+### web_fetch：读网页，而不是让模型跑 curl
+
+- 有它之前，"读这个网址"只能靠 `exec_command`（`curl`）或 `code_interpreter`（`requests`）：没有域名确认、没有大小上限、没有 HTML→文本这一步，失败形态还随 shell 方言漂移。取舍见 [ADR 0027](decisions/0027-web-fetch-tool.md)。
+- **工具内部不调模型**：参考实现有 `prompt` 参数并用小模型提炼答案，本仓库没有——tool 层拿不到 provider，硬接会绕开速率限制与用量记账，而主模型本来就在 loop 里、下一步就要读这段正文。所以参数只有 `url`，别为了"对齐参考实现"把 `prompt` 加回来。
+- **权限目标是主机名（`permissions.NETWORK_READ_TOOLS`）**：`read` 类工具的默认目标是 `file_path` / `path`，网络读取没有这个字段；`_target` 走 `web_urls.host_of(url)`，因此规则键是 `example.com`，同域名第二个页面不再弹框，子域各自弹框。URL 不合法返回 `None` 不弹框（工具自己报错）。改这段时同时看 `_build_request` 的 `network_fetch` 分支，确认框的文案与 `details.url` 在那里。
+- **重定向自己走**（`allow_redirects=False`）：同域（主机名相等，端口/协议可不同）最多 5 跳；跨域不跟随，返回 `redirect_to` 让模型另抓一次——新站点没被批准过，跳过去等于绕过域名确认。
+- **URL 规则只有一份**（`agent/tools/web_urls.py`）：工具拒绝什么、权限门问什么必须同一个答案，否则要么重复弹框，要么把 A 站的批准套到 B 站。工具包之间不许互相 import，所以它落在包根。
+- **不完整要说明**：2 MiB 正文上限（`response_truncated`）、超预算落盘（`content_truncated` + `persisted_path`）、空正文给固定文案、HTTP ≥ 400 报 `http_error` 而不是把错误页当正文。任何一项都不要改成静默截断。
+- **HTML 转换只用标准库**（`web_fetch/html_text.py`）：标题/列表/链接/代码块/表格行保留，`script`/`style`/`hidden`/表单控件丢弃，`nav`/`footer`/`role=navigation` 这类站点框架也丢——参考实现靠小模型过滤这部分噪音，这里没有那一步。解析异常回退到"正则去标签"，抓取已经成功就不该在转换上失败。
+- 新增分类 `network`：`spec.CATEGORY_NETWORK`、`toolMeta.js` 的 `CATEGORY_ORDER` / 标签键、六份 `locales/*.json` 要一起改（`test/tool_api_test.py` 会校验分类在 `CATEGORY_KINDS` 里）。
+
 ### read_file 永远带行号
 
 - `read_file` 的返回内容一律带 `N<TAB>` 行号前缀（`agent/tools/read_file/lines.py` 的 `LINE_NUMBER_SEPARATOR` / `_format_lines`），**不提供 `include_line_numbers` 之类的开关**。

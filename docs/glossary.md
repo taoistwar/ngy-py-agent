@@ -88,6 +88,17 @@
 | **`num_matches`** | `count` 模式的合计数：逐行模式下是**命中行数**（与 `rg -c` 一致），`multiline` 下是**命中块数**。名字里的 “matches” 指的就是这两种计数单位，不是出现次数。 | `agent/tools/grep/listing.py` |
 | **`timed_out` / `scan_truncated`** | 墙钟预算（20 秒）用尽 / 遍历条目上限被触发。两者都表示“这个答案不完整”，与 `truncated`（输出条数已截断）分开报告。 | `agent/tools/grep/tool.py` |
 
+## 网页抓取（`web_fetch`）
+
+| 术语 | 定义 | 位置 |
+| --- | --- | --- |
+| **`web_fetch`** | 抓取 http/https 网页并返回可读文本的工具：HTML 转 Markdown 风格文本，纯文本/JSON/XML 原样返回，其它类型落盘给路径。只读、可并行；参数只有 `url`（参考实现的 `prompt` 被去掉，工具内部不调模型，见 ADR 0027 D1）。 | `agent/tools/web_fetch/` |
+| **回执（receipt）** | 一次抓取的结构化结果：`url`、`requested_url`、`code`/`code_text`、`content_type`/`media_type`/`encoding`、`bytes`、`duration_ms`、`redirected`、`response_truncated`、`title`，加上正文三件套 `content`/`content_truncated`/`persisted_path`。失败是 `{"error", "reason", ...}`。 | `agent/tools/web_fetch/tool.py` |
+| **网络读取工具（`NETWORK_READ_TOOLS`）** | 声明为 `read` 但目标是**域名**而不是路径的工具清单。权限门因此按 `web_urls.host_of(url)` 取目标、每次都问，规则键是主机名：同站第二个页面不再弹框，子域各自弹框。 | `agent/tools/permissions.py` |
+| **`redirect_to`** | 跨域跳转的落点。工具**不跟随**跨域跳转（新站点没被批准过），而是把地址交还给模型另发一次调用；同域跳转（含 `http`→`https`）自动跟随，最多 5 跳。 | `agent/tools/web_fetch/fetch.py` |
+| **`response_truncated` / `content_truncated`** | 前者：正文在 2 MiB 上限处被截断（页码原文不全）；后者：正文超出输出 token 预算、已落盘，`content` 只是预览。两者都不静默，模型据此决定要不要回读或缩小范围。 | `agent/tools/web_fetch/render.py` |
+| **`agent/tools/web_urls.py`** | 工具与权限门共用的 URL 规则：只允许 http/https、拒绝内嵌凭证、丢 fragment、主机名小写去尾点。两边必须给同一个答案，否则确认会重复或串站。 | `agent/tools/web_urls.py` |
+
 ## 文件编辑（`edit_file`）
 
 | 术语 | 定义 | 位置 |

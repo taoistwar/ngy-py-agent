@@ -503,6 +503,7 @@
   "menuSkills": "Навыки",
   "toolManagerTitle": "Инструменты",
   "toolCategoryFile": "Файлы",
+  "toolCategoryNetwork": "Доступ к сети",
   "toolCategoryShell": "Команды и процессы",
   "toolCategoryComputer": "Управление рабочим столом",
   "toolCategoryCompute": "Вычисления и код",

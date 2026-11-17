@@ -503,6 +503,7 @@
   "menuSkills": "技能",
   "toolManagerTitle": "工具管理",
   "toolCategoryFile": "文件读写",
+  "toolCategoryNetwork": "网络访问",
   "toolCategoryShell": "命令与进程",
   "toolCategoryComputer": "桌面操作",
   "toolCategoryCompute": "计算与代码",

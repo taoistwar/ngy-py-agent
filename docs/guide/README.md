@@ -12,6 +12,7 @@
 - [API：Provider 与模型](api-models.md)
 - [API：工具管理](api-tools.md)
 - [工具：`exec_command`](tool-exec-command.md)
+- [工具：`web_fetch`](tool-web-fetch.md)
 - [工具：`ask_user_question`](tool-ask-user-question.md)
 - [工具：`computer_observe` / `computer_control`](tool-computer.md)
 - [工具黑名单（denylist）](tool-denylist.md)
