@@ -200,6 +200,17 @@ npm run i18n:check
 - **HTML 转换只用标准库**（`web_fetch/html_text.py`）：标题/列表/链接/代码块/表格行保留，`script`/`style`/`hidden`/表单控件丢弃，`nav`/`footer`/`role=navigation` 这类站点框架也丢——参考实现靠小模型过滤这部分噪音，这里没有那一步。解析异常回退到"正则去标签"，抓取已经成功就不该在转换上失败。
 - 新增分类 `network`：`spec.CATEGORY_NETWORK`、`toolMeta.js` 的 `CATEGORY_ORDER` / 标签键、六份 `locales/*.json` 要一起改（`test/tool_api_test.py` 会校验分类在 `CATEGORY_KINDS` 里）。
 
+### web_search：先找页面，再去读
+
+- `web_search`（`agent/tools/web_search/`）回答"哪些页面在讲这件事"。`web_fetch` 只能读**已知 URL**，`exec_command`/`code_interpreter` 能搜但结果形态随方言漂移、失败只知道"命令退出了"。取舍见 [ADR 0028](decisions/0028-web-search-tool.md)。
+- **后端是配置，不是参数**（`WEB_SEARCH_PROVIDER`）：模型没有"换一个引擎重试"的能力，给它这个参数只会浪费一步。默认后端无需密钥（DuckDuckGo HTML 端点，`duckduckgo.py`），所以拿到仓库就能用；Tavily / Serper / Bing 在 `search_apis.py`，三者共用一个 `SearchHit` 形状（`hits.py`）。
+- **只给标题/网址/摘要，不抓正文**：参考实现有 `livecrawl`，这里没有。抓正文要重做整条 `web_fetch` 链路（2 MiB 上限、HTML→文本、跨域跳转规则），两份规则一定会漂移。需要正文就 `web_fetch`。
+- **权限目标是工具自身**（`permissions.SEARCH_PERMISSION_TARGET = "web_search"`）：搜索没有 `url` 可用，而按 query 建规则会让用户为每个新问题再点一次。`_target` 的 `NETWORK_READ_TOOLS` 分支先取 `host_of(url)`（`web_fetch` 走这条），没有 URL 时再落到工具名；不能解析出目标就不问，让工具自己报 `invalid_query`。确认框文案与 `details.query` 在 `_build_request` 的 `network_search` 分支。
+- **默认后端是抓页面，必须把"坏了"说清楚**：DDG 改版或被机器人校验时解析不出结果，`provider_blocked` 会带一句"配置 API 后端"的提示；**不要**把它退化成"没有结果"，那会让模型以为话题不存在而反复改词重试。
+- **域名过滤统一在 `providers.run`**：两个后端支持原生域名过滤、两个不支持，行为不能取决于后端。子域匹配（`docs.example.com` 命中 `example.com`）、去重、`num_results` 截断都在这一处；**被 `num_results` 截掉的条数不算 `filtered_out`**——那是上限不是过滤，混在一起会让"你的过滤器吃掉了结果"这条提示骗人。
+- **三重不完整都要报**：`filtered_out`（域名过滤）、`context_truncated` / `dropped_results`（超 `context_max_characters`，按整条丢）、`content_truncated` + `persisted_path`（超输出 token 预算，落盘到本次运行的临时目录）。`search_type_applied` 说明后端是否真的支持 `fast`/`deep`。
+- 分类沿用 `network`（`spec.CATEGORY_NETWORK`），**前端无需改动**；顺序放在 `grep` 与 `web_fetch` 之间（找到页面 → 再读页面）；`ask` 模式加入允许列表，`plan` 仍然没有工具。
+
 ### read_file 永远带行号
 
 - `read_file` 的返回内容一律带 `N<TAB>` 行号前缀（`agent/tools/read_file/lines.py` 的 `LINE_NUMBER_SEPARATOR` / `_format_lines`），**不提供 `include_line_numbers` 之类的开关**。

@@ -26,6 +26,7 @@ EXPECTED_ORDER = (
     "code_interpreter",
     "glob",
     "grep",
+    "web_search",
     "web_fetch",
     "read_file",
     "edit_file",

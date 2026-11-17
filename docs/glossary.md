@@ -94,10 +94,23 @@
 | --- | --- | --- |
 | **`web_fetch`** | 抓取 http/https 网页并返回可读文本的工具：HTML 转 Markdown 风格文本，纯文本/JSON/XML 原样返回，其它类型落盘给路径。只读、可并行；参数只有 `url`（参考实现的 `prompt` 被去掉，工具内部不调模型，见 ADR 0027 D1）。 | `agent/tools/web_fetch/` |
 | **回执（receipt）** | 一次抓取的结构化结果：`url`、`requested_url`、`code`/`code_text`、`content_type`/`media_type`/`encoding`、`bytes`、`duration_ms`、`redirected`、`response_truncated`、`title`，加上正文三件套 `content`/`content_truncated`/`persisted_path`。失败是 `{"error", "reason", ...}`。 | `agent/tools/web_fetch/tool.py` |
-| **网络读取工具（`NETWORK_READ_TOOLS`）** | 声明为 `read` 但目标是**域名**而不是路径的工具清单。权限门因此按 `web_urls.host_of(url)` 取目标、每次都问，规则键是主机名：同站第二个页面不再弹框，子域各自弹框。 | `agent/tools/permissions.py` |
+| **网络读取工具（`NETWORK_READ_TOOLS`）** | 声明为 `read` 但目标不是路径的工具清单。`web_fetch` 按 `web_urls.host_of(url)` 取目标主机名，同站第二个页面不再弹框、子域各自弹框；`web_search` 没有 URL，目标是工具自身（见下）。这类工具每次都问。 | `agent/tools/permissions.py` |
 | **`redirect_to`** | 跨域跳转的落点。工具**不跟随**跨域跳转（新站点没被批准过），而是把地址交还给模型另发一次调用；同域跳转（含 `http`→`https`）自动跟随，最多 5 跳。 | `agent/tools/web_fetch/fetch.py` |
 | **`response_truncated` / `content_truncated`** | 前者：正文在 2 MiB 上限处被截断（页码原文不全）；后者：正文超出输出 token 预算、已落盘，`content` 只是预览。两者都不静默，模型据此决定要不要回读或缩小范围。 | `agent/tools/web_fetch/render.py` |
 | **`agent/tools/web_urls.py`** | 工具与权限门共用的 URL 规则：只允许 http/https、拒绝内嵌凭证、丢 fragment、主机名小写去尾点。两边必须给同一个答案，否则确认会重复或串站。 | `agent/tools/web_urls.py` |
+
+## 联网搜索（`web_search`）
+
+| 术语 | 定义 | 位置 |
+| --- | --- | --- |
+| **`web_search`** | 联网搜索并返回"标题 + 网址 + 摘要"的工具。**只搜不读**：读页面是 `web_fetch`。只读、可并行；后端由部署配置决定，不是参数（ADR 0028）。 | `agent/tools/web_search/` |
+| **结果单（receipt）** | `query`、`provider`、`search_type` / `search_type_applied`、`result_count`、`results`、`filtered_out`、`context_truncated` / `dropped_results`、`content`、`content_truncated` / `persisted_path`、`duration_ms`。失败是 `{"error", "reason", ...}`。 | `agent/tools/web_search/tool.py` |
+| **`SEARCH_PERMISSION_TARGET`** | 搜索的权限目标，就是工具名本身：搜索没有 URL，而按 `query` 建规则会让用户为每个新问题再确认一次。一次"本任务允许"覆盖该任务里的全部搜索。 | `agent/tools/permissions.py` |
+| **`filtered_out`** | 被域名过滤（或重复 URL）去掉的条数。与 `num_results` 截断分开计：后者是上限，不是过滤。 | `agent/tools/web_search/providers.py` |
+| **`context_truncated` / `dropped_results`** | 结果列表超出调用方给的 `context_max_characters`，尾部按整条丢弃，并报出丢了几条。与超 token 预算的 `content_truncated` 不是一回事。 | `agent/tools/web_search/render.py` |
+| **`search_type_applied`** | 后端是否真的支持 `fast` / `deep`。目前只有 Tavily 有深度设置，其余后端返回 `false`，让模型知道它请求的力度没有生效。 | `agent/tools/web_search/providers.py` |
+| **`SearchHit`** | 后端中立的一条结果：`title` / `url` / `snippet`。四个后端的响应形状在这里收敛，渲染层不需要知道是哪个后端。 | `agent/tools/web_search/hits.py` |
+| **`provider_blocked`** | 默认（无密钥）后端遇到机器人校验时的原因码。它**不是**空结果：提示用户配置 `WEB_SEARCH_API_KEY` 换 API 后端，而不是换个词重试。 | `agent/tools/web_search/duckduckgo.py` |
 
 ## 文件编辑（`edit_file`）
 

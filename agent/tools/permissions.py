@@ -52,10 +52,15 @@ PERMISSION_KINDS = (
 )
 
 # ``read`` tools whose target is a network host rather than a path. The filesystem
-# heuristics below cannot decide anything about them: every fetch is a question
-# until the user allows that host for the task, and the rule is keyed on the host so
-# a second page from the same site is not asked about again (ADR 0027).
-NETWORK_READ_TOOLS = ("web_fetch",)
+# heuristics below cannot decide anything about them: every call is a question until
+# the user allows that host for the task, and the rule is keyed on the host so a
+# second page from the same site is not asked about again (ADR 0027).
+NETWORK_READ_TOOLS = ("web_fetch", "web_search")
+
+# A search has no URL to key a rule on, and a per-query rule would ask again for the
+# next thing the user wants to know. The decision is therefore "may this task search
+# the web at all", stored under the tool's own name (ADR 0028).
+SEARCH_PERMISSION_TARGET = "web_search"
 
 # Decision reasons. Kept as plain strings so they can travel in event payloads
 # without a translation step, and so the UI can branch on them.
@@ -464,9 +469,15 @@ class PermissionBroker:
             details["new_string"] = _truncate(new)
             summary = f"Edit {target}"
         elif kind == PERMISSION_READ and tool in NETWORK_READ_TOOLS:
-            details["url"] = str(arguments.get("url") or "")
-            details["reason"] = "network_fetch"
-            summary = f"Fetch {target}"
+            if tool == SEARCH_PERMISSION_TARGET:
+                query = _truncate(str(arguments.get("query") or "").strip())
+                details["query"] = query
+                details["reason"] = "network_search"
+                summary = f"Search the web: {query}"
+            else:
+                details["url"] = str(arguments.get("url") or "")
+                details["reason"] = "network_fetch"
+                summary = f"Fetch {target}"
         elif kind == PERMISSION_READ:
             details["reason"] = "sensitive_path"
             summary = f"Read {target}"
@@ -501,7 +512,17 @@ class PermissionBroker:
             # granularity a user can reason about, and one dialog per page would make
             # the tool unusable. A malformed URL returns ``None`` so the tool answers
             # with its own error instead of asking about something it cannot fetch.
-            return host_of(arguments.get("url"))
+            host = host_of(arguments.get("url"))
+            if host:
+                return host
+            if tool == SEARCH_PERMISSION_TARGET:
+                # A search carries a query instead of a URL. Without a usable query
+                # the tool refuses the call; asking the user about it would offer a
+                # decision that cannot be honoured.
+                query = arguments.get("query")
+                if isinstance(query, str) and query.strip():
+                    return SEARCH_PERMISSION_TARGET
+            return None
 
         if kind in (PERMISSION_READ, PERMISSION_WRITE):
             raw = arguments.get("file_path")
