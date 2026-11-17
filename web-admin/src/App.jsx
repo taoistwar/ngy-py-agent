@@ -43,6 +43,7 @@ import {
   fetchTools,
   fetchWorkspaces,
   importSkill,
+  probeMcpServer,
   renameSession,
   revertAndDeleteTask,
   stopTask,
@@ -2053,6 +2054,10 @@ export default function App() {
     [refreshMcpServers, translate]
   )
 
+  // A probe reports success and failure the same way - as a result the dialog
+  // renders - so this one deliberately does not touch the page-level banner.
+  const probeMcpServerHandler = useCallback((mcpId) => probeMcpServer(mcpId), [])
+
   const updateRetention = useCallback(
     async (daysValue) => {
       try {
@@ -2603,6 +2608,7 @@ export default function App() {
             onCreate={createMcpServerHandler}
             onUpdate={updateMcpServerHandler}
             onDelete={deleteMcpServerHandler}
+            onProbe={probeMcpServerHandler}
             onRefresh={refreshMcpServers}
             translate={translate}
           />

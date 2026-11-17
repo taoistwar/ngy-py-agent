@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import Modal from "./Modal"
+import McpProbeDialog from "./McpProbeDialog"
 import { MCP_TRANSPORT_OPTIONS, ManagerSearch, matchesKeyword } from "./shared"
 
 function emptyMcpForm() {
@@ -16,11 +17,21 @@ function serverToForm(server) {
   }
 }
 
-export default function McpServerManager({ servers, onCreate, onUpdate, onDelete, onRefresh, translate }) {
+export default function McpServerManager({
+  servers,
+  onCreate,
+  onUpdate,
+  onDelete,
+  onProbe,
+  onRefresh,
+  translate,
+}) {
   const [search, setSearch] = useState("")
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
+  // ``{server, status, result}`` while a connection test is open, else ``null``.
+  const [probe, setProbe] = useState(null)
 
   const editingId = form?.mcp_id || ""
 
@@ -92,6 +103,23 @@ export default function McpServerManager({ servers, onCreate, onUpdate, onDelete
     }
   }
 
+  // A failed connection is a result to read inside the dialog, not a page-level
+  // error, so it is caught here instead of being thrown to the app banner.
+  const handleProbe = async (server) => {
+    setProbe({ server, status: "running", result: null })
+    try {
+      const result = await onProbe(server.mcp_id)
+      setProbe((prev) =>
+        prev?.server?.mcp_id === server.mcp_id ? { server, status: "done", result } : prev
+      )
+    } catch (probeError) {
+      const result = { ok: false, error: probeError?.message || translate("errorUnknown") }
+      setProbe((prev) =>
+        prev?.server?.mcp_id === server.mcp_id ? { server, status: "done", result } : prev
+      )
+    }
+  }
+
   return (
     <section className="panel model-manager">
       <div className="panel-titlebar">
@@ -145,6 +173,14 @@ export default function McpServerManager({ servers, onCreate, onUpdate, onDelete
                     <td className="mono">{server.target || "-"}</td>
                     <td>{server.description || "-"}</td>
                     <td className="model-actions">
+                      <button
+                        type="button"
+                        className="btn btn-xs"
+                        onClick={() => handleProbe(server)}
+                        disabled={probe?.status === "running"}
+                      >
+                        {translate("mcpProbeRun")}
+                      </button>
                       <button type="button" className="btn btn-xs" onClick={() => openEdit(server)}>
                         {translate("modelEdit")}
                       </button>
@@ -224,6 +260,15 @@ export default function McpServerManager({ servers, onCreate, onUpdate, onDelete
             </div>
           </form>
         </Modal>
+      )}
+
+      {probe && (
+        <McpProbeDialog
+          server={probe.server}
+          state={probe}
+          onClose={() => setProbe(null)}
+          translate={translate}
+        />
       )}
     </section>
   )

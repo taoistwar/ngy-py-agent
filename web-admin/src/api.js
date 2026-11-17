@@ -287,6 +287,13 @@ export async function deleteMcpServer(mcpId) {
   })
 }
 
+// One connection attempt: start the server, handshake, and return its tool list.
+export async function probeMcpServer(mcpId) {
+  return requestJson(`${API_BASE}/api/mcp-servers/${mcpId}/probe`, {
+    method: "POST",
+  })
+}
+
 export async function createTask(payload) {
   return requestJson(`${API_BASE}/api/tasks`, {
     method: "POST",
