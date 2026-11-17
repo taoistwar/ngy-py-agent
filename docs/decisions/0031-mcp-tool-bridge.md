@@ -47,7 +47,10 @@ MCP 市场存的是预设，智能体勾选后会把它写进自己的快照并�
 
 ### D5. 远端结果怎么变成模型能读的文本
 
-- `content` 里的 `text` 直通；`resource` 保留 URI（有 `text` 就带上）；`image` / `audio` 换成一行 `[image image/png - not shown to the model]`——模型读不了字节，假装读过比说清楚更糟。
+- `content` 里的 `text` 直通；`resource` 保留 URI（有 `text` 就带上）。
+- `image` 块把字节写进临时目录并作为 `ToolImage` 交给 `agent.vision`，与 `computer_observe` 走同一条视觉通道：内容寻址（重复的截图复用同一个文件）、png/jpeg/webp/gif、8 MB 以内、base64 合法才写。文本里同时留一行 `[image image/png]`——看不见图的模型也得知道"有张截图"，而 `supports_image_input` 为假的模型只拿得到这一行。
+- `audio` 只留一行标记：这个仓库没有音频输入的通道，造一个没人消费的 attachment 没有意义。
+- 写不进文件、base64 坏了、格式不认识、超过上限：都不让这次调用失败，只是没有 attachment。截图丢了一张不值得让模型的真正答案一起丢。
 - 没有可用内容时退回 `structuredContent` 的 JSON；两者都没有则明说 `(the MCP tool returned no content)`。
 - 服务端回 `isError: true` 抛 `McpToolError`：这是一次失败的调用，那一步应当标记为失败，模型读到「Error: <服务端原话>」而不是把它当成功结果继续推理。传输层失败（进程退出、超时、非 JSON）沿用 `McpSessionError` / `McpProtocolError`。
 - 结果原样交给 `apply_result_budget`，与内置工具同一套预算：远端工具没有资格绕过它。
@@ -63,12 +66,13 @@ MCP 市场存的是预设，智能体勾选后会把它写进自己的快照并�
 
 - 不做工具级白名单：勾选一个服务端就是授权它的全部工具，逐工具勾选会让配置界面爆炸，而权限门已经逐次问过。
 - 不把 MCP 工具加进 `agent/tools/catalog.py`，也不进 `/api/tools`：它们是每次任务动态注册的，没有稳定的「工具清单」可言。
-- 不注入图片/音频字节，不做 `sse`，不做跨任务连接池。
+- 不做音频输入、不做 `sse`、不做跨任务连接池。
 
 ## 后果
 
 - 「你有哪些 MCP」现在有真实答案：`mcp__` 前缀的工具出现在模型可见工具集里，系统提示词里还有一份服务端清单（含未连上的原因）。
 - 工具数量可能陡增（`@modelcontextprotocol/server-everything` 一次给出 16 个），schema 与工具列表都会变长；这是勾选该服务端的直接代价，由用户决定。
 - 每个任务开始会多出连接时间（本地 `npx` 约 2 秒；冷启动要下载包时更久，上限 60 秒/请求）。连不上不会失败，只是少工具。
+- 远端截图能进模型了：`image` 块落进系统临时目录的 `ngy-mcp-images/`，由 `agent.vision` 决定是否随下一条消息发出；没有图片输入的模型仍然只看到 `[image image/png]`，行为与之前一致。
 - 权限门新增 `mcp` 种类，但界面不加新标签：确认框显示的是后端给的 `summary` 与 `details`（且刻意不显示 `kind`），而「工具管理」页只列内置工具，所以没有地方需要一个 `mcp` 的中文名。`docs/dev.md`、`docs/guide/api-agents.md`、`docs/guide/api-tools.md` 同步。
 - 测试覆盖：`test/agent/mcp/mcp_bridge_test.py`（命名、注册、调用、远端失败、坏预设、撞名、关停、任务级开关）、`test/agent_loop_mcp_test.py`（注册进 registry 与 schema、坏预设不失败、teardown 关停）、`test/tools/permissions_test.py`（目标=服务端、session 粒度、auto_approve、deny_all）、`test/agent/mcp/mcp_prompt_test.py`。

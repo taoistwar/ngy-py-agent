@@ -21,6 +21,7 @@ from agent.mcp.jsonrpc import McpProtocolError
 from agent.mcp.models import McpToolInfo
 from agent.mcp.names import tool_name
 from agent.mcp.stdio import McpSessionError, StdioSession
+from agent.models import ToolOutcome
 from agent.tools.permissions import PERMISSION_MCP
 from agent.tools.spec import CATEGORY_OTHER
 
@@ -165,7 +166,7 @@ class McpBridge:
         they arrived: rewriting them here would be a second, silently different contract.
         """
 
-        def call(**arguments: Any) -> str:
+        def call(**arguments: Any) -> ToolOutcome:
             return mcp_session.call_tool(
                 server.session, tool.name, arguments, self.call_timeout
             )

@@ -463,7 +463,7 @@ npm run i18n:check
 - 三根管道用**两种编码**解码（`stdio.py::_wrap_pipes`）：stdout 是协议消息，按规范 UTF-8；stderr 是 `cmd.exe` / npm 的诊断，Windows 上是控制台代码页（中文系统 GBK）。统一按 UTF-8 解会把最常见的「'npx' 不是内部或外部命令」变成乱码。
 - `target` 写成绝对路径时，其所在目录会被放到子进程 `PATH` 最前（`_child_env`）：`npx.cmd` 这类 shim 会按名字调 `node`，不这么做就会"包装好了也起不来"。写成裸 `npx` 则要求后端进程自己能在 `PATH` 里找到它（fnm 管理的 Node 要先激活）。
 - 探测失败一律是 `200 + ok: false + error`：连不上、超时、服务端报错、非 JSON 输出都算"这次没连上"，不是接口错误；只有预设不存在才 404。错误信息里带 stderr 尾部，因为 npm 的 404 / 缺 `node` 只会说在 stderr 上。
-- 远端工具报错（`isError`）抛 `McpToolError`，于是那一步是失败而不是成功；图片/音频块只留一行占位（`[image image/png - not shown to the model]`），字节对模型没有意义。
+- 远端工具报错（`isError`）抛 `McpToolError`，于是那一步是失败而不是成功。`image` 块由 `agent/mcp/images.py` 写成 `ToolImage`（内容寻址、png/jpeg/webp/gif、8 MB 上限），与 `computer_observe` 同一条视觉通道，文本里另留一行 `[image image/png]` 给看不见图的模型；`audio` 只留标记。
 - `sse` 还没实现：探测会明说，运行时把它记为未连接。关停走 `taskkill /F /T`（Windows）或 `killpg`（POSIX）：`npx` 后面还有 `node` 子进程，只杀 `Popen` 返回的那个会留下孤儿。
 
 ## 13. 后端模块划分（`main.py` 拆分后）

@@ -59,6 +59,16 @@ TOOLS = [
         "name": "no-schema",
         "description": "",
     },
+    {
+        "name": "shot",
+        "description": "Returns a tiny PNG",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "bad-image",
+        "description": "Returns base64 that is not an image",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -96,6 +106,27 @@ for raw in sys.stdin:
                 "jsonrpc": "2.0",
                 "id": request_id,
                 "result": {"content": [{"type": "text", "text": "it broke"}], "isError": True},
+            })
+        elif name == "shot":
+            send({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "content": [
+                        {"type": "text", "text": "here is the window"},
+                        {
+                            "type": "image",
+                            "data": "iVBORw0KGgo=",
+                            "mimeType": "image/png",
+                        },
+                    ]
+                },
+            })
+        elif name == "bad-image":
+            send({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"content": [{"type": "image", "data": "!!!!", "mimeType": "image/png"}]},
             })
         else:
             send({
@@ -193,8 +224,8 @@ class BridgeTest(unittest.TestCase):
 
         added = bridge.register(registry)
 
-        self.assertEqual(added, 3)
-        self.assertEqual(bridge.statuses[0]["tool_count"], 3)
+        self.assertEqual(added, 5)
+        self.assertEqual(bridge.statuses[0]["tool_count"], 5)
         tool = registry.tools["mcp__filesystem__echo"]
         self.assertEqual(tool["permission"], PERMISSION_MCP)
         self.assertIn("MCP server filesystem", tool["description"])
@@ -214,9 +245,36 @@ class BridgeTest(unittest.TestCase):
         registry = self.registry()
         bridge.register(registry)
 
-        self.assertEqual(
-            registry.execute_tool("mcp__filesystem__echo", {"text": "hi"}), "echo: hi"
-        )
+        outcome = registry.execute_tool("mcp__filesystem__echo", {"text": "hi"})
+
+        self.assertEqual(outcome.model_text, "echo: hi")
+        self.assertEqual(outcome.images, [])
+
+    def test_an_image_block_arrives_as_an_attachment(self):
+        bridge = self.open_bridge(self.preset())
+        registry = self.registry()
+        bridge.register(registry)
+
+        outcome = registry.execute_tool("mcp__filesystem__shot", {})
+
+        self.assertIn("here is the window", outcome.model_text)
+        # The text still says an image arrived, for a model that cannot see it.
+        self.assertIn("[image image/png]", outcome.model_text)
+        self.assertEqual(len(outcome.images), 1)
+        image = outcome.images[0]
+        self.assertEqual(image.mime_type, "image/png")
+        self.assertTrue(Path(image.path).is_file())
+        self.assertTrue(Path(image.path).read_bytes().startswith(b"\x89PNG"))
+
+    def test_undecodable_image_bytes_keep_only_the_marker(self):
+        bridge = self.open_bridge(self.preset())
+        registry = self.registry()
+        bridge.register(registry)
+
+        outcome = registry.execute_tool("mcp__filesystem__bad-image", {})
+
+        self.assertEqual(outcome.images, [])
+        self.assertIn("[image image/png]", outcome.model_text)
 
     def test_a_remote_failure_fails_the_step(self):
         bridge = self.open_bridge(self.preset())
@@ -299,7 +357,7 @@ class LiveTest(unittest.TestCase):
 
         self.assertIsNotNone(bridge)
         self.assertEqual(live.active("task-live"), [bridge])
-        self.assertEqual(bridge.statuses[0]["tool_count"], 3)
+        self.assertEqual(bridge.statuses[0]["tool_count"], 5)
 
         live.stop_task("task-live")
 

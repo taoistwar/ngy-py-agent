@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, List
 
+from agent.mcp.images import tool_image_from_block
 from agent.mcp.models import McpToolInfo
 from agent.mcp.stdio import StdioSession
+from agent.models import ToolImage, ToolOutcome
 
 # What this client offers to speak. A server that only knows an older revision
 # answers with the revision it picked, which is why it is reported back rather than
@@ -85,8 +87,8 @@ def list_tools(session: StdioSession, timeout: float) -> list[McpToolInfo]:
 
 def call_tool(
     session: StdioSession, tool: str, arguments: dict[str, Any], timeout: float
-) -> str:
-    """Run one remote tool and return the text the model should read.
+) -> ToolOutcome:
+    """Run one remote tool and return what the model should read and see.
 
     Raises ``McpToolError`` when the server answers ``isError``, and lets the session's
     own ``McpSessionError`` / ``McpProtocolError`` through when the conversation itself
@@ -100,7 +102,7 @@ def call_tool(
     text = _content_text(result)
     if result.get("isError"):
         raise McpToolError(text)
-    return text
+    return ToolOutcome(model_text=text, images=_content_images(result))
 
 
 def _tool_info(entry: dict[str, Any]) -> McpToolInfo | None:
@@ -156,5 +158,25 @@ def _block_text(block: dict[str, Any]) -> str:
         return str(resource or "")
     if kind in ("image", "audio"):
         media = str(block.get("mimeType") or "unknown type")
-        return f"[{kind} {media} - not shown to the model]"
+        # The text says what arrived; the bytes travel separately (and only image
+        # blocks that the vision layer can send become an attachment).
+        return f"[{kind} {media}]"
     return json.dumps(block, ensure_ascii=False)[:1000]
+
+
+def _content_images(result: dict[str, Any]) -> List[ToolImage]:
+    """Image attachments for one ``tools/call`` result.
+
+    A block that cannot be decoded, is too large, or is a format the vision layer does
+    not send is left out silently: the text marker already says an image arrived, and
+    failing the tool call over its screenshot would lose the model's real answer.
+    """
+    images: List[ToolImage] = []
+    content = result.get("content")
+    for block in content if isinstance(content, list) else []:
+        if not isinstance(block, dict) or block.get("type") != "image":
+            continue
+        image = tool_image_from_block(block)
+        if image is not None:
+            images.append(image)
+    return images
