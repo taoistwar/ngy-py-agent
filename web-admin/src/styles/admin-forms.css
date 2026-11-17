@@ -284,12 +284,6 @@
   max-height: none;
 }
 
-/* Run action under the test inputs, right-aligned as the column's verb. */
-.tool-test-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
 /* Narrow screens collapse the grid into one stacked column. */
 @media (max-width: 820px) {
   .tool-detail-grid {

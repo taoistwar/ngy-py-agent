@@ -183,8 +183,12 @@ export default function ToolDetailBody({
       <div className="agent-section-head">
         <span>{translate("agentToolParams")}</span>
       </div>
+      {/* The run action heads the form it submits. */}
       <div className="agent-section-head">
         <span>{translate("toolTestPanel")}</span>
+        <button type="button" className="btn btn-xs btn-primary" onClick={onRun} disabled={testing}>
+          {testing ? translate("toolTestRunning") : translate("toolTest")}
+        </button>
       </div>
 
       {params.length > 0 ? (
@@ -219,14 +223,6 @@ export default function ToolDetailBody({
           <div className="form-error">{inputError}</div>
         </>
       ) : null}
-
-      <div className="tool-detail-spacer" />
-      {/* The run action stays under the inputs, next to what it sends. */}
-      <div className="tool-test-actions">
-        <button type="button" className="btn btn-compact btn-primary" onClick={onRun} disabled={testing}>
-          {testing ? translate("toolTestRunning") : translate("toolTest")}
-        </button>
-      </div>
     </div>
   )
 }
