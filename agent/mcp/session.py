@@ -13,16 +13,20 @@ from typing import Any, List
 
 from agent.mcp.images import tool_image_from_block
 from agent.mcp.models import McpToolInfo
-from agent.mcp.stdio import StdioSession
+from agent.mcp.protocol import CLIENT_INFO, PROTOCOL_VERSION, McpSession
 from agent.models import ToolImage, ToolOutcome
 
-# What this client offers to speak. A server that only knows an older revision
-# answers with the revision it picked, which is why it is reported back rather than
-# assumed.
-PROTOCOL_VERSION = "2025-06-18"
-CLIENT_INFO = {"name": "ngy-py-agent", "version": "0.1.0"}
 # A server that never stopped paginating would otherwise keep the caller waiting.
 _MAX_TOOL_PAGES = 20
+
+__all__ = [
+    "PROTOCOL_VERSION",
+    "McpToolError",
+    "McpServerInfo",
+    "initialize",
+    "list_tools",
+    "call_tool",
+]
 
 
 class McpToolError(Exception):
@@ -43,7 +47,7 @@ class McpServerInfo:
     protocol_version: str = ""
 
 
-def initialize(session: StdioSession, timeout: float) -> McpServerInfo:
+def initialize(session: McpSession, timeout: float) -> McpServerInfo:
     """Handshake, then tell the server the handshake is done."""
     result = session.request(
         "initialize",
@@ -66,7 +70,7 @@ def initialize(session: StdioSession, timeout: float) -> McpServerInfo:
     )
 
 
-def list_tools(session: StdioSession, timeout: float) -> list[McpToolInfo]:
+def list_tools(session: McpSession, timeout: float) -> list[McpToolInfo]:
     """Every tool the server offers, following its pagination cursors."""
     tools: list[McpToolInfo] = []
     cursor: str | None = None
@@ -86,7 +90,7 @@ def list_tools(session: StdioSession, timeout: float) -> list[McpToolInfo]:
 
 
 def call_tool(
-    session: StdioSession, tool: str, arguments: dict[str, Any], timeout: float
+    session: McpSession, tool: str, arguments: dict[str, Any], timeout: float
 ) -> ToolOutcome:
     """Run one remote tool and return what the model should read and see.
 
