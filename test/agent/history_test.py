@@ -102,6 +102,21 @@ class SessionHistoryTest(unittest.TestCase):
 
         self.assertEqual([], build_session_history(self.session_id))
 
+    def test_a_deleted_task_is_not_context(self):
+        """A turn the user removed from the session must not resurface as history."""
+        deleted = self._finished_task("create add()", "created add()")
+        self._finished_task("add tests for that", "added tests")
+
+        self.assertTrue(self.store.delete_task(deleted))
+
+        self.assertEqual(
+            [
+                {"role": "user", "content": "add tests for that"},
+                {"role": "assistant", "content": "added tests"},
+            ],
+            build_session_history(self.session_id),
+        )
+
     def test_another_sessions_tasks_are_not_context(self):
         other_session = self.store.create_session("other")
         self._finished_task("elsewhere", "answering elsewhere", session_id=other_session)

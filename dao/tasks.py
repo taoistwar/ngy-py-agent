@@ -65,7 +65,19 @@ class _TaskMixin:
             self._conn.commit()
 
     def delete_task(self, task_id: str) -> bool:
+        """Delete a task together with the messages it produced.
+
+        The events are removed explicitly instead of being left to ``ON DELETE
+        CASCADE``: a database created before that foreign key existed keeps its old
+        ``events`` table, so the cascade silently would not run there and the deleted
+        turn would leave its messages behind.
+
+        History needs no second step: a session's next task rebuilds its transcript
+        from the ``tasks`` rows (see ``agent.history``), so once this row is gone the
+        deleted turn is no longer handed to the model as context.
+        """
         with self._lock:
+            self._conn.execute("DELETE FROM events WHERE task_id = ?", (task_id,))
             cursor = self._conn.execute("DELETE FROM tasks WHERE task_id = ?", (task_id,))
             self._conn.commit()
             return (cursor.rowcount or 0) > 0
@@ -75,6 +87,15 @@ class _TaskMixin:
             return 0
         cutoff = datetime.now(UTC) - timedelta(days=retention_days)
         with self._lock:
+            # Same reasoning as ``delete_task``: the events go first, so an older
+            # database without the cascade still loses the expired task's messages.
+            self._conn.execute(
+                """
+                DELETE FROM events
+                WHERE task_id IN (SELECT task_id FROM tasks WHERE created_at < ?)
+                """,
+                (cutoff.isoformat(),),
+            )
             cursor = self._conn.execute(
                 "DELETE FROM tasks WHERE created_at < ?",
                 (cutoff.isoformat(),),

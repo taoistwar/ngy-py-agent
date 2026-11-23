@@ -40,9 +40,10 @@ class TaskHistoryApiTest(unittest.TestCase):
         state.monitor_store = self._previous_store
         self._tmp.cleanup()
 
-    def _finished_task(self, query: str, result: str) -> None:
+    def _finished_task(self, query: str, result: str) -> str:
         task_id = self.store.create_task(query, "openai", session_id=self.session_id)
         self.store.finish_task(task_id, success=True, result=result)
+        return task_id
 
     def _create_task(self, query: str) -> dict:
         """Run the route with the worker replaced by a recorder."""
@@ -93,6 +94,16 @@ class TaskHistoryApiTest(unittest.TestCase):
 
         contents = [message["content"] for message in recorded["history_messages"]]
         self.assertEqual(["create add()", "created add()"], contents)
+
+    def test_a_deleted_task_is_not_handed_to_the_next_task(self):
+        deleted = self._finished_task("create add()", "created add()")
+        self._finished_task("add tests for that", "added tests")
+        self.assertTrue(self.store.delete_task(deleted))
+
+        recorded = self._create_task("make it faster")
+
+        contents = [message["content"] for message in recorded["history_messages"]]
+        self.assertEqual(["add tests for that", "added tests"], contents)
 
 
 if __name__ == "__main__":
