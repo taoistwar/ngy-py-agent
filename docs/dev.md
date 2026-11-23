@@ -454,7 +454,8 @@ npm run i18n:check
 
 ### MCP：连接测试 + 任务级工具桥
 
-- `agent/mcp/` 有两条用途，共用同一套协议代码：集市页的「测试连接」（`probe_server`，`POST /api/mcp-servers/{id}/probe`）和任务运行时（`bridge` + `live`）。见 ADR 0031。
+- `agent/mcp/` 有三条用途，共用同一套协议代码：集市页的「测试连接」（`probe_server`，`POST /api/mcp-servers/{id}/probe`）、集市页点开某个工具的「单独调用」（`call_server_tool`，`POST /api/mcp-servers/{id}/tools/{tool}/test`）和任务运行时（`bridge` + `live`）。见 ADR 0031。
+- 连接测试弹窗里的工具清单可点：点一行（或「测试」按钮）切到该工具的参数表单，参数由 `input_schema` 生成，提交后后端走 `tool_call.call_server_tool`（独立连接，不参与任务、不走确认门禁），结果按文本展示并截断到 20000 字符。工具自己报 `isError` 是 `ok: false` + 服务端原文，不是接口错误。
 - 任务开始时 `_build_runtime` 调 `live.start_for_task(task_id, agent_config["mcp_servers"])`：逐个服务端起进程、`initialize`、`tools/list`，把每个远端工具注册成 `mcp__<服务端>__<工具名>`（`names.py` 负责清洗、截断到 64 字符、撞名加 `_2`）。注册发生在 `get_tool_schemas` **之前**，否则模型看不到就不会调用。
 - 这些工具就是普通的 `ToolRegistry` 条目：同样的 deny 名单、同样的 `permission_request`、同样的结果预算与事件。权限种类是 `mcp`，目标从工具名里解析出服务端（`server_of`），摘要形如 `Run echo on MCP server filesystem`。没有第二条分发路径。
 - 一个服务端起不来不算任务失败：`bridge.statuses` 记下原因，工具缺席，`registry.mcp_status` 带进「Starting ReAct loop」事件和系统提示词的 `## MCP servers` 一节（`prompt.py`）——否则"连不上"和"没配置"在模型看来是一样的，它会直接回答"没有 MCP"。
@@ -479,7 +480,7 @@ npm run i18n:check
 | `agent/history.py` | 会话上下文：把同一会话中**已完成**任务的 `query` / `result` 重建成 `user` / `assistant` messages，并按消息数 / 字符预算裁剪（只留最近的轮次） | 不注入、不运行任务 |
 | `agent/usage.py` | 两处读数：任务的 token 总和与墙钟耗时；会话的上下文占用（最近一次模型请求的 `usage`，回溯最多 5 个任务 / 5 条响应，分母取模型 `max_input_tokens`，缺失时回退到循环自己的字符预算 ÷ 4） | 不估算文本、不改上下文 |
 | `agent/runtime/` | "一个任务是什么"：`config`（provider / 工作目录 / 步数 / 确认模式的解析）、`naming`（会话标题与任务名）、`purge`（保留期清理）、`events`（事件构造）、`runner`（`run_task`：跑 ReAct 循环并把两个 broker 注册进 `commons.state`） | HTTP 细节 |
-| `agent/mcp/` | MCP 客户端与工具桥：`jsonrpc`（行分隔消息编解码）、`stdio`（起进程、读写管道、关停进程树）、`session`（握手 / 工具清单 / 工具调用）、`probe`（集市的一次性连接测试）、`bridge`（把远端工具注册成 `mcp__<server>__<tool>`）、`live`（任务级开关与关停）、`names`（命名与反解）、`prompt`（提示词里的服务端列表）、`models`（结果类型） | 不读 `commons` / `dao`，不碰路由 |
+| `agent/mcp/` | MCP 客户端与工具桥：`jsonrpc`（行分隔消息编解码）、`stdio`（起进程、读写管道、关停进程树）、`session`（握手 / 工具清单 / 工具调用）、`probe`（集市的一次性连接测试）、`tool_call`（集市的一次性工具调用）、`bridge`（把远端工具注册成 `mcp__<server>__<tool>`）、`live`（任务级开关与关停）、`names`（命名与反解）、`prompt`（提示词里的服务端列表）、`models`（结果类型） | 不读 `commons` / `dao`，不碰路由 |
 | `routes/task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
 | `dao/` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁；按职责拆成 `base`（常量与行工具）/ `schema`（建表与迁移）/ `sessions`（会话、工作空间）/ `forks`（Fork 复制）/ `agents` / `settings` / `tasks`（任务与事件）/ `store`（组合类） | provider、模型与 MCP（各自独立模块） |
 | `dao/llm.py` | provider 端点与模型两张表的 SQL、旧 `models` 表的一次性迁移；共用 `dao.store` 的连接与锁 | 限流策略 |
@@ -488,7 +489,7 @@ npm run i18n:check
 | `routes/llm_api.py` | provider 与模型路由、写入时把 RPM 推给 `provider_throttle`（`sync_provider_throttle`） | 限流的窗口算法 |
 | `routes/agent_api.py` | 模式、智能体、技能库路由 | |
 | `routes/admin_api.py` | 管理配置路由（保留期 / 步数 / 确认模式 / 权限规则）、启动时把 env + 数据库读进 `commons.state` 的 loader、`.env` 加载 | 业务路由 |
-| `routes/mcp_api.py` | MCP 集市路由（`/api/mcp-servers`，含连接测试 `POST /{mcp_id}/probe`） | 存储实现（在 `dao/mcp.py`）与协议细节（在 `agent/mcp/`） |
+| `routes/mcp_api.py` | MCP 集市路由（`/api/mcp-servers`，含连接测试 `POST /{mcp_id}/probe` 与单工具调用 `POST /{mcp_id}/tools/{tool_name}/test`） | 存储实现（在 `dao/mcp.py`）与协议细节（在 `agent/mcp/`） |
 
 两条必须守住的规则：
 

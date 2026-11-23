@@ -27,6 +27,30 @@ class McpToolInfo:
 
 
 @dataclass(frozen=True)
+class McpToolCallResult:
+    """Outcome of one hand-run tool call from the marketplace.
+
+    Like the probe, a failed call is a result to read: ``ok`` is false and ``error``
+    carries the server's own wording, so the page renders it instead of catching.
+    """
+
+    ok: bool
+    tool: str
+    result: str = ""
+    error: str = ""
+    duration_ms: int = 0
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "ok": self.ok,
+            "tool": self.tool,
+            "result": self.result,
+            "error": self.error,
+            "duration_ms": self.duration_ms,
+        }
+
+
+@dataclass(frozen=True)
 class McpProbeResult:
     """Outcome of one connection attempt.
 

@@ -25,7 +25,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 import main  # noqa: E402
 import routes.mcp_api as mcp_api  # noqa: E402
-from agent.mcp import McpProbeResult, McpToolInfo  # noqa: E402
+from agent.mcp import McpProbeResult, McpToolCallResult, McpToolInfo  # noqa: E402
 from dao.mcp import _SqliteMcpServerStore  # noqa: E402
 
 
@@ -35,6 +35,7 @@ class McpApiTest(unittest.TestCase):
         self._root = Path(self._tmp.name)
         self._previous_store = mcp_api.mcp_store
         self._previous_probe = mcp_api.probe_server
+        self._previous_call = mcp_api.call_server_tool
         self.store = _SqliteMcpServerStore(self._root / "mcp.db")
         mcp_api.mcp_store = self.store
         self.client = TestClient(main.app)
@@ -42,6 +43,7 @@ class McpApiTest(unittest.TestCase):
     def tearDown(self):
         mcp_api.mcp_store = self._previous_store
         mcp_api.probe_server = self._previous_probe
+        mcp_api.call_server_tool = self._previous_call
         self.store.close()
         self._tmp.cleanup()
 
@@ -155,6 +157,87 @@ class McpApiTest(unittest.TestCase):
         body = response.json()
         self.assertFalse(body["ok"])
         self.assertIn("empty", body["error"])
+
+    def test_tool_test_returns_the_answer_and_the_arguments(self):
+        created = self.create_server()
+        calls = []
+
+        def fake_call(preset, tool_name, arguments):
+            calls.append((preset, tool_name, arguments))
+            return McpToolCallResult(ok=True, tool=tool_name, result="3", duration_ms=12)
+
+        mcp_api.call_server_tool = fake_call
+        response = self.client.post(
+            f"/api/mcp-servers/{created['mcp_id']}/tools/add/test",
+            json={"arguments": {"a": 1, "b": 2}},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["tool"], "add")
+        self.assertEqual(body["result"], "3")
+        self.assertEqual(body["duration_ms"], 12)
+        self.assertFalse(body["truncated"])
+        # The preset the route hands to the client is the stored one, not the request.
+        self.assertEqual(calls[0][0]["target"], "npx -y @modelcontextprotocol/everything")
+        self.assertEqual(calls[0][1], "add")
+        self.assertEqual(calls[0][2], {"a": 1, "b": 2})
+
+    def test_tool_test_without_body_sends_no_arguments(self):
+        created = self.create_server()
+        seen = []
+
+        def fake_call(preset, tool_name, arguments):
+            seen.append(arguments)
+            return McpToolCallResult(ok=True, tool=tool_name, result="ok")
+
+        mcp_api.call_server_tool = fake_call
+        response = self.client.post(f"/api/mcp-servers/{created['mcp_id']}/tools/ping/test")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(seen, [{}])
+
+    def test_failing_tool_call_is_a_result_not_an_api_error(self):
+        created = self.create_server()
+
+        def fake_call(preset, tool_name, arguments):
+            return McpToolCallResult(ok=False, tool=tool_name, error="the tool blew up", duration_ms=5)
+
+        mcp_api.call_server_tool = fake_call
+        response = self.client.post(
+            f"/api/mcp-servers/{created['mcp_id']}/tools/fail/test", json={"arguments": {}}
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertFalse(body["ok"])
+        self.assertIn("blew up", body["error"])
+        self.assertEqual(body["result"], "")
+
+    def test_a_huge_tool_result_is_clipped(self):
+        created = self.create_server()
+        payload = "x" * (mcp_api.MAX_RESULT_CHARS * 3)
+
+        def fake_call(preset, tool_name, arguments):
+            return McpToolCallResult(ok=True, tool=tool_name, result=payload)
+
+        mcp_api.call_server_tool = fake_call
+        response = self.client.post(
+            f"/api/mcp-servers/{created['mcp_id']}/tools/dump/test", json={"arguments": {}}
+        )
+
+        body = response.json()
+        self.assertTrue(body["truncated"])
+        self.assertLess(len(body["result"]), len(payload))
+        self.assertIn("more characters", body["result"])
+
+    def test_tool_test_of_unknown_server_is_404(self):
+        response = self.client.post(
+            "/api/mcp-servers/does-not-exist/tools/add/test", json={"arguments": {}}
+        )
+
+        self.assertEqual(response.status_code, 404, response.text)
 
 
 if __name__ == "__main__":
