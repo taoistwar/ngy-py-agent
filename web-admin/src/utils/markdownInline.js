@@ -1,10 +1,10 @@
-// Inline Markdown: emphasis, code spans, links and hard breaks.
+// Inline Markdown: emphasis, code spans, links, math and hard breaks.
 //
 // The tokens below never carry HTML: ``components/MarkdownView.jsx`` turns them into
 // React elements, so a model answer may quote arbitrary markup and it still shows as
 // text instead of being parsed.
 
-const ESCAPABLE = "\\`*_{}[]()#+-.!|>~"
+const ESCAPABLE = "\\`*_{}[]()#+-.!|>~$"
 const LINK_PATTERN = /^\[([^\]\n]*)\]\(([^()\s]*)(?:\s+"[^"\n]*")?\)/
 const AUTOLINK_PATTERN = /^<(https?:\/\/[^>\s]+)>/
 const BARE_URL_PATTERN = /^(?:https?:\/\/|www\.)[^\s<>()[\]]+/
@@ -136,6 +136,55 @@ function matchBareUrl(text, index) {
   }
 }
 
+/** Index of the closing ``$`` (or ``$$``) run, or -1. Escaped dollars are literal. */
+function findDollarClose(text, from, width) {
+  let index = from
+  while (index < text.length) {
+    const char = text[index]
+    if (char === "\\") {
+      index += 2
+      continue
+    }
+    if (char === "$") {
+      if (width === 1) return index
+      if (text[index + 1] === "$") return index
+      index += 1
+      continue
+    }
+    index += 1
+  }
+  return -1
+}
+
+/**
+ * ``$...$`` math and ``$$...$$`` display math written inside a line.
+ *
+ * Currency stays text: a single-``$`` opener may not be followed by a space, its
+ * closer may not follow a space, and a closer followed by a digit (``$5-$10``) is
+ * not math either - the same rules GitHub uses.
+ */
+function matchMath(text, index) {
+  const display = text.startsWith("$$", index)
+  const width = display ? 2 : 1
+  const open = index + width
+  const first = text[open] || ""
+
+  if (!display && (!first || /\s/.test(first))) return null
+
+  const close = findDollarClose(text, open, width)
+  if (close < 0) return null
+
+  const content = text.slice(open, close)
+  if (!content.trim()) return null
+  if (!display && /\s$/.test(content)) return null
+  if (!display && /\d/.test(text[close + 1] || "")) return null
+
+  return {
+    node: { type: "math", text: content, display },
+    next: close + width,
+  }
+}
+
 /**
  * Parses one line (or one already-joined run of text) into inline tokens.
  *
@@ -170,6 +219,16 @@ export function parseInline(text) {
         flush()
         nodes.push({ type: "code", text: source.slice(index + 1, end) })
         index = end + 1
+        continue
+      }
+    }
+
+    if (char === "$") {
+      const math = matchMath(source, index)
+      if (math) {
+        flush()
+        nodes.push(math.node)
+        index = math.next
         continue
       }
     }

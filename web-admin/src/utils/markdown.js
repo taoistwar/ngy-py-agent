@@ -1,5 +1,5 @@
 // Block-level Markdown for the task result pane: headings, lists, fenced code,
-// blockquotes, tables and horizontal rules.
+// display math, blockquotes, tables and horizontal rules.
 //
 // This is a renderer, not a spec-complete parser: it covers what model answers
 // actually write. Rendering lives in ``components/MarkdownView.jsx``.
@@ -7,6 +7,7 @@
 import { parseInline } from "./markdownInline"
 
 const FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})\s*([\w#+.-]*)\s*$/
+const MATH_PATTERN = /^\s{0,3}\$\$/
 const HEADING_PATTERN = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/
 const RULE_PATTERN = /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/
 const QUOTE_PATTERN = /^\s{0,3}>\s?(.*)$/
@@ -84,6 +85,7 @@ function isTableDivider(line) {
 function startsBlock(line) {
   return (
     FENCE_PATTERN.test(line) ||
+    MATH_PATTERN.test(line) ||
     HEADING_PATTERN.test(line) ||
     RULE_PATTERN.test(line) ||
     QUOTE_PATTERN.test(line) ||
@@ -125,6 +127,42 @@ function parseFence(lines, start, match) {
     block: { type: "code", lang: match[2] || "", text: body.join("\n") },
     next: index,
   }
+}
+
+/**
+ * ``$$ ... $$`` display math, either on one line (``$$x^2$$``) or with the body on
+ * its own lines. An unterminated opener returns null so the answer is not swallowed
+ * up to the end of the document.
+ */
+function parseMathBlock(lines, start) {
+  const opening = lines[start].trim().slice(2)
+  const inlineClose = opening.indexOf("$$")
+
+  if (inlineClose >= 0) {
+    const text = opening.slice(0, inlineClose).trim()
+    // Trailing words after the closer mean the line is prose with inline math; leaving
+    // it to the paragraph parser keeps that text instead of dropping it.
+    if (!text || opening.slice(inlineClose + 2).trim()) return null
+    return { block: { type: "math", text, display: true }, next: start + 1 }
+  }
+
+  const body = opening.trim() ? [opening] : []
+  let index = start + 1
+
+  while (index < lines.length) {
+    const line = lines[index]
+    const close = line.indexOf("$$")
+    if (close >= 0) {
+      body.push(line.slice(0, close))
+      const text = body.join("\n").trim()
+      if (!text) return null
+      return { block: { type: "math", text, display: true }, next: index + 1 }
+    }
+    body.push(line)
+    index += 1
+  }
+
+  return null
 }
 
 function parseQuote(lines, start) {
@@ -234,6 +272,15 @@ function parseBlocks(lines) {
       blocks.push(parsed.block)
       index = parsed.next
       continue
+    }
+
+    if (MATH_PATTERN.test(line)) {
+      const parsed = parseMathBlock(lines, index)
+      if (parsed) {
+        blocks.push(parsed.block)
+        index = parsed.next
+        continue
+      }
     }
 
     const heading = HEADING_PATTERN.exec(line)

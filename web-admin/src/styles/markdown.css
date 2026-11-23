@@ -116,6 +116,22 @@
   text-transform: uppercase;
 }
 
+/* KaTeX output (components/KatexMath.jsx). ``.katex`` defaults to 1.21em, which is
+   too loud next to 13px prose; display math scrolls sideways instead of clipping. */
+.markdown-body .md-math .katex {
+  font-size: 1.08em;
+}
+
+.markdown-body .md-math-display {
+  margin: 2px 0 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.markdown-body .md-math-display .katex-display {
+  margin: 0;
+}
+
 .markdown-body blockquote {
   margin: 0 0 8px;
   padding: 2px 0 2px 10px;

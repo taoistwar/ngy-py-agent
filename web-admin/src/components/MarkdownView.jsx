@@ -5,6 +5,7 @@
 
 import { useMemo } from "react"
 import { parseMarkdown } from "../utils/markdown"
+import KatexMath from "./KatexMath"
 
 const SAFE_PROTOCOLS = ["http:", "https:", "mailto:"]
 
@@ -43,6 +44,8 @@ function renderInline(nodes, keyPrefix) {
         return <em key={key}>{renderInline(node.children, key)}</em>
       case "del":
         return <del key={key}>{renderInline(node.children, key)}</del>
+      case "math":
+        return <KatexMath key={key} tex={node.text} display={node.display} block={false} />
       case "link": {
         const href = safeHref(node.href)
         if (!href) {
@@ -139,6 +142,8 @@ function renderBlocks(blocks, keyPrefix) {
             <code>{block.text}</code>
           </pre>
         )
+      case "math":
+        return <KatexMath key={key} tex={block.text} display={block.display !== false} block />
       case "list":
         return renderList(block, key)
       case "quote":
