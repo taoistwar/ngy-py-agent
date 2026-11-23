@@ -602,6 +602,10 @@
   "mcpProbeToolsEmpty": "Этот сервер не предоставляет инструментов.",
   "mcpProbeToolName": "Инструмент",
   "mcpProbeToolDescription": "Описание",
+  "mcpToolTestTitle": "Тест инструмента MCP",
+  "mcpToolTestPickHint": "Нажмите на инструмент, чтобы вызвать его отдельно",
+  "mcpToolTestOpenHint": "Открыть тест этого инструмента",
+  "mcpToolTestBack": "Назад к инструментам",
   "yes": "да",
   "no": "нет"
 }

@@ -294,6 +294,21 @@ export async function probeMcpServer(mcpId) {
   })
 }
 
+// Run one tool of one server with hand-written arguments. A call the server
+// reports as failed still answers 200; only an unknown preset is rejected.
+export async function testMcpTool(mcpId, toolName, args) {
+  return requestJson(
+    `${API_BASE}/api/mcp-servers/${encodeURIComponent(mcpId)}/tools/${encodeURIComponent(toolName)}/test`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ arguments: args }),
+    }
+  )
+}
+
 export async function createTask(payload) {
   return requestJson(`${API_BASE}/api/tasks`, {
     method: "POST",

@@ -602,6 +602,10 @@
   "mcpProbeToolsEmpty": "该服务没有提供任何工具。",
   "mcpProbeToolName": "工具名",
   "mcpProbeToolDescription": "说明",
+  "mcpToolTestTitle": "MCP 工具测试",
+  "mcpToolTestPickHint": "点击工具可单独调用",
+  "mcpToolTestOpenHint": "点击进入该工具的测试",
+  "mcpToolTestBack": "返回工具清单",
   "yes": "是",
   "no": "否"
 }

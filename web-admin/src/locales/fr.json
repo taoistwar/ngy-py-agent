@@ -602,6 +602,10 @@
   "mcpProbeToolsEmpty": "Ce serveur n'expose aucun outil.",
   "mcpProbeToolName": "Outil",
   "mcpProbeToolDescription": "Description",
+  "mcpToolTestTitle": "Test d'un outil MCP",
+  "mcpToolTestPickHint": "Cliquez sur un outil pour l'appeler seul",
+  "mcpToolTestOpenHint": "Ouvrir un test pour cet outil",
+  "mcpToolTestBack": "Retour aux outils",
   "yes": "oui",
   "no": "non"
 }

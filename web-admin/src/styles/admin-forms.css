@@ -284,6 +284,13 @@
   max-height: none;
 }
 
+/* The MCP tool test shows its result under the form instead of beside it, so the
+   box sizes itself and long output scrolls inside it. */
+.mcp-tool-test-result {
+  min-height: 120px;
+  max-height: 320px;
+}
+
 /* Narrow screens collapse the grid into one stacked column. */
 @media (max-width: 820px) {
   .tool-detail-grid {

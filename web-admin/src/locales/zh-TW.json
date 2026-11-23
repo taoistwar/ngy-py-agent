@@ -602,6 +602,10 @@
   "mcpProbeToolsEmpty": "此伺服器沒有提供任何工具。",
   "mcpProbeToolName": "工具名稱",
   "mcpProbeToolDescription": "說明",
+  "mcpToolTestTitle": "MCP 工具測試",
+  "mcpToolTestPickHint": "點擊工具可單獨呼叫",
+  "mcpToolTestOpenHint": "點擊進入該工具的測試",
+  "mcpToolTestBack": "返回工具清單",
   "yes": "是",
   "no": "否"
 }

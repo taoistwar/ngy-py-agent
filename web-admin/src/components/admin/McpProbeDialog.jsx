@@ -1,7 +1,12 @@
 // Result of one MCP connection test: whether the server answered, what it called
-// itself, and the tools it exposed. It lives outside McpServerManager so the
-// marketplace page stays a list with a form.
+// itself, and the tools it exposed. Picking a tool opens its own test form, so the
+// marketplace can check a preset's tools and not just its handshake.
+//
+// It lives outside McpServerManager so the marketplace page stays a list with a form.
 
+import { useState } from "react"
+
+import McpToolTestView from "./McpToolTestView"
 import Modal from "./Modal"
 import { mcpTransportLabel } from "./shared"
 
@@ -20,7 +25,7 @@ function serverLabel(result) {
   return result.server_version ? `${name} ${result.server_version}` : name
 }
 
-function ToolTable({ tools, translate }) {
+function ToolTable({ tools, translate, onPick }) {
   if (tools.length === 0) {
     return <p className="hint">{translate("mcpProbeToolsEmpty")}</p>
   }
@@ -30,13 +35,38 @@ function ToolTable({ tools, translate }) {
         <tr>
           <th>{translate("mcpProbeToolName")}</th>
           <th>{translate("mcpProbeToolDescription")}</th>
+          <th>{translate("modelListActions")}</th>
         </tr>
       </thead>
       <tbody>
+        {/* The row is the entry point: clicking a tool opens its test form. */}
         {tools.map((tool) => (
-          <tr key={tool.name}>
+          <tr
+            key={tool.name}
+            className="model-row-link"
+            title={translate("mcpToolTestOpenHint")}
+            tabIndex={0}
+            onClick={() => onPick(tool)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return
+              event.preventDefault()
+              onPick(tool)
+            }}
+          >
             <td className="mono">{tool.name}</td>
             <td>{tool.description || "-"}</td>
+            <td className="model-actions">
+              <button
+                type="button"
+                className="btn btn-xs"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onPick(tool)
+                }}
+              >
+                {translate("toolTest")}
+              </button>
+            </td>
           </tr>
         ))}
       </tbody>
@@ -44,7 +74,7 @@ function ToolTable({ tools, translate }) {
   )
 }
 
-function ProbeBody({ result, translate }) {
+function ProbeBody({ result, translate, onPickTool }) {
   const tools = result.tools || []
   return (
     <>
@@ -63,9 +93,14 @@ function ProbeBody({ result, translate }) {
         <>
           <div className="agent-section-head">
             <span>{translate("mcpProbeTools")}</span>
-            <span className="hint">{tools.length}</span>
+            <div className="agent-section-actions">
+              {tools.length > 0 ? (
+                <span className="hint">{translate("mcpToolTestPickHint")}</span>
+              ) : null}
+              <span className="hint">{tools.length}</span>
+            </div>
           </div>
-          <ToolTable tools={tools} translate={translate} />
+          <ToolTable tools={tools} translate={translate} onPick={onPickTool} />
         </>
       ) : (
         <pre className="agent-detail-block tool-test-error">
@@ -77,23 +112,39 @@ function ProbeBody({ result, translate }) {
 }
 
 export default function McpProbeDialog({ server, state, onClose, translate }) {
+  // The tool picked for a manual run, or null while the probe summary is shown.
+  const [pickedTool, setPickedTool] = useState(null)
   const running = state?.status === "running"
   const result = state?.result || null
   const hint = server
     ? `${server.name} · ${mcpTransportLabel(server.transport)} · ${server.target}`
     : ""
+  const toolHint = server && pickedTool ? `${server.name} · ${pickedTool.name}` : ""
 
   return (
     <Modal
-      title={translate("mcpProbeTitle")}
-      hint={hint}
+      title={pickedTool ? translate("mcpToolTestTitle") : translate("mcpProbeTitle")}
+      hint={pickedTool ? toolHint : hint}
       closeLabel={translate("dialogClose")}
       onClose={onClose}
       wide
     >
-      <p className="hint">{translate("mcpProbeHint")}</p>
-      {running ? <p className="hint">{translate("mcpProbeRunning")}</p> : null}
-      {result ? <ProbeBody result={result} translate={translate} /> : null}
+      {pickedTool ? (
+        <McpToolTestView
+          server={server}
+          tool={pickedTool}
+          onBack={() => setPickedTool(null)}
+          translate={translate}
+        />
+      ) : (
+        <>
+          <p className="hint">{translate("mcpProbeHint")}</p>
+          {running ? <p className="hint">{translate("mcpProbeRunning")}</p> : null}
+          {result ? (
+            <ProbeBody result={result} translate={translate} onPickTool={setPickedTool} />
+          ) : null}
+        </>
+      )}
     </Modal>
   )
 }
