@@ -45,7 +45,6 @@ import {
   importSkill,
   probeMcpServer,
   renameSession,
-  revertAndDeleteTask,
   stopTask,
   updateAgent,
   updateMcpServer,
@@ -104,7 +103,7 @@ import {
   saveRememberedModel,
 } from "./utils/composerModelMemory"
 import { formatTime } from "./utils/format"
-import { buildTaskEditDraft, replaceTaskWithEdit } from "./utils/taskEditFlow"
+import { buildTaskEditDraft, truncateSessionFromTask } from "./utils/taskEditFlow"
 import { forkTaskSession } from "./utils/taskForkFlow"
 
 const EVENT_PAGE_SIZE = 30
@@ -1716,8 +1715,9 @@ export default function App() {
   )
 
   // Re-running replays the original request; a model that no longer exists falls
-  // back to the provider recorded on the task. Undo and delete the old task first,
-  // so the replay starts from a clean workspace and leaves no duplicate behind.
+  // back to the provider recorded on the task. The task and every turn after it are
+  // undone and deleted first: the replay is the session's new last turn, so nothing
+  // that ran later may survive as its context.
   const rerunTaskHandler = useCallback(
     async (task) => {
       if (!task?.task_id) return
@@ -1729,12 +1729,12 @@ export default function App() {
       }
       try {
         setError("")
-        const result = await revertAndDeleteTask(task.task_id)
-        if (!result.deleted) {
+        const outcome = await truncateSessionFromTask(task, task.session_id || activeSessionRef.current)
+        if (!outcome.deleted) {
           // Keep the task: its undo dialog is the only place to resolve these files.
           setError(
-            result.blocked.length > 0
-              ? `${translate("revertFailed")} ${translate("revertConflictNote")} ${result.blocked.join(", ")}`
+            outcome.blocked.length > 0
+              ? `${translate("revertFailed")} ${translate("revertConflictNote")} ${outcome.blocked.join(", ")}`
               : translate("revertFailed")
           )
           refreshTasks().catch(() => {})
@@ -1742,16 +1742,25 @@ export default function App() {
         }
         setSelectedTaskIds((prev) => {
           const next = new Set(prev)
-          next.delete(task.task_id)
+          outcome.removed.forEach((taskId) => next.delete(taskId))
           return next
         })
+        if (outcome.removed.includes(selectedIdRef.current)) {
+          // The pane must not keep describing a turn that no longer exists, even if
+          // starting the replay fails below.
+          applySelection("")
+          setSelectedTask(null)
+          setEvents([])
+          nextOffsetRef.current = 0
+          setHasMoreEvents(false)
+        }
         await createNewTask(payload)
       } catch (rerunError) {
         setError(rerunError?.message || translate("errorUnknown"))
         refreshTasks().catch(() => {})
       }
     },
-    [createNewTask, models, refreshTasks, translate]
+    [applySelection, createNewTask, models, refreshTasks, translate]
   )
 
   // Forking branches a new session at this turn: it and every turn before it are
@@ -1792,7 +1801,7 @@ export default function App() {
       if (!edit) return createNewTask(payload)
       try {
         setError("")
-        const outcome = await replaceTaskWithEdit(edit, activeSessionRef.current)
+        const outcome = await truncateSessionFromTask(edit, activeSessionRef.current)
         if (!outcome.deleted) {
           // The undo hit a conflict: keep the edit so nothing has to be retyped.
           refreshTasks().catch(() => {})

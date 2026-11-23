@@ -1,13 +1,14 @@
-// Editing a task from the list: the row's prompt, agent and model are filled back
-// into the composer, and sending that composer replaces the original turn.
+// Replacing a turn from the list: editing a row refills the composer, re-running
+// replays the row's own content. Both start by removing the clicked turn and every
+// turn that ran after it in the same session - a task is built from the session's
+// transcript, so a later turn would otherwise be replayed as context for the new
+// one (and, when every turn is dropped, the session's history is empty again).
 //
 // "Replace" is three steps, in this order:
-//   1. the turn is undone (its file changes are reverted) and deleted, the same way
-//      a re-run does it, so the replay starts from a clean workspace;
-//   2. the turns created after it in the same session are deleted too - a task is
-//      built from the session's transcript, so leaving them would replay them as
-//      context for the edited turn;
-//   3. the caller creates a task from the edited content.
+//   1. the turn is undone (its file changes are reverted) and deleted, so the replay
+//      starts from a clean workspace;
+//   2. the turns created after it in the same session are deleted too;
+//   3. the caller creates a task from the edited/replayed content.
 
 import { deleteTask, fetchTasks, revertAndDeleteTask, stopTask } from "../api"
 import { isTaskRunningStatus } from "../i18n"
@@ -33,34 +34,43 @@ function turnIdsAfter(sessionTasks, taskId) {
   return sessionTasks.slice(index + 1).map((item) => item.task_id)
 }
 
-// Delete ``task`` and every turn after it. A turn that is still running is stopped
-// first: deleting a live task would leave its thread appending events to a record
-// that no longer exists.
+// The composer carries the row it was filled from as ``taskId``; a task read from
+// the API calls the same thing ``task_id``.
+function taskIdOf(task) {
+  return task?.task_id || task?.taskId || ""
+}
+
+// Delete ``task`` and every turn after it in the same session. A turn that is still
+// running is stopped first: deleting a live task would leave its thread appending
+// events to a record that no longer exists.
 //
 // Returns ``{deleted, blocked, removed}``. ``deleted: false`` means the undo hit a
 // conflict and the task was kept - its undo dialog is the only place those files can
 // be settled - so nothing at all is deleted.
-export async function replaceTaskWithEdit(task, sessionId) {
+export async function truncateSessionFromTask(task, sessionId) {
+  const taskId = taskIdOf(task)
+  if (!taskId) return { deleted: false, blocked: [], removed: [] }
+
   // Read the list before anything is removed: the turns to drop are only known by
   // their position relative to this one.
   const sessionTasks = sessionId ? await fetchTasks(sessionId) : []
-  const laterIds = turnIdsAfter(sessionTasks, task.task_id)
+  const laterIds = turnIdsAfter(sessionTasks, taskId)
 
-  const result = await revertAndDeleteTask(task.task_id)
+  const result = await revertAndDeleteTask(taskId)
   if (!result.deleted) {
     return { deleted: false, blocked: result.blocked, removed: [] }
   }
 
-  const removed = [task.task_id]
-  for (const taskId of laterIds) {
-    const later = sessionTasks.find((item) => item.task_id === taskId)
+  const removed = [taskId]
+  for (const laterId of laterIds) {
+    const later = sessionTasks.find((item) => item.task_id === laterId)
     if (later && isTaskRunningStatus(later.status)) {
       // A failed stop still lets the delete through: the record is what matters,
       // and the thread cannot outlive it for long.
-      await stopTask(taskId).catch(() => {})
+      await stopTask(laterId).catch(() => {})
     }
-    await deleteTask(taskId)
-    removed.push(taskId)
+    await deleteTask(laterId)
+    removed.push(laterId)
   }
 
   return { deleted: true, blocked: [], removed }
