@@ -549,4 +549,20 @@ export async function updateWebSearchConfig(payload) {
   })
 }
 
+// The backend and credentials of the web_fetch tool. The page's value replaces
+// WEB_FETCH_* from .env and is applied to the next fetch, not the next restart.
+export async function fetchWebFetchConfig() {
+  return requestJson(`${API_BASE}/api/admin/web-fetch`)
+}
+
+export async function updateWebFetchConfig(payload) {
+  return requestJson(`${API_BASE}/api/admin/web-fetch`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
 

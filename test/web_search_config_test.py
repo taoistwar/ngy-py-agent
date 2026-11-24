@@ -86,6 +86,14 @@ class WebSearchConfigTest(unittest.TestCase):
         )
         self.assertEqual("env", source)
 
+    def test_an_alias_from_the_environment_is_reported_canonically(self):
+        os.environ[limits.PROVIDER_ENV] = "deepsearch"
+
+        backend, source = self.load()
+
+        self.assertEqual("deepseek", backend.provider)
+        self.assertEqual("env", source)
+
     def test_a_saved_backend_wins_over_the_environment(self):
         os.environ.update({limits.PROVIDER_ENV: "tavily", limits.API_KEY_ENV: "env-key"})
         self.store.set_web_search_config("serper", "saved-key", "https://internal.example")

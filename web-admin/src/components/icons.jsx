@@ -314,6 +314,17 @@ export function SearchIcon() {
   )
 }
 
+// A globe: the sidebar entry for choosing how web_fetch reads a page.
+export function GlobeIcon() {
+  return (
+    <Icon>
+      <circle cx="12" cy="12" r="9" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <path d="M12 3a14.5 14.5 0 0 1 3.8 9 14.5 14.5 0 0 1-3.8 9 14.5 14.5 0 0 1-3.8-9A14.5 14.5 0 0 1 12 3z" />
+    </Icon>
+  )
+}
+
 export function SidebarIcon({ collapsed = false }) {
   return (
     <Icon>

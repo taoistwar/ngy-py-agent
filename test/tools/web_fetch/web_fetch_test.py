@@ -10,6 +10,7 @@ defined in ``_Handler`` below. That keeps the suite runnable offline and makes
 "what the server answered" part of the test rather than of the internet.
 """
 
+import json
 import socket
 import sys
 import tempfile
@@ -28,7 +29,7 @@ from agent.tools.bindings import ToolBindings  # noqa: E402
 from agent.tools.catalog import build_all_specs  # noqa: E402
 from agent.tools.permissions import PermissionBroker, PermissionMode  # noqa: E402
 from agent.tools.registry import ToolRegistry  # noqa: E402
-from agent.tools.web_fetch import make_web_fetch_tool  # noqa: E402
+from agent.tools.web_fetch import limits, make_web_fetch_tool  # noqa: E402
 from agent.tools.web_fetch.html_text import html_to_text  # noqa: E402
 from agent.tools.web_fetch.tool import EMPTY_PAGE_TEXT  # noqa: E402
 from agent.tools.web_urls import UrlError, parse_url  # noqa: E402
@@ -71,6 +72,33 @@ class _Handler(BaseHTTPRequestHandler):
     """One route table for the whole module; no state, no files."""
 
     protocol_version = "HTTP/1.1"
+    last_post = None
+
+    def do_POST(self):  # noqa: N802 - the base class names it
+        path = self.path.split("?", 1)[0]
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(length)
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            payload = None
+        type(self).last_post = {
+            "path": path,
+            "body": payload,
+            "authorization": self.headers.get("Authorization"),
+        }
+        if path == "/deepseek/fetch":
+            if self.headers.get("Authorization") != "Bearer fetch-key":
+                return self._json(401, {"error": {"message": "Authentication Fails"}})
+            return self._json(
+                200,
+                {"title": "DeepSeek Rendered", "content": "# Heading\n\nRendered by DeepSeek."},
+            )
+        if path == "/deepseek/large":
+            return self._json(200, {"title": "Large", "content": LARGE_TEXT})
+        if path == "/deepseek/error":
+            return self._json(402, {"error": {"message": "Insufficient Balance"}})
+        return self._send(404, "text/plain; charset=utf-8", b"not found")
 
     def do_GET(self):  # noqa: N802 - the base class names it
         path = self.path.split("?", 1)[0]
@@ -104,6 +132,10 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _json(self, status, payload):
+        body = json.dumps(payload).encode("utf-8")
+        self._send(status, "application/json; charset=utf-8", body)
 
     def _redirect(self, location):
         self.send_response(302)
@@ -145,8 +177,11 @@ class _ServerCase(unittest.TestCase):
         self.tool = make_web_fetch_tool(
             max_tokens=25000, output_directory=self.outputs, timeout=5
         )
+        limits.reset()
+        _Handler.last_post = None
 
     def tearDown(self):
+        limits.reset()
         self._tmp.cleanup()
 
     def fetch(self, path):
@@ -186,6 +221,7 @@ class WebFetchToolTest(_ServerCase):
         self.assertFalse(result["redirected"])
         self.assertFalse(result["content_truncated"])
         self.assertIsNone(result["persisted_path"])
+        self.assertEqual(result["provider"], "builtin")
 
     def test_a_same_host_redirect_is_followed(self):
         result = self.fetch("/redirect-same")
@@ -252,6 +288,68 @@ class WebFetchToolTest(_ServerCase):
         result = self.fetch("/empty.html")
 
         self.assertEqual(result["content"], EMPTY_PAGE_TEXT)
+
+    def test_the_deepseek_backend_returns_markdown_and_a_title(self):
+        limits.configure(
+            limits.BackendSettings("deepseek", "fetch-key", self.base + "/deepseek/fetch")
+        )
+
+        result = self.fetch("/page.html")
+
+        self.assertNotIn("error", result, result)
+        self.assertEqual(result["provider"], "deepseek")
+        self.assertEqual(result["title"], "DeepSeek Rendered")
+        self.assertEqual(result["content"], "# Heading\n\nRendered by DeepSeek.")
+        self.assertEqual(result["content_type"], "text/markdown; charset=utf-8")
+        self.assertEqual(result["code"], 200)
+        self.assertFalse(result["redirected"])
+        self.assertEqual(_Handler.last_post["body"], {"url": self.base + "/page.html"})
+        self.assertEqual(_Handler.last_post["authorization"], "Bearer fetch-key")
+
+    def test_deepseek_without_a_key_is_refused_before_any_request(self):
+        limits.configure(
+            limits.BackendSettings("deepseek", "", self.base + "/deepseek/fetch")
+        )
+
+        result = self.fetch("/page.html")
+
+        self.assertEqual(result["reason"], "missing_api_key")
+        self.assertIsNone(_Handler.last_post)
+
+    def test_a_deepseek_http_error_keeps_the_provider_message(self):
+        limits.configure(
+            limits.BackendSettings("deepseek", "fetch-key", self.base + "/deepseek/error")
+        )
+
+        result = self.fetch("/page.html")
+
+        self.assertEqual(result["reason"], "http_error")
+        self.assertEqual(result["code"], 402)
+        self.assertEqual(result["provider"], "deepseek")
+        self.assertIn("Insufficient Balance", result["error"])
+
+    def test_a_large_deepseek_page_uses_the_same_persist_contract(self):
+        limits.configure(
+            limits.BackendSettings("deepseek", "fetch-key", self.base + "/deepseek/large")
+        )
+        tool = make_web_fetch_tool(max_tokens=200, output_directory=self.outputs, timeout=5)
+
+        result = tool(self.base + "/page.html")
+
+        self.assertTrue(result["content_truncated"])
+        self.assertEqual(result["provider"], "deepseek")
+        saved = Path(result["persisted_path"])
+        self.assertEqual(saved.read_text(encoding="utf-8"), LARGE_TEXT)
+
+    def test_deepsearch_is_accepted_as_an_alias_for_deepseek(self):
+        limits.configure(
+            limits.BackendSettings("deepsearch", "fetch-key", self.base + "/deepseek/fetch")
+        )
+
+        result = self.fetch("/page.html")
+
+        self.assertNotIn("error", result, result)
+        self.assertEqual(result["provider"], "deepseek")
 
     def test_a_missing_page_is_an_http_error(self):
         result = self.fetch("/missing")

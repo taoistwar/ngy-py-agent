@@ -13,6 +13,8 @@ download tool would allow: this is a reading tool, not a downloader.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
+from typing import Optional
 
 # Total wall clock for one fetch, including redirects and the body read.
 DEFAULT_TIMEOUT_SECONDS = 20.0
@@ -45,6 +47,72 @@ ACCEPT = (
     "text/plain;q=0.9,application/json;q=0.8,*/*;q=0.5"
 )
 ACCEPT_LANGUAGE = "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7"
+
+# Which implementation reads the page. ``builtin`` is this process's own request
+# plus HTML conversion, so a fresh checkout works without credentials;
+# ``deepseek`` sends the URL to DeepSeek's Fetch API and gets Markdown back.
+DEFAULT_PROVIDER = "builtin"
+PROVIDER_ENV = "WEB_FETCH_PROVIDER"
+API_KEY_ENV = "WEB_FETCH_API_KEY"
+BASE_URL_ENV = "WEB_FETCH_BASE_URL"
+
+
+@dataclass(frozen=True)
+class BackendSettings:
+    """Which fetcher answers, with its key and endpoint override."""
+
+    provider: str
+    api_key: str
+    base_url: str
+
+
+def env_backend() -> BackendSettings:
+    """The backend described by the environment, or the local fetcher."""
+    return BackendSettings(
+        provider=(os.getenv(PROVIDER_ENV) or "").strip() or DEFAULT_PROVIDER,
+        api_key=(os.getenv(API_KEY_ENV) or "").strip(),
+        base_url=(os.getenv(BASE_URL_ENV) or "").strip(),
+    )
+
+
+# The admin page's saved row, applied at startup and on every write. A snapshot is
+# returned so a save that lands mid-call cannot mix a new provider with an old key.
+_runtime: Optional[BackendSettings] = None
+
+
+def configure(backend: BackendSettings) -> None:
+    """Install the saved backend for this process; called by the admin API."""
+    global _runtime
+    _runtime = backend
+
+
+def reset() -> None:
+    """Drop the saved backend and fall back to the environment (tests, reloads)."""
+    global _runtime
+    _runtime = None
+
+
+def backend() -> BackendSettings:
+    """The backend one fetch should use: the saved row, else the environment."""
+    configured = _runtime
+    if configured is not None:
+        return configured
+    return env_backend()
+
+
+def provider_name() -> str:
+    """The configured backend name, or the local fetcher."""
+    return backend().provider
+
+
+def api_key() -> str:
+    """The configured API key; empty for the local fetcher."""
+    return backend().api_key
+
+
+def base_url() -> str:
+    """The endpoint override, or empty to use the provider's own endpoint."""
+    return backend().base_url
 
 
 def timeout_seconds() -> float:

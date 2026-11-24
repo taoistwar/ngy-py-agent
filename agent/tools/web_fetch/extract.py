@@ -147,6 +147,12 @@ def extract_content(page: FetchedPage) -> Extracted:
 
     if is_textual(media_type) and not binary:
         text, encoding = decode_body(page.body, hint)
-        return Extracted(kind=KIND_TEXT, text=text, media_type=media_type, encoding=encoding)
+        return Extracted(
+            kind=KIND_TEXT,
+            text=text,
+            title=page.title,
+            media_type=media_type,
+            encoding=encoding,
+        )
 
     return Extracted(kind=KIND_BINARY, media_type=media_type or "application/octet-stream")

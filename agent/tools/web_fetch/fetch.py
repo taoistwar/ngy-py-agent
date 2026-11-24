@@ -53,6 +53,10 @@ class FetchedPage:
     redirects: int
     # Set when the server sent us to a different host; ``body`` is empty then.
     redirect_to: Optional[str] = None
+    # A server-side backend may report the title separately from the body.
+    title: str = ""
+    # Which adapter produced this page, so the receipt can say so.
+    provider: str = "builtin"
 
 
 def status_text(status: int) -> str:

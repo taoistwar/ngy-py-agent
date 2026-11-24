@@ -84,8 +84,8 @@ class _SettingsMixin:
     def set_skills_root(self, skills_root: str) -> None:
         self._set_setting("skills_root", skills_root)
 
-    def get_web_search_config(self) -> dict[str, Any] | None:
-        value = self._get_setting("web_search_config")
+    def _get_json_setting(self, key: str) -> dict[str, Any] | None:
+        value = self._get_setting(key)
         if value is None:
             return None
         try:
@@ -94,14 +94,33 @@ class _SettingsMixin:
             return None
         return payload if isinstance(payload, dict) else None
 
+    def _set_json_setting(self, key: str, payload: dict[str, Any]) -> None:
+        self._set_setting(key, json.dumps(payload))
+
+    def get_web_search_config(self) -> dict[str, Any] | None:
+        return self._get_json_setting("web_search_config")
+
     def set_web_search_config(self, provider: str, api_key: str, base_url: str) -> None:
         # One row for the whole backend: "which source is in force" then has one
         # answer, and switching provider cannot leave a stale key behind.
-        payload = json.dumps(
+        self._set_json_setting(
+            "web_search_config",
             {
                 "provider": str(provider),
                 "api_key": str(api_key),
                 "base_url": str(base_url),
-            }
+            },
         )
-        self._set_setting("web_search_config", payload)
+
+    def get_web_fetch_config(self) -> dict[str, Any] | None:
+        return self._get_json_setting("web_fetch_config")
+
+    def set_web_fetch_config(self, provider: str, api_key: str, base_url: str) -> None:
+        self._set_json_setting(
+            "web_fetch_config",
+            {
+                "provider": str(provider),
+                "api_key": str(api_key),
+                "base_url": str(base_url),
+            },
+        )

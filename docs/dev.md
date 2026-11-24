@@ -195,6 +195,7 @@ npm run i18n:check
 - **工具内部不调模型**：参考实现有 `prompt` 参数并用小模型提炼答案，本仓库没有——tool 层拿不到 provider，硬接会绕开速率限制与用量记账，而主模型本来就在 loop 里、下一步就要读这段正文。所以参数只有 `url`，别为了"对齐参考实现"把 `prompt` 加回来。
 - **权限目标是主机名（`permissions.NETWORK_READ_TOOLS`）**：`read` 类工具的默认目标是 `file_path` / `path`，网络读取没有这个字段；`_target` 走 `web_urls.host_of(url)`，因此规则键是 `example.com`，同域名第二个页面不再弹框，子域各自弹框。URL 不合法返回 `None` 不弹框（工具自己报错）。改这段时同时看 `_build_request` 的 `network_fetch` 分支，确认框的文案与 `details.url` 在那里。
 - **重定向自己走**（`allow_redirects=False`）：同域（主机名相等，端口/协议可不同）最多 5 跳；跨域不跟随，返回 `redirect_to` 让模型另抓一次——新站点没被批准过，跳过去等于绕过域名确认。
+- **后端可配置**（`WEB_FETCH_PROVIDER`）：`builtin` 是原来的本地抓取；`deepseek` 走 DeepSeek 的 Fetch API（`deepseek.py` + `providers.py`），由对方服务器抓取并返回 Markdown。服务端后端看不到跨域跳转，也拿不到 PDF/图片的原始字节——不要试图在适配器里补回 D3/D6，指南里已把这条差异写明。
 - **URL 规则只有一份**（`agent/tools/web_urls.py`）：工具拒绝什么、权限门问什么必须同一个答案，否则要么重复弹框，要么把 A 站的批准套到 B 站。工具包之间不许互相 import，所以它落在包根。
 - **不完整要说明**：2 MiB 正文上限（`response_truncated`）、超预算落盘（`content_truncated` + `persisted_path`）、空正文给固定文案、HTTP ≥ 400 报 `http_error` 而不是把错误页当正文。任何一项都不要改成静默截断。
 - **HTML 转换只用标准库**（`web_fetch/html_text.py`）：标题/列表/链接/代码块/表格行保留，`script`/`style`/`hidden`/表单控件丢弃，`nav`/`footer`/`role=navigation` 这类站点框架也丢——参考实现靠小模型过滤这部分噪音，这里没有那一步。解析异常回退到"正则去标签"，抓取已经成功就不该在转换上失败。
@@ -227,7 +228,7 @@ npm run i18n:check
 - **只给标题/网址/摘要，不抓正文**：参考实现有 `livecrawl`，这里没有。抓正文要重做整条 `web_fetch` 链路（2 MiB 上限、HTML→文本、跨域跳转规则），两份规则一定会漂移。需要正文就 `web_fetch`。
 - **权限目标是工具自身**（`permissions.SEARCH_PERMISSION_TARGET = "web_search"`）：搜索没有 `url` 可用，而按 query 建规则会让用户为每个新问题再点一次。`_target` 的 `NETWORK_READ_TOOLS` 分支先取 `host_of(url)`（`web_fetch` 走这条），没有 URL 时再落到工具名；不能解析出目标就不问，让工具自己报 `invalid_query`。确认框文案与 `details.query` 在 `_build_request` 的 `network_search` 分支。
 - **默认后端是抓页面，必须把"坏了"说清楚**：DDG 改版或被机器人校验时解析不出结果，`provider_blocked` 会带一句"配置 API 后端"的提示；**不要**把它退化成"没有结果"，那会让模型以为话题不存在而反复改词重试。
-- **域名过滤统一在 `providers.run`**：两个后端支持原生域名过滤、两个不支持，行为不能取决于后端。子域匹配（`docs.example.com` 命中 `example.com`）、去重、`num_results` 截断都在这一处；**被 `num_results` 截掉的条数不算 `filtered_out`**——那是上限不是过滤，混在一起会让"你的过滤器吃掉了结果"这条提示骗人。
+- **域名过滤统一在 `providers.run`**：只有 Tavily 支持原生域名过滤，其余后端不支持，行为不能取决于后端。子域匹配（`docs.example.com` 命中 `example.com`）、去重、`num_results` 截断都在这一处；**被 `num_results` 截掉的条数不算 `filtered_out`**——那是上限不是过滤，混在一起会让"你的过滤器吃掉了结果"这条提示骗人。
 - **三重不完整都要报**：`filtered_out`（域名过滤）、`context_truncated` / `dropped_results`（超 `context_max_characters`，按整条丢）、`content_truncated` + `persisted_path`（超输出 token 预算，落盘到本次运行的临时目录）。`search_type_applied` 说明后端是否真的支持 `fast`/`deep`。
 - 分类沿用 `network`（`spec.CATEGORY_NETWORK`），**前端无需改动**；顺序放在 `grep` 与 `web_fetch` 之间（找到页面 → 再读页面）；`ask` 模式加入允许列表，`plan` 仍然没有工具。
 

@@ -32,6 +32,8 @@ from agent.tools.denylist import (
     parse_rules,
 )
 from agent.tools.permissions import PermissionMode, normalize_mode
+from agent.tools.web_fetch import limits as web_fetch_limits
+from agent.tools.web_fetch import providers as web_fetch_providers
 from agent.tools.web_search import limits as web_search_limits
 from agent.tools.web_search import providers as web_search_providers
 from commons import state
@@ -51,6 +53,8 @@ from commons.schemas import (
     PermissionRuleRequest,
     RetentionConfigRequest,
     RetentionConfigResponse,
+    WebFetchConfigRequest,
+    WebFetchConfigResponse,
     WebSearchConfigRequest,
     WebSearchConfigResponse,
 )
@@ -121,6 +125,16 @@ def _load_web_search_config() -> tuple[web_search_limits.BackendSettings, str]:
     degrades to the keyless default instead of failing every search.
     """
     env_backend = web_search_limits.env_backend()
+    # The page only offers canonical ids, so an alias in .env must not leave the
+    # GET response naming a value the form cannot display.
+    env_provider = web_search_providers.canonical_name(env_backend.provider)
+    if env_provider not in web_search_providers.SUPPORTED:
+        env_provider = web_search_limits.DEFAULT_PROVIDER
+    env_backend = web_search_limits.BackendSettings(
+        provider=env_provider,
+        api_key=env_backend.api_key,
+        base_url=env_backend.base_url,
+    )
     stored = state.monitor_store.get_web_search_config()
     if not stored:
         return env_backend, "env"
@@ -150,7 +164,53 @@ def _checked_web_search_provider(raw: Any) -> str:
     return provider
 
 
-def _checked_web_search_base_url(raw: Any) -> str:
+def _load_web_fetch_config() -> tuple[web_fetch_limits.BackendSettings, str]:
+    """The saved fetch backend, else the environment's.
+
+    A saved row owns all three fields, so a key in ``.env`` cannot silently serve
+    a provider chosen on the page. An unknown stored backend (a hand-edited
+    database) degrades to the keyless local fetcher instead of failing every fetch.
+    """
+    env_backend = web_fetch_limits.env_backend()
+    env_provider = web_fetch_providers.canonical_name(env_backend.provider)
+    if env_provider not in web_fetch_providers.SUPPORTED:
+        env_provider = web_fetch_limits.DEFAULT_PROVIDER
+    env_backend = web_fetch_limits.BackendSettings(
+        provider=env_provider,
+        api_key=env_backend.api_key,
+        base_url=env_backend.base_url,
+    )
+    stored = state.monitor_store.get_web_fetch_config()
+    if not stored:
+        return env_backend, "env"
+    provider = web_fetch_providers.canonical_name(stored.get("provider"))
+    if provider not in web_fetch_providers.SUPPORTED:
+        provider = web_fetch_limits.DEFAULT_PROVIDER
+    return (
+        web_fetch_limits.BackendSettings(
+            provider=provider,
+            api_key=str(stored.get("api_key") or "").strip(),
+            base_url=str(stored.get("base_url") or "").strip(),
+        ),
+        "database",
+    )
+
+
+def _checked_web_fetch_provider(raw: Any) -> str:
+    provider = web_fetch_providers.canonical_name(raw)
+    if provider not in web_fetch_providers.SUPPORTED:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unknown fetch provider '{raw}'; use one of: "
+                f"{', '.join(web_fetch_providers.SUPPORTED)}."
+            ),
+        )
+    return provider
+
+
+def _checked_http_endpoint(raw: Any, what: str) -> str:
+    """An empty or http(s) endpoint override; anything else is a 400."""
     url = str(raw or "").strip()
     if not url:
         return ""
@@ -161,7 +221,7 @@ def _checked_web_search_base_url(raw: Any) -> str:
     if parts is None or parts.scheme not in ("http", "https") or not parts.netloc:
         raise HTTPException(
             status_code=400,
-            detail=f"Search endpoint '{url}' is not an http(s) URL.",
+            detail=f"{what} '{url}' is not an http(s) URL.",
         )
     return url
 
@@ -198,6 +258,8 @@ def load_startup_config() -> None:
     # pushed into it here and on every admin write (see ``web_search_limits``).
     web_search_backend, _ = _load_web_search_config()
     web_search_limits.configure(web_search_backend)
+    web_fetch_backend, _ = _load_web_fetch_config()
+    web_fetch_limits.configure(web_fetch_backend)
     # The limiter holds the policy itself: a task builds its provider per run, so
     # nothing else survives long enough to carry the budgets (ADR 0014).
     llm_api.sync_provider_throttle()
@@ -344,7 +406,7 @@ async def set_web_search_config(
     backend = web_search_limits.BackendSettings(
         provider=_checked_web_search_provider(payload.provider),
         api_key=payload.api_key.strip(),
-        base_url=_checked_web_search_base_url(payload.base_url),
+        base_url=_checked_http_endpoint(payload.base_url, "Search endpoint"),
     )
     # Written and pushed together: the next search in a running task must use
     # the backend the page just saved, without waiting for a restart.
@@ -353,6 +415,43 @@ async def set_web_search_config(
     )
     web_search_limits.configure(backend)
     return _web_search_response(backend, "database")
+
+
+# ------------------------------------------------------------------- web fetch
+
+
+def _web_fetch_response(
+    backend: web_fetch_limits.BackendSettings, source: str
+) -> WebFetchConfigResponse:
+    return WebFetchConfigResponse(
+        provider=backend.provider,
+        api_key=backend.api_key,
+        base_url=backend.base_url,
+        source=source,
+        supported=list(web_fetch_providers.SUPPORTED),
+    )
+
+
+@router.get("/api/admin/web-fetch", response_model=WebFetchConfigResponse)
+async def get_web_fetch_config() -> WebFetchConfigResponse:
+    backend, source = _load_web_fetch_config()
+    return _web_fetch_response(backend, source)
+
+
+@router.put("/api/admin/web-fetch", response_model=WebFetchConfigResponse)
+async def set_web_fetch_config(payload: WebFetchConfigRequest) -> WebFetchConfigResponse:
+    backend = web_fetch_limits.BackendSettings(
+        provider=_checked_web_fetch_provider(payload.provider),
+        api_key=payload.api_key.strip(),
+        base_url=_checked_http_endpoint(payload.base_url, "Fetch endpoint"),
+    )
+    # Written and pushed together: the next fetch in a running task must use the
+    # backend the page just saved, without waiting for a restart.
+    state.monitor_store.set_web_fetch_config(
+        backend.provider, backend.api_key, backend.base_url
+    )
+    web_fetch_limits.configure(backend)
+    return _web_fetch_response(backend, "database")
 
 
 # -------------------------------------------------------------- permission rules

@@ -24,6 +24,8 @@ from commons.schemas.config import (
     PermissionModeConfigResponse,
     RetentionConfigRequest,
     RetentionConfigResponse,
+    WebFetchConfigRequest,
+    WebFetchConfigResponse,
     WebSearchConfigRequest,
     WebSearchConfigResponse,
 )
@@ -140,6 +142,8 @@ __all__ = [
     "ToolTestRequest",
     "ToolTestResponse",
     "ToolTextResponse",
+    "WebFetchConfigRequest",
+    "WebFetchConfigResponse",
     "WebSearchConfigRequest",
     "WebSearchConfigResponse",
     "WorkspaceCreateRequest",

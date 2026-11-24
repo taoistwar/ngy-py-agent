@@ -97,3 +97,27 @@ class WebSearchConfigResponse(BaseModel):
     base_url: str
     source: str
     supported: list[str]
+
+
+class WebFetchConfigRequest(BaseModel):
+    """Backend and credentials for the ``web_fetch`` tool."""
+
+    provider: str = Field(description="builtin / deepseek")
+    api_key: str = Field(
+        default="", description="Key for the chosen backend; the builtin fetcher ignores it."
+    )
+    base_url: str = Field(
+        default="",
+        max_length=1024,
+        description="Replaces the backend endpoint; empty uses the backend's own URL.",
+    )
+
+
+class WebFetchConfigResponse(BaseModel):
+    """The web fetch backend currently in force, and where it came from."""
+
+    provider: str
+    api_key: str
+    base_url: str
+    source: str
+    supported: list[str]

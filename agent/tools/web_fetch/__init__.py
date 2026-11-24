@@ -22,6 +22,12 @@ does not need it: it does not answer a ``prompt`` with a second model (see
 :mod:`~agent.tools.web_fetch.tool` and ADR 0027), and it does not follow a redirect
 into a different site.
 
+The implementation is configurable (:mod:`agent.tools.web_fetch.providers`): the
+local fetcher above is the default, and ``deepseek`` delegates to DeepSeek's
+server-side Fetch API, which returns Markdown. The redirect and raw-byte
+guarantees describe the local fetcher; a server-side provider handles redirects
+upstream and cannot return original PDF/image bytes.
+
 One tool, one package, named after the tool the model sees (see ``AGENTS.md``).
 The URL rules are shared with the permission gate and therefore live at the
 package root (:mod:`agent.tools.web_urls`). This module re-exports the public

@@ -41,6 +41,7 @@ import {
   fetchTaskEvents,
   fetchTasks,
   fetchTools,
+  fetchWebFetchConfig,
   fetchWebSearchConfig,
   fetchWorkspaces,
   importSkill,
@@ -53,6 +54,7 @@ import {
   updateProvider,
   updateRetentionConfig,
   updateSkillsRoot,
+  updateWebFetchConfig,
   updateWebSearchConfig,
   updateWorkspace,
 } from "./api"
@@ -90,6 +92,7 @@ import {
   RetentionManager,
 } from "./components/admin/SettingsPanels"
 import SkillManager from "./components/admin/SkillManager"
+import WebFetchManager from "./components/admin/WebFetchManager"
 import WebSearchManager from "./components/admin/WebSearchManager"
 import AppSidebar from "./components/shell/AppSidebar"
 import AppTopbar from "./components/shell/AppTopbar"
@@ -987,6 +990,7 @@ export default function App() {
   const [maxStepsConfig, setMaxStepsConfig] = useState(null)
   const [agentsMdConfig, setAgentsMdConfig] = useState(null)
   const [permissionModeConfig, setPermissionModeConfig] = useState(null)
+  const [webFetchConfig, setWebFetchConfig] = useState(null)
   const [webSearchConfig, setWebSearchConfig] = useState(null)
   const [permissionRules, setPermissionRules] = useState(null)
   const [denyList, setDenyList] = useState(null)
@@ -2137,6 +2141,24 @@ export default function App() {
     [translate]
   )
 
+  const refreshWebFetch = useCallback(async () => {
+    const config = await fetchWebFetchConfig()
+    setWebFetchConfig(config)
+    return config
+  }, [])
+
+  const updateWebFetch = useCallback(
+    async (payload) => {
+      try {
+        const config = await updateWebFetchConfig(payload)
+        setWebFetchConfig(config)
+      } catch (webFetchError) {
+        setError(webFetchError?.message || translate("errorUnknown"))
+      }
+    },
+    [translate]
+  )
+
   const refreshWebSearch = useCallback(async () => {
     const config = await fetchWebSearchConfig()
     setWebSearchConfig(config)
@@ -2295,6 +2317,9 @@ export default function App() {
     refreshWebSearch().catch((webSearchError) =>
       setError(webSearchError?.message || translate("errorLoadFailed"))
     )
+    refreshWebFetch().catch((webFetchError) =>
+      setError(webFetchError?.message || translate("errorLoadFailed"))
+    )
     refreshPermissionRules().catch(() => {})
     refreshDenyList().catch(() => {})
     refreshHealth().catch(() => {})
@@ -2354,6 +2379,9 @@ export default function App() {
       if (activeMenu === "websearch") {
         refreshWebSearch().catch(() => {})
       }
+      if (activeMenu === "webfetch") {
+        refreshWebFetch().catch(() => {})
+      }
       if (activeMenu === "permissions") {
         refreshPermissionRules().catch(() => {})
       }
@@ -2366,7 +2394,7 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [activeMenu, applySelection, refreshAgentMeta, refreshAgents, refreshDenyList, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWebSearch, refreshWorkspaces, translate])
+  }, [activeMenu, applySelection, refreshAgentMeta, refreshAgents, refreshDenyList, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWebFetch, refreshWebSearch, refreshWorkspaces, translate])
 
   useEffect(() => {
     if (!selectedId || activeMenu !== "tasks") return
@@ -2724,6 +2752,17 @@ export default function App() {
             onSave={updateWebSearch}
             onRefresh={() =>
               refreshWebSearch().catch((refreshError) =>
+                setError(refreshError?.message || translate("errorLoadFailed"))
+              )
+            }
+            translate={translate}
+          />
+        ) : activeMenu === "webfetch" ? (
+          <WebFetchManager
+            config={webFetchConfig}
+            onSave={updateWebFetch}
+            onRefresh={() =>
+              refreshWebFetch().catch((refreshError) =>
                 setError(refreshError?.message || translate("errorLoadFailed"))
               )
             }

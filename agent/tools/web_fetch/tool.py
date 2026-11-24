@@ -25,10 +25,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from agent.tools.web_fetch import limits, providers
 from agent.tools.web_fetch.errors import WebFetchError
 from agent.tools.web_fetch.extract import KIND_BINARY, Extracted, extract_content
-from agent.tools.web_fetch.fetch import FetchedPage, fetch_page
-from agent.tools.web_fetch.limits import timeout_seconds
+from agent.tools.web_fetch.fetch import FetchedPage
 from agent.tools.web_fetch.render import fit_content, save_binary
 from agent.tools.web_urls import UrlError, parse_url
 
@@ -49,6 +49,7 @@ def _receipt(page: FetchedPage, **extra: Any) -> Dict[str, Any]:
         "duration_ms": page.elapsed_ms,
         "redirected": page.redirects > 0,
         "response_truncated": page.body_truncated,
+        "provider": page.provider,
     }
     receipt.update(extra)
     return receipt
@@ -153,7 +154,16 @@ def _web_fetch_impl(
     except UrlError as exc:
         raise WebFetchError(exc.message, exc.reason, **exc.details) from None
 
-    page = fetch_page(target, timeout=timeout if timeout else timeout_seconds())
+    # One snapshot: a save from the admin page may land mid-call, and the key
+    # must belong to the backend that is actually asked.
+    configured = limits.backend()
+    provider = providers.resolve(configured.provider, configured.api_key)
+    page = provider.fetch(
+        target,
+        endpoint=providers.endpoint_for(provider, configured.base_url),
+        api_key=configured.api_key,
+        timeout=timeout if timeout else limits.timeout_seconds(),
+    )
     if page.redirect_to:
         return _redirect_result(page)
 
