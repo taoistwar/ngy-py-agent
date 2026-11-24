@@ -35,7 +35,7 @@ from agent.tools.permissions import PERMISSION_NONE  # noqa: E402
 from agent.tools.user_question import (  # noqa: E402
     STATUS_ANSWERED,
     STATUS_NO_CLIENT,
-    STATUS_TIMEOUT,
+    STATUS_STOPPED,
     QuestionResult,
 )
 
@@ -252,15 +252,17 @@ class NoChannelTest(unittest.TestCase):
         self.assertEqual(outcome.details["status"], STATUS_NO_CLIENT)
         self.assertEqual(outcome.details["answered_count"], 0)
 
-    def test_a_timeout_is_reported_with_the_reason(self):
-        channel = FakeChannel(QuestionResult(answers={}, status=STATUS_TIMEOUT, timeout_seconds=30.0))
+    def test_a_stop_is_reported_with_the_reason(self):
+        channel = FakeChannel(QuestionResult(answers={}, status=STATUS_STOPPED))
 
         outcome = make_ask_user_question_tool(channel)(questions=ONE_QUESTION)
 
         self.assertEqual(payload_of(outcome.model_text), {"answers": {}})
-        self.assertIn("within 30 seconds", outcome.model_text)
-        self.assertEqual(outcome.details["status"], STATUS_TIMEOUT)
-        self.assertEqual(outcome.details["timeout_seconds"], 30.0)
+        self.assertIn("task was stopped", outcome.model_text)
+        self.assertEqual(outcome.details["status"], STATUS_STOPPED)
+        # No deadline is promised to the caller any more: the tool waits, or the task
+        # is stopped (ADR 0010 D2, revised).
+        self.assertNotIn("timeout_seconds", outcome.details)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
 """Task routes: create, list, inspect, stop, delete, stream - and answer.
 
 The two answer endpoints are the inbound half of the two blocking channels. In both, a
-tool call is parked inside the task thread until the answer arrives, the deadline passes,
-or the task is stopped; the gate fails closed on silence (ADR 0006) while a question does
-not (ADR 0010 D2), and the difference shows up in what the tool gets back, not here.
+tool call is parked inside the task thread until the answer arrives or the task is
+stopped - the gate also gives up at its deadline, a question never does (ADR 0010 D2).
+The gate fails closed on silence (ADR 0006) while a question does not, and the
+difference shows up in what the tool gets back, not here.
 """
 
 from __future__ import annotations
@@ -341,10 +342,11 @@ async def answer_question(
     """Answer a pending question batch, unblocking the task's waiting thread.
 
     The other half of the question channel: the tool call is parked inside the task
-    thread until this arrives, the deadline passes, or the task is stopped. Unlike a
-    permission answer, this one carries **data**, so a malformed body is refused
-    rather than coerced - an id nobody asked about, or a non-string answer, would
-    otherwise reach the model as an answer to a question it never asked.
+    thread until this arrives or the task is stopped - there is no deadline to outlast
+    (ADR 0010 D2, revised). Unlike a permission answer, this one carries **data**, so a
+    malformed body is refused rather than coerced - an id nobody asked about, or a
+    non-string answer, would otherwise reach the model as an answer to a question it
+    never asked.
     """
     broker = state.get_task_question_broker(task_id)
     if broker is None:

@@ -33,8 +33,6 @@ from agent.tools.user_question import (  # noqa: E402
 from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
 
-WAIT_SECONDS = 30.0
-
 QUESTIONS = [
     {
         "id": "approach",
@@ -72,7 +70,7 @@ class QuestionApiTest(unittest.TestCase):
     # ------------------------------------------------------------------ helpers
 
     def register_broker(self, task_id="task-1"):
-        broker = UserQuestionBroker(task_id=task_id, wait_seconds=WAIT_SECONDS)
+        broker = UserQuestionBroker(task_id=task_id)
         state.register_task_questions(task_id, broker)
         return broker
 

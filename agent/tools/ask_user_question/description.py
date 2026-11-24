@@ -28,9 +28,10 @@ ASK_USER_QUESTION_DESCRIPTION = (
     "free-form one to every question. The result is JSON keyed by each question's id "
     "('{\"answers\": {\"<id>\": {\"answers\": [...]}}}'); an option the user picked appears as "
     "its label, anything they typed appears as another entry, and a question they skipped has "
-    "an empty list. When nobody answers - no client is connected, or the wait times out - the "
-    "answer set is empty and the result says why: decide yourself with the information you "
-    "have, state the assumption you made, and do not ask again."
+    "an empty list. The wait has no time limit: the call returns when the user answers, or "
+    "with an empty answer set when no client is connected or the task is stopped - the result "
+    "says why, and then you decide yourself with the information you have, state the "
+    "assumption you made, and do not ask again."
 )
 
 ASK_USER_QUESTION_PARAMETERS: Dict[str, Any] = {

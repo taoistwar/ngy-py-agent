@@ -1,31 +1,27 @@
 """Tests for the question channel (ADR 0010).
 
-The properties worth pinning are the ones that differ from the permission gate: an
-unanswered question is **not** a refusal, a stop beats the timeout, and the two
-brokers cannot answer for each other.
+The properties worth pinning are the ones that differ from the permission gate: the wait
+has **no deadline**, a stop releases it, and the two brokers cannot answer for each
+other.
 
 Run from the repository root::
 
     uv run python test/tools/user_question_test.py -v
 """
 
-import os
 import sys
 import threading
 import time
 import unittest
 from pathlib import Path
-from unittest import mock
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from agent.tools import user_question  # noqa: E402
 from agent.tools.user_question import (  # noqa: E402
     STATUS_ANSWERED,
     STATUS_STOPPED,
-    STATUS_TIMEOUT,
     UserQuestionBroker,
     UserQuestionRequest,
     validate_answers,
@@ -75,7 +71,9 @@ class BrokerTest(unittest.TestCase):
         def runner():
             box["result"] = broker.ask(questions or QUESTIONS)
 
-        thread = threading.Thread(target=runner)
+        # Daemon: a failed assertion must not leave a thread parked forever and wedge
+        # the test process now that the wait has no deadline.
+        thread = threading.Thread(target=runner, daemon=True)
         thread.start()
         self.assertTrue(wait_for(lambda: broker.pending() is not None), "the broker never asked")
         return thread, box
@@ -118,22 +116,29 @@ class BrokerTest(unittest.TestCase):
         self.assertEqual(answer_payload["question_count"], 2)
         self.assertEqual(answer_payload["request_id"], request_payload["request_id"])
 
-    # ------------------------------------------------------- nobody answering
+    # ------------------------------------------------------------ the long wait
 
-    def test_nobody_answering_is_not_a_refusal(self):
-        broker = self.make_broker(wait_seconds=0.3)
+    def test_the_wait_has_no_deadline(self):
+        # Longer than any polling tick: the call must still be parked, not answered
+        # on the user's behalf by a timer (ADR 0010 D2, revised).
+        broker = self.make_broker()
+        thread, box = self.park(broker)
 
-        result = broker.ask(QUESTIONS)
+        time.sleep(0.6)
 
-        self.assertEqual(result.status, STATUS_TIMEOUT)
-        self.assertEqual(result.answers, {})
-        # The model is told what to do about it, not told that it was denied.
-        self.assertIn("decide yourself", result.note())
-        self.assertIn("Nobody answered", result.note())
-        self.assertEqual(self.events[-1][2]["status"], STATUS_TIMEOUT)
+        self.assertTrue(thread.is_alive())
+        self.assertIsNotNone(broker.pending())
+        self.assertNotIn("result", box)
 
-    def test_a_stop_beats_the_timeout(self):
-        broker = self.make_broker(wait_seconds=30.0, should_stop=lambda: True)
+        request_id = broker.pending().request_id
+        self.assertTrue(broker.resolve(request_id, {"approach": {"answers": ["Patch it"]}}))
+        thread.join(5)
+
+        self.assertEqual(box["result"].status, STATUS_ANSWERED)
+        self.assertEqual(box["result"].answers, {"approach": {"answers": ["Patch it"]}})
+
+    def test_a_stop_releases_the_wait(self):
+        broker = self.make_broker(should_stop=lambda: True)
 
         started = time.monotonic()
         result = broker.ask(QUESTIONS)
@@ -143,7 +148,7 @@ class BrokerTest(unittest.TestCase):
         self.assertIn("stopped", result.note())
 
     def test_cancel_all_releases_the_waiter_without_calling_it_answered(self):
-        broker = self.make_broker(wait_seconds=30.0)
+        broker = self.make_broker()
         thread, box = self.park(broker)
 
         broker.cancel_all()
@@ -190,26 +195,6 @@ class BrokerTest(unittest.TestCase):
         empty, error = validate_answers(request, {})
         self.assertIsNone(error)
         self.assertEqual(empty, {})
-
-
-class TimeoutKnobTest(unittest.TestCase):
-    def test_the_question_timeout_has_its_own_knob(self):
-        with mock.patch.dict(
-            os.environ, {"ASK_USER_TIMEOUT_SECONDS": "7", "PERMISSION_TIMEOUT_SECONDS": "99"}
-        ):
-            self.assertEqual(user_question.timeout_seconds(), 7.0)
-
-        with mock.patch.dict(os.environ, {"PERMISSION_TIMEOUT_SECONDS": "99"}, clear=False):
-            os.environ.pop("ASK_USER_TIMEOUT_SECONDS", None)
-            # The permission knob must not retune questions: silence means "decide
-            # yourself" here and "refuse" there, so one value cannot serve both.
-            self.assertEqual(user_question.timeout_seconds(), 120.0)
-
-    def test_a_nonsense_value_falls_back_to_the_default(self):
-        with mock.patch.dict(os.environ, {"ASK_USER_TIMEOUT_SECONDS": "soon"}):
-            self.assertEqual(user_question.timeout_seconds(), 120.0)
-        with mock.patch.dict(os.environ, {"ASK_USER_TIMEOUT_SECONDS": "0"}):
-            self.assertEqual(user_question.timeout_seconds(), 120.0)
 
 
 if __name__ == "__main__":

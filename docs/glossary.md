@@ -238,7 +238,7 @@
 | **"其他"行（Other）** | 自由输入项由**客户端**添加（`QuestionPrompt.jsx`），模型被要求在选项里不要自己加 "Other"。它不产生标签，只把用户输入作为答案。 | `web-admin/src/components/QuestionPrompt.jsx` |
 | **`pending_question`** | 任务详情/列表里的待答问题批（与 `pending_permission` 并列），前端 1 秒轮询它渲染对话框；答复后置空。 | `routes/task_api.py`、`commons/state.py` |
 | **`no_client`** | 没有客户端可问（CLI、库调用、未注入 broker）时提问结果的 `status`。**不阻塞、不抛异常、不假装问过**：模型拿到空答案并被告知自行决定。 | `agent/tools/registry.py` |
-| **提问超时（`ASK_USER_TIMEOUT_SECONDS`）** | 默认 120 秒，**独立于** `PERMISSION_TIMEOUT_SECONDS`：两人应答的语义不同（"拒绝这次调用" vs "带着假设继续"），共用一个旋钮会互相误伤。超时返回空答案 + "自行决定并说明假设"，**不是拒绝**。 | `agent/tools/user_question.py` |
+| **无限等待（no deadline）** | `ask_user_question` **没有超时**：等到有人回答或任务被停止为止。定时器会在用户还在思考时替他回答，而真正无人应答的场景是"没有客户端"，走 `no_client`、根本不阻塞。 | `agent/tools/user_question.py`、[ADR 0010](decisions/0010-ask-user-question.md) |
 
 ## 快照与回退（checkpoint）
 

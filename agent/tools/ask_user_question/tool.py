@@ -54,7 +54,6 @@ def ask_user_question_impl(questions_raw: Any, ask_user: Optional[AskUser]) -> T
         "questions": questions,
         "answered_count": len(result.answers),
         "question_count": len(questions),
-        "timeout_seconds": result.timeout_seconds,
     }
     return model_text, details
 

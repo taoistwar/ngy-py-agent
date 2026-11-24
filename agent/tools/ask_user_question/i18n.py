@@ -15,8 +15,8 @@ ZH_CN = ToolText(
         "末尾加 '(Recommended)'。不要添加 'Other' 选项：客户端会给每个问题自动加一个自由填写"
         "的选项。结果是以每个问题 id 为键的 JSON（'{\"answers\": {\"<id>\": {\"answers\": "
         "[...]}}}'）；用户选中的选项以标签形式出现，用户输入的内容作为另一项出现，被跳过的"
-        "问题得到空数组。没人回答时 —— 没有客户端连接，或等待超时 —— 答案集为空且结果会说明"
-        "原因：用你已有的信息自行决定，说明所做的假设，不要再问一次。"
+        "问题得到空数组。等待没有时限：用户回答后调用才返回；只有在没有客户端连接或任务被停止"
+        "时才返回空答案集，结果会说明原因：用你已有的信息自行决定，说明所做的假设，不要再问一次。"
     ),
     parameters={
         "questions": "要展示给用户的问题。优先 1 个，不要超过 3 个。",
@@ -32,8 +32,8 @@ ZH_TW = ToolText(
         "末尾加上 '(Recommended)'。不要自行加入 'Other' 選項：用戶端會為每個問題自動加一個"
         "自由填寫的選項。結果是以每個問題 id 為鍵的 JSON（'{\"answers\": {\"<id>\": {\"answers\": "
         "[...]}}}'）；使用者選中的選項以標籤形式出現，使用者輸入的內容作為另一項出現，被略過的"
-        "問題得到空陣列。沒人回答時 —— 沒有用戶端連線，或等待逾時 —— 答案集為空且結果會說明"
-        "原因：用你既有的資訊自行決定，說明所做的假設，不要再問一次。"
+        "問題得到空陣列。等待沒有時限：使用者回答後呼叫才返回；只有在沒有用戶端連線或任務被停止"
+        "時才返回空答案集，結果會說明原因：用你既有的資訊自行決定，說明所做的假設，不要再問一次。"
     ),
     parameters={
         "questions": "要展示給使用者的問題。優先 1 個，不要超過 3 個。",
@@ -53,10 +53,11 @@ FR = ToolText(
         "à chaque question. Le résultat est un JSON dont les clés sont les id des questions "
         "('{\"answers\": {\"<id>\": {\"answers\": [...]}}}') ; les options choisies apparaissent "
         "sous forme de libellés, le texte saisi par l'utilisateur apparaît comme une entrée "
-        "supplémentaire, et une question ignorée reçoit un tableau vide. Si personne ne répond — "
-        "aucun client connecté, ou délai dépassé — l'ensemble des réponses est vide et le résultat "
-        "en donne la raison : décidez avec ce que vous avez, expliquez l'hypothèse retenue et ne "
-        "reposez pas la question."
+        "supplémentaire, et une question ignorée reçoit un tableau vide. L'attente n'a pas de "
+        "limite : l'appel ne revient qu'une fois l'utilisateur ayant répondu, ou avec un ensemble "
+        "vide si aucun client n'est connecté ou si la tâche est arrêtée — le résultat en donne la "
+        "raison : décidez avec ce que vous avez, expliquez l'hypothèse retenue et ne reposez pas "
+        "la question."
     ),
     parameters={
         "questions": "Questions à présenter à l'utilisateur. Une seule de préférence, trois au maximum.",
@@ -75,8 +76,9 @@ DE = ToolText(
         "Client ergänzt zu jeder Frage automatisch ein Freitextfeld. Das Ergebnis ist JSON mit der "
         "id jeder Frage als Schlüssel ('{\"answers\": {\"<id>\": {\"answers\": [...]}}}'); gewählte "
         "Optionen erscheinen als Beschriftung, selbst eingegebener Text als weiterer Eintrag, "
-        "übersprungene Fragen erhalten ein leeres Array. Antwortet niemand — kein Client verbunden "
-        "oder Zeitüberschreitung —, ist die Antwortmenge leer und das Ergebnis nennt den Grund: "
+        "übersprungene Fragen erhalten ein leeres Array. Das Warten hat keine Frist: der Aufruf "
+        "kehrt erst zurück, wenn der Benutzer antwortet, oder mit leerer Antwortmenge, wenn kein "
+        "Client verbunden ist oder die Aufgabe angehalten wurde — das Ergebnis nennt den Grund: "
         "entscheide mit den vorhandenen Informationen, nenne die getroffene Annahme und frage "
         "nicht erneut."
     ),
@@ -98,9 +100,10 @@ RU = ToolText(
         "Результат — JSON с id каждого вопроса в качестве ключа "
         "('{\"answers\": {\"<id>\": {\"answers\": [...]}}}'); выбранные варианты приходят как "
         "подписи, введённый пользователем текст — как отдельный элемент, пропущенный вопрос "
-        "получает пустой массив. Если никто не ответил — нет подключённого клиента или истекло "
-        "время ожидания — набор ответов пуст, а результат объясняет причину: решайте сами на "
-        "основе имеющегося, укажите сделанное допущение и не спрашивайте снова."
+        "получает пустой массив. У ожидания нет срока: вызов возвращается только после ответа "
+        "пользователя либо с пустым набором ответов, если клиент не подключён или задача "
+        "остановлена — результат объясняет причину: решайте сами на основе имеющегося, укажите "
+        "сделанное допущение и не спрашивайте снова."
     ),
     parameters={
         "questions": "Вопросы для показа пользователю. Лучше один, не больше трёх.",

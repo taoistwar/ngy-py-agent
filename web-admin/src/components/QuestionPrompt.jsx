@@ -10,19 +10,19 @@ const OTHER = "__other__"
  * Question dialog for `ask_user_question`.
  *
  * The request comes from `GET /api/tasks/{id}` (`pending_question`) and the task
- * thread is parked until this posts back, times out, or the task is stopped - the
- * same shape as `PermissionPrompt`, but the answer carries data instead of a verdict.
+ * thread is parked until this posts back or the task is stopped - the same shape as
+ * `PermissionPrompt`, but the answer carries data instead of a verdict.
  *
  * Two things it has to get right:
  *
  * - **the free-form row is added here.** The model is told not to send an "Other"
  *   option, so this dialog is what makes "none of these" possible;
  * - **skipping is a real answer.** An empty answer set reaches the model as "nobody
- *   answered, decide yourself" - better than making the user wait out the timeout.
+ *   answered, decide yourself" - better than leaving the task parked forever.
  *
- * Not dismissible: closing the dialog silently would leave the task blocked until
- * the timeout, and "skip" already says that on purpose. Escape and the close button
- * both skip.
+ * Not dismissible: closing the dialog silently would leave the task blocked with
+ * nobody left to answer, and "skip" already says that on purpose. Escape and the
+ * close button both skip.
  */
 export default function QuestionPrompt({ request, onAnswered, translate }) {
   const [selected, setSelected] = useState({})
