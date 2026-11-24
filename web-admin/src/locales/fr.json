@@ -179,7 +179,7 @@
   "webSearchSourceEnv": "environnement",
   "webSearchProvider": "Backend",
   "webSearchApiKey": "Clé API",
-  "webSearchApiKeyPlaceholder": "Requise pour Tavily, Serper et Bing",
+  "webSearchApiKeyPlaceholder": "Requise pour DeepSeek, Tavily, Serper et Bing",
   "webSearchBaseUrl": "Remplacement de l'endpoint",
   "webSearchBaseUrlPlaceholder": "Laisser vide pour utiliser l'endpoint du backend",
   "webSearchSave": "Enregistrer",

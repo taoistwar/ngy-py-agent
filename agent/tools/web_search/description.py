@@ -15,7 +15,7 @@ WEB_SEARCH_DESCRIPTION = (
     "Search the web and return ranked results: a title, a URL and a snippet for each. "
     "It does not open the pages it finds - call web_fetch on a URL to read one. "
     "The backend is configured for this deployment (a keyless default, or an API "
-    "provider such as Tavily, Serper or Bing); it is not a tool argument. "
+    "provider such as DeepSeek Search, Tavily, Serper or Bing); it is not a tool argument. "
     "'allowed_domains' keeps only those sites and 'blocked_domains' removes them; the "
     "two cannot be combined and passing both is an error. A domain also covers its "
     "subdomains, so 'example.com' allows 'docs.example.com'. "

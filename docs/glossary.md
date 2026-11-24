@@ -109,7 +109,7 @@
 | **`filtered_out`** | 被域名过滤（或重复 URL）去掉的条数。与 `num_results` 截断分开计：后者是上限，不是过滤。 | `agent/tools/web_search/providers.py` |
 | **`context_truncated` / `dropped_results`** | 结果列表超出调用方给的 `context_max_characters`，尾部按整条丢弃，并报出丢了几条。与超 token 预算的 `content_truncated` 不是一回事。 | `agent/tools/web_search/render.py` |
 | **`search_type_applied`** | 后端是否真的支持 `fast` / `deep`。目前只有 Tavily 有深度设置，其余后端返回 `false`，让模型知道它请求的力度没有生效。 | `agent/tools/web_search/providers.py` |
-| **`SearchHit`** | 后端中立的一条结果：`title` / `url` / `snippet`。四个后端的响应形状在这里收敛，渲染层不需要知道是哪个后端。 | `agent/tools/web_search/hits.py` |
+| **`SearchHit`** | 后端中立的一条结果：`title` / `url` / `snippet`。五个后端的响应形状在这里收敛，渲染层不需要知道是哪个后端。 | `agent/tools/web_search/hits.py` |
 | **`provider_blocked`** | 默认（无密钥）后端遇到机器人校验时的原因码。它**不是**空结果：提示用户配置 `WEB_SEARCH_API_KEY` 换 API 后端，而不是换个词重试。 | `agent/tools/web_search/duckduckgo.py` |
 
 ## 保险柜密钥请求（`vault_http`）

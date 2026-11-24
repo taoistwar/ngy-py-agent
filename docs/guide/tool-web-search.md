@@ -24,7 +24,7 @@
 | 字段 | 含义 |
 | --- | --- |
 | `query` | 这次搜索的问题（归一化后） |
-| `provider` | 实际使用的后端（`duckduckgo` / `tavily` / `serper` / `bing`） |
+| `provider` | 实际使用的后端（`duckduckgo` / `deepseek` / `tavily` / `serper` / `bing`） |
 | `search_type` / `search_type_applied` | 请求的力度，以及后端是否真的支持它 |
 | `result_count` | 返回条数 |
 | `results` | `{"title", "url", "snippet"}` 数组 |
@@ -46,8 +46,8 @@
 
 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `WEB_SEARCH_PROVIDER` | `duckduckgo` | 后端标识：`duckduckgo` / `tavily` / `serper` / `bing`。 |
-| `WEB_SEARCH_API_KEY` | 空 | API 后端的密钥。`tavily` 放在请求体、`serper` 走 `X-API-KEY` 头、`bing` 走 `Ocp-Apim-Subscription-Key` 头。 |
+| `WEB_SEARCH_PROVIDER` | `duckduckgo` | 后端标识：`duckduckgo` / `deepseek` / `tavily` / `serper` / `bing`。`deepsearch` 是 `deepseek` 的别名。 |
+| `WEB_SEARCH_API_KEY` | 空 | API 后端的密钥。`deepseek` 走 `Authorization: Bearer` 头、`tavily` 放在请求体、`serper` 走 `X-API-KEY` 头、`bing` 走 `Ocp-Apim-Subscription-Key` 头。 |
 | `WEB_SEARCH_BASE_URL` | 空 | 覆盖后端端点（公司网关、镜像或测试用）。整段替换，不是拼接前缀。 |
 | `WEB_SEARCH_TIMEOUT_SECONDS` | `15` | 单次搜索总超时，上限 60 秒；连接超时固定 8 秒。 |
 | `WEB_SEARCH_DEFAULT_NUM_RESULTS` | `8` | 模型没给 `num_results` 时的条数，上限 20。 |
@@ -56,6 +56,8 @@
 超时与默认条数不在页面里，仍由环境变量控制；后端、密钥、端点覆盖以页面为准。切回 DuckDuckGo 时密钥仍会留在数据库里，但该后端用不到它，也不会随请求发出。
 
 默认后端是**无需密钥**的 DuckDuckGo HTML 端点，所以拿到仓库就能用。它有两个已知代价：解析的是页面结构（改版会失效），以及可能被机器人校验拦截——这两种情况都会以 `provider_blocked` / 空结果明确报回来，而不是假装"没有相关内容"。配置任意一个 API 后端可以获得稳定的结果质量。
+
+`deepseek` 后端调用 DeepSeek 的 Search API（`POST https://api.deepseek.com/v1/tools/search`），请求只取标题/网址/摘要，不请求网页正文（`need_content` 保持默认 `false`）。DeepSeek 返回的 `summary`（约 600–800 字符，面向模型阅读）会优先作为结果的 `snippet`；没有 `summary` 时回落到较短的 `snippet`。`deepsearch` 作为别名可用，但页面与数据库统一存成 `deepseek`。
 
 请求头是一个固定的 `User-Agent`（`ngy-py-agent-web-search/0.1`）与常见的 `Accept` / `Accept-Language`。
 

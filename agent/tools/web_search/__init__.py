@@ -9,9 +9,9 @@ result shaped so a citation can be written from it.
 The shape of the tool, and why:
 
 * **one backend, chosen by configuration** (:mod:`~agent.tools.web_search.providers`):
-  a keyless default that works on a fresh checkout, and Tavily / Serper / Bing
-  when an operator sets a key. The model does not pick a provider; a parameter it
-  cannot fill correctly is a step wasted.
+  a keyless default that works on a fresh checkout, and DeepSeek Search / Tavily /
+  Serper / Bing when an operator sets a key. The model does not pick a provider; a
+  parameter it cannot fill correctly is a step wasted.
 * **snippets only, no page text** (:mod:`~agent.tools.web_search.tool`): reading a
   page is ``web_fetch``'s job, with its own size caps, HTML conversion and
   redirect rules. Fetching here too would mean two copies of those rules that can

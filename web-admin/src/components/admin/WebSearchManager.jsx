@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 // in agent/tools/web_search/providers.py: only DuckDuckGo works without a signup.
 const SEARCH_PROVIDERS = [
   { value: "duckduckgo", label: "DuckDuckGo (keyless)", needsKey: false },
+  { value: "deepseek", label: "DeepSeek Search", needsKey: true },
   { value: "tavily", label: "Tavily", needsKey: true },
   { value: "serper", label: "Serper (Google)", needsKey: true },
   { value: "bing", label: "Bing Web Search", needsKey: true },

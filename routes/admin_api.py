@@ -124,7 +124,7 @@ def _load_web_search_config() -> tuple[web_search_limits.BackendSettings, str]:
     stored = state.monitor_store.get_web_search_config()
     if not stored:
         return env_backend, "env"
-    provider = str(stored.get("provider") or "").strip().lower()
+    provider = web_search_providers.canonical_name(stored.get("provider"))
     if provider not in web_search_providers.SUPPORTED:
         provider = web_search_limits.DEFAULT_PROVIDER
     return (
@@ -138,7 +138,7 @@ def _load_web_search_config() -> tuple[web_search_limits.BackendSettings, str]:
 
 
 def _checked_web_search_provider(raw: Any) -> str:
-    provider = str(raw or "").strip().lower()
+    provider = web_search_providers.canonical_name(raw)
     if provider not in web_search_providers.SUPPORTED:
         raise HTTPException(
             status_code=400,

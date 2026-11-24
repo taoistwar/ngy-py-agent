@@ -1,6 +1,6 @@
-"""The three keyed backends: Tavily, Serper and Bing Web Search.
+"""The keyed backends: DeepSeek Search, Tavily, Serper and Bing Web Search.
 
-They are one module because they are the same thing three times - a documented
+They are one module because they are the same thing four times - a documented
 JSON API, a key, and a results array - and because keeping them side by side is
 what makes the differences obvious (where the key goes, what the snippet field
 is called, which one understands a search depth).
@@ -26,6 +26,11 @@ from agent.tools.web_search import http
 from agent.tools.web_search.hits import SearchHit
 from agent.tools.web_search.query import SEARCH_TYPE_DEEP, SearchRequest
 
+DEEPSEEK_NAME = "deepseek"
+# The name the feature is often called by; accepted as an alias, never stored.
+DEEPSEEK_ALIAS = "deepsearch"
+DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/tools/search"
+
 TAVILY_NAME = "tavily"
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
 
@@ -50,6 +55,37 @@ def _hits(entries: List[Dict[str, Any]], title: str, url: str, snippet: str) -> 
     hits: List[SearchHit] = []
     for entry in entries:
         hit = SearchHit.build(entry.get(title), entry.get(url), entry.get(snippet))
+        if hit is not None:
+            hits.append(hit)
+    return hits
+
+
+def search_deepseek(
+    request: SearchRequest, *, endpoint: str, api_key: str, timeout: float
+) -> List[SearchHit]:
+    """DeepSeek Search: Bearer auth, and a ``summary`` written for a model.
+
+    ``snippet`` is the 100-200 character string a UI shows; ``summary`` is the
+    600-800 character version the provider expects a model to read. The tool
+    exists to hand a model something it can cite, so the longer field wins when
+    the answer has one. Page text is deliberately not requested (no
+    ``need_content``): reading a page stays ``web_fetch``'s job.
+    """
+    payload: Dict[str, Any] = {"query": request.query, "count": request.num_results}
+    answer = http.post_json(
+        endpoint,
+        payload=payload,
+        headers={"Authorization": f"Bearer {api_key}"},
+        timeout=timeout,
+    )
+    hits: List[SearchHit] = []
+    for entry in _entries(answer, "results"):
+        summary = str(entry.get("summary") or "").strip()
+        hit = SearchHit.build(
+            entry.get("title"),
+            entry.get("url"),
+            summary or entry.get("snippet"),
+        )
         if hit is not None:
             hits.append(hit)
     return hits

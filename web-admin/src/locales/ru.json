@@ -179,7 +179,7 @@
   "webSearchSourceEnv": "окружение",
   "webSearchProvider": "Бэкенд",
   "webSearchApiKey": "Ключ API",
-  "webSearchApiKeyPlaceholder": "Требуется для Tavily, Serper и Bing",
+  "webSearchApiKeyPlaceholder": "Требуется для DeepSeek, Tavily, Serper и Bing",
   "webSearchBaseUrl": "Переопределение эндпоинта",
   "webSearchBaseUrlPlaceholder": "Оставьте пустым, чтобы использовать собственный эндпоинт бэкенда",
   "webSearchSave": "Сохранить",

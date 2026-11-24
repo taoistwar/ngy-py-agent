@@ -3,7 +3,7 @@
 Choosing a backend is configuration, not a model decision. The tool exposes one
 ``web_search`` to the model and the operator chooses where it goes with
 ``WEB_SEARCH_PROVIDER``; a model that had to pick would spend a call guessing
-which of four names this deployment happens to have a key for.
+which of five names this deployment happens to have a key for.
 
 The default is the keyless backend, so the tool works on a fresh checkout. A
 provider that needs a key but has none is refused *before* a request is made,
@@ -11,14 +11,14 @@ with a message that names the variable to set - the alternative is a 401 the
 model cannot act on.
 
 Filtering happens here rather than in the adapters because it must be identical
-for every backend: two providers support domain filters natively, the other two
+for every backend: one provider supports domain filters natively, the other four
 ignore them, and "which sites come back" cannot depend on that.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agent.tools.web_search import duckduckgo, limits, search_apis
 from agent.tools.web_search.errors import WebSearchError
@@ -54,6 +54,13 @@ PROVIDERS: Dict[str, Provider] = {
         supports_depth=duckduckgo.SUPPORTS_DEPTH,
         search=duckduckgo.search,
     ),
+    search_apis.DEEPSEEK_NAME: Provider(
+        name=search_apis.DEEPSEEK_NAME,
+        endpoint=search_apis.DEEPSEEK_ENDPOINT,
+        needs_key=True,
+        supports_depth=False,
+        search=search_apis.search_deepseek,
+    ),
     search_apis.TAVILY_NAME: Provider(
         name=search_apis.TAVILY_NAME,
         endpoint=search_apis.TAVILY_ENDPOINT,
@@ -79,10 +86,21 @@ PROVIDERS: Dict[str, Provider] = {
 
 SUPPORTED = tuple(PROVIDERS)
 
+# Accepted spellings that are not stored as-is: the settings page and the
+# environment both funnel into one canonical id, so "which backend is in force"
+# has exactly one answer.
+ALIASES = {search_apis.DEEPSEEK_ALIAS: search_apis.DEEPSEEK_NAME}
+
+
+def canonical_name(name: Any) -> str:
+    """The canonical backend id for ``name``; unknown names pass through unchanged."""
+    text = str(name or "").strip().lower()
+    return ALIASES.get(text, text)
+
 
 def resolve(name: str, api_key: str) -> Provider:
     """The provider to call, or a :class:`WebSearchError` saying why not."""
-    text = (name or "").strip().lower()
+    text = canonical_name(name)
     if not text:
         text = limits.DEFAULT_PROVIDER
     provider = PROVIDERS.get(text)

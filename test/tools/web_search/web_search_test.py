@@ -87,6 +87,22 @@ SERPER_JSON = {
 BING_JSON = {
     "webPages": {"value": [{"name": "Bing One", "url": "https://bing.example/one", "snippet": "Bing"}]}
 }
+DEEPSEEK_JSON = {
+    "results": [
+        {
+            "title": "DeepSeek One",
+            "url": "https://deepseek.example/one",
+            "snippet": "Short snippet",
+            "summary": "Long summary written for the model",
+        },
+        {
+            "title": "DeepSeek Two",
+            "url": "https://deepseek.example/two",
+            "snippet": "Only a snippet here",
+            "summary": "",
+        },
+    ]
+}
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -130,11 +146,21 @@ class _Handler(BaseHTTPRequestHandler):
             if self.headers.get("X-API-KEY") != "serper-key":
                 return self._send(401, "application/json", b'{"error": "bad key"}')
             return self._json(200, SERPER_JSON)
+        if parts.path == "/deepseek/search":
+            if self.headers.get("Authorization") != "Bearer deepseek-key":
+                return self._send(401, "application/json", b'{"error": "bad key"}')
+            return self._json(200, DEEPSEEK_JSON)
         return self._send(404, "text/plain; charset=utf-8", b"not found")
 
     def _record(self, method, parts, body):
         type(self).calls.append(
-            {"method": method, "path": parts.path, "query": parts.query, "body": body}
+            {
+                "method": method,
+                "path": parts.path,
+                "query": parts.query,
+                "body": body,
+                "authorization": self.headers.get("Authorization"),
+            }
         )
 
     def _json(self, status, payload):
@@ -344,6 +370,37 @@ class WebSearchToolTest(_ServerCase):
         self.assertNotIn("error", result, result)
         self.assertEqual(result["results"][0]["title"], "Bing One")
         self.assertEqual(result["results"][0]["snippet"], "Bing")
+
+    def test_deepseek_uses_bearer_auth_and_prefers_the_model_summary(self):
+        result = self.tool("/deepseek/search", provider="deepseek", api_key="deepseek-key")(
+            "react 19"
+        )
+
+        self.assertNotIn("error", result, result)
+        self.assertEqual(result["provider"], "deepseek")
+        self.assertFalse(result["search_type_applied"])
+        self.assertEqual(
+            [hit["url"] for hit in result["results"]],
+            ["https://deepseek.example/one", "https://deepseek.example/two"],
+        )
+        # ``summary`` is the 600-800 character field meant for a model; a result
+        # without one falls back to the shorter ``snippet``.
+        self.assertEqual(result["results"][0]["snippet"], "Long summary written for the model")
+        self.assertEqual(result["results"][1]["snippet"], "Only a snippet here")
+        call = _Handler.calls[0]
+        self.assertEqual("Bearer deepseek-key", call["authorization"])
+        body = json.loads(call["body"])
+        self.assertEqual(body["query"], "react 19")
+        self.assertEqual(body["count"], 8)
+        self.assertEqual(result["result_count"], 2)
+
+    def test_deepsearch_is_accepted_as_an_alias_for_deepseek(self):
+        result = self.tool(
+            "/deepseek/search", provider="deepsearch", api_key="deepseek-key"
+        )("react 19")
+
+        self.assertNotIn("error", result, result)
+        self.assertEqual(result["provider"], "deepseek")
 
     def test_a_wrong_key_is_reported_as_an_http_error(self):
         result = self.tool("/tavily/search", provider="tavily", api_key="wrong")(

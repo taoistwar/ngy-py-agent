@@ -179,7 +179,7 @@
   "webSearchSourceEnv": "環境變數",
   "webSearchProvider": "搜尋後端",
   "webSearchApiKey": "API 金鑰",
-  "webSearchApiKeyPlaceholder": "Tavily、Serper、Bing 需要填寫",
+  "webSearchApiKeyPlaceholder": "DeepSeek、Tavily、Serper、Bing 需要填寫",
   "webSearchBaseUrl": "端點覆寫",
   "webSearchBaseUrlPlaceholder": "留空則使用後端預設位址",
   "webSearchSave": "儲存",

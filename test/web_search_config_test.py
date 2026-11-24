@@ -143,6 +143,16 @@ class WebSearchConfigTest(unittest.TestCase):
         )
         self.assertEqual(response.json(), self.client.get("/api/admin/web-search").json())
 
+    def test_the_deepsearch_alias_is_saved_as_deepseek(self):
+        response = self.client.put(
+            "/api/admin/web-search",
+            json={"provider": "deepsearch", "api_key": "saved-key", "base_url": ""},
+        )
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual("deepseek", response.json()["provider"])
+        self.assertEqual("deepseek", self.store.get_web_search_config()["provider"])
+
     def test_the_tool_reads_the_saved_backend_without_explicit_arguments(self):
         self.client.put(
             "/api/admin/web-search",

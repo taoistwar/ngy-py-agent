@@ -80,7 +80,7 @@ class RetentionConfigResponse(BaseModel):
 class WebSearchConfigRequest(BaseModel):
     """Backend and credentials for the ``web_search`` tool."""
 
-    provider: str = Field(description="duckduckgo / tavily / serper / bing")
+    provider: str = Field(description="duckduckgo / deepseek / tavily / serper / bing")
     api_key: str = Field(default="", description="Key for the chosen backend; DuckDuckGo ignores it.")
     base_url: str = Field(
         default="",

@@ -223,7 +223,7 @@ npm run i18n:check
 ### web_search：先找页面，再去读
 
 - `web_search`（`agent/tools/web_search/`）回答"哪些页面在讲这件事"。`web_fetch` 只能读**已知 URL**，`exec_command`/`code_interpreter` 能搜但结果形态随方言漂移、失败只知道"命令退出了"。取舍见 [ADR 0028](decisions/0028-web-search-tool.md)。
-- **后端是配置，不是参数**（`WEB_SEARCH_PROVIDER`）：模型没有"换一个引擎重试"的能力，给它这个参数只会浪费一步。默认后端无需密钥（DuckDuckGo HTML 端点，`duckduckgo.py`），所以拿到仓库就能用；Tavily / Serper / Bing 在 `search_apis.py`，三者共用一个 `SearchHit` 形状（`hits.py`）。
+- **后端是配置，不是参数**（`WEB_SEARCH_PROVIDER`）：模型没有"换一个引擎重试"的能力，给它这个参数只会浪费一步。默认后端无需密钥（DuckDuckGo HTML 端点，`duckduckgo.py`），所以拿到仓库就能用；DeepSeek / Tavily / Serper / Bing 在 `search_apis.py`，共享一个 `SearchHit` 形状（`hits.py`）。
 - **只给标题/网址/摘要，不抓正文**：参考实现有 `livecrawl`，这里没有。抓正文要重做整条 `web_fetch` 链路（2 MiB 上限、HTML→文本、跨域跳转规则），两份规则一定会漂移。需要正文就 `web_fetch`。
 - **权限目标是工具自身**（`permissions.SEARCH_PERMISSION_TARGET = "web_search"`）：搜索没有 `url` 可用，而按 query 建规则会让用户为每个新问题再点一次。`_target` 的 `NETWORK_READ_TOOLS` 分支先取 `host_of(url)`（`web_fetch` 走这条），没有 URL 时再落到工具名；不能解析出目标就不问，让工具自己报 `invalid_query`。确认框文案与 `details.query` 在 `_build_request` 的 `network_search` 分支。
 - **默认后端是抓页面，必须把"坏了"说清楚**：DDG 改版或被机器人校验时解析不出结果，`provider_blocked` 会带一句"配置 API 后端"的提示；**不要**把它退化成"没有结果"，那会让模型以为话题不存在而反复改词重试。
