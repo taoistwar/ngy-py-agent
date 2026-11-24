@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -31,6 +32,8 @@ from agent.tools.denylist import (
     parse_rules,
 )
 from agent.tools.permissions import PermissionMode, normalize_mode
+from agent.tools.web_search import limits as web_search_limits
+from agent.tools.web_search import providers as web_search_providers
 from commons import state
 from commons.schemas import (
     MAX_STEPS_LIMIT,
@@ -48,6 +51,8 @@ from commons.schemas import (
     PermissionRuleRequest,
     RetentionConfigRequest,
     RetentionConfigResponse,
+    WebSearchConfigRequest,
+    WebSearchConfigResponse,
 )
 from dao import TASK_RETENTION_DEFAULT_DAYS
 from routes import llm_api
@@ -107,6 +112,60 @@ def _load_permission_mode_config() -> tuple[PermissionMode, str]:
     return normalize_mode(db_mode), "database"
 
 
+def _load_web_search_config() -> tuple[web_search_limits.BackendSettings, str]:
+    """The saved search backend, else the environment's.
+
+    A saved row owns all three fields: falling back per field would let a key
+    from ``.env`` silently serve a provider chosen on the page, which is not
+    what the page says. A row naming an unknown backend (a hand-edited database)
+    degrades to the keyless default instead of failing every search.
+    """
+    env_backend = web_search_limits.env_backend()
+    stored = state.monitor_store.get_web_search_config()
+    if not stored:
+        return env_backend, "env"
+    provider = str(stored.get("provider") or "").strip().lower()
+    if provider not in web_search_providers.SUPPORTED:
+        provider = web_search_limits.DEFAULT_PROVIDER
+    return (
+        web_search_limits.BackendSettings(
+            provider=provider,
+            api_key=str(stored.get("api_key") or "").strip(),
+            base_url=str(stored.get("base_url") or "").strip(),
+        ),
+        "database",
+    )
+
+
+def _checked_web_search_provider(raw: Any) -> str:
+    provider = str(raw or "").strip().lower()
+    if provider not in web_search_providers.SUPPORTED:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unknown search provider '{raw}'; use one of: "
+                f"{', '.join(web_search_providers.SUPPORTED)}."
+            ),
+        )
+    return provider
+
+
+def _checked_web_search_base_url(raw: Any) -> str:
+    url = str(raw or "").strip()
+    if not url:
+        return ""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        parts = None
+    if parts is None or parts.scheme not in ("http", "https") or not parts.netloc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Search endpoint '{url}' is not an http(s) URL.",
+        )
+    return url
+
+
 def _get_env_task_retention_days() -> int:
     raw = os.getenv("TASK_RETENTION_DAYS", str(TASK_RETENTION_DEFAULT_DAYS)).strip()
     try:
@@ -135,6 +194,10 @@ def load_startup_config() -> None:
     state.agents_md_max_bytes = agents_md.max_bytes
     state.agents_md_source = agents_md_source
     state.permission_mode, state.permission_mode_source = _load_permission_mode_config()
+    # The tool layer keeps no database handle, so the effective search backend is
+    # pushed into it here and on every admin write (see ``web_search_limits``).
+    web_search_backend, _ = _load_web_search_config()
+    web_search_limits.configure(web_search_backend)
     # The limiter holds the policy itself: a task builds its provider per run, so
     # nothing else survives long enough to carry the budgets (ADR 0014).
     llm_api.sync_provider_throttle()
@@ -251,6 +314,45 @@ async def set_permission_mode_config(
         mode=state.permission_mode.value,
         source=state.permission_mode_source,
     )
+
+
+# ------------------------------------------------------------------ web search
+
+
+def _web_search_response(
+    backend: web_search_limits.BackendSettings, source: str
+) -> WebSearchConfigResponse:
+    return WebSearchConfigResponse(
+        provider=backend.provider,
+        api_key=backend.api_key,
+        base_url=backend.base_url,
+        source=source,
+        supported=list(web_search_providers.SUPPORTED),
+    )
+
+
+@router.get("/api/admin/web-search", response_model=WebSearchConfigResponse)
+async def get_web_search_config() -> WebSearchConfigResponse:
+    backend, source = _load_web_search_config()
+    return _web_search_response(backend, source)
+
+
+@router.put("/api/admin/web-search", response_model=WebSearchConfigResponse)
+async def set_web_search_config(
+    payload: WebSearchConfigRequest,
+) -> WebSearchConfigResponse:
+    backend = web_search_limits.BackendSettings(
+        provider=_checked_web_search_provider(payload.provider),
+        api_key=payload.api_key.strip(),
+        base_url=_checked_web_search_base_url(payload.base_url),
+    )
+    # Written and pushed together: the next search in a running task must use
+    # the backend the page just saved, without waiting for a restart.
+    state.monitor_store.set_web_search_config(
+        backend.provider, backend.api_key, backend.base_url
+    )
+    web_search_limits.configure(backend)
+    return _web_search_response(backend, "database")
 
 
 # -------------------------------------------------------------- permission rules

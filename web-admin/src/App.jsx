@@ -41,6 +41,7 @@ import {
   fetchTaskEvents,
   fetchTasks,
   fetchTools,
+  fetchWebSearchConfig,
   fetchWorkspaces,
   importSkill,
   probeMcpServer,
@@ -52,6 +53,7 @@ import {
   updateProvider,
   updateRetentionConfig,
   updateSkillsRoot,
+  updateWebSearchConfig,
   updateWorkspace,
 } from "./api"
 import {
@@ -88,6 +90,7 @@ import {
   RetentionManager,
 } from "./components/admin/SettingsPanels"
 import SkillManager from "./components/admin/SkillManager"
+import WebSearchManager from "./components/admin/WebSearchManager"
 import AppSidebar from "./components/shell/AppSidebar"
 import AppTopbar from "./components/shell/AppTopbar"
 import { DEFAULT_MENU } from "./components/shell/navigation"
@@ -984,6 +987,7 @@ export default function App() {
   const [maxStepsConfig, setMaxStepsConfig] = useState(null)
   const [agentsMdConfig, setAgentsMdConfig] = useState(null)
   const [permissionModeConfig, setPermissionModeConfig] = useState(null)
+  const [webSearchConfig, setWebSearchConfig] = useState(null)
   const [permissionRules, setPermissionRules] = useState(null)
   const [denyList, setDenyList] = useState(null)
   const [health, setHealth] = useState("unknown")
@@ -2133,6 +2137,24 @@ export default function App() {
     [translate]
   )
 
+  const refreshWebSearch = useCallback(async () => {
+    const config = await fetchWebSearchConfig()
+    setWebSearchConfig(config)
+    return config
+  }, [])
+
+  const updateWebSearch = useCallback(
+    async (payload) => {
+      try {
+        const config = await updateWebSearchConfig(payload)
+        setWebSearchConfig(config)
+      } catch (webSearchError) {
+        setError(webSearchError?.message || translate("errorUnknown"))
+      }
+    },
+    [translate]
+  )
+
   const refreshPermissionRules = useCallback(async () => {
     const config = await fetchPermissionRules()
     setPermissionRules(config)
@@ -2270,6 +2292,9 @@ export default function App() {
     refreshPermissionMode().catch((permissionError) =>
       setError(permissionError?.message || translate("errorLoadFailed"))
     )
+    refreshWebSearch().catch((webSearchError) =>
+      setError(webSearchError?.message || translate("errorLoadFailed"))
+    )
     refreshPermissionRules().catch(() => {})
     refreshDenyList().catch(() => {})
     refreshHealth().catch(() => {})
@@ -2326,6 +2351,9 @@ export default function App() {
         refreshAgentsMd().catch(() => {})
         refreshPermissionMode().catch(() => {})
       }
+      if (activeMenu === "websearch") {
+        refreshWebSearch().catch(() => {})
+      }
       if (activeMenu === "permissions") {
         refreshPermissionRules().catch(() => {})
       }
@@ -2338,7 +2366,7 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [activeMenu, applySelection, refreshAgentMeta, refreshAgents, refreshDenyList, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWorkspaces, translate])
+  }, [activeMenu, applySelection, refreshAgentMeta, refreshAgents, refreshDenyList, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWebSearch, refreshWorkspaces, translate])
 
   useEffect(() => {
     if (!selectedId || activeMenu !== "tasks") return
@@ -2690,6 +2718,17 @@ export default function App() {
               translate={translate}
             />
           </div>
+        ) : activeMenu === "websearch" ? (
+          <WebSearchManager
+            config={webSearchConfig}
+            onSave={updateWebSearch}
+            onRefresh={() =>
+              refreshWebSearch().catch((refreshError) =>
+                setError(refreshError?.message || translate("errorLoadFailed"))
+              )
+            }
+            translate={translate}
+          />
         ) : activeMenu === "permissions" ? (
           <PermissionRulesManager
             rules={permissionRules}

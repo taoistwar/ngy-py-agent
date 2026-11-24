@@ -148,18 +148,21 @@ def _web_search_impl(
         context_max_characters=context_max_characters,
     )
 
+    # One snapshot: a save from the admin page may land mid-call, and the key
+    # must belong to the backend that is actually asked.
+    configured = limits.backend()
     provider = providers.resolve(
-        search_provider or limits.provider_name(),
-        limits.api_key() if api_key is None else api_key,
+        search_provider or configured.provider,
+        configured.api_key if api_key is None else api_key,
     )
-    endpoint = providers.endpoint_for(provider, base_url or limits.base_url())
+    endpoint = providers.endpoint_for(provider, base_url or configured.base_url)
 
     started = time.monotonic()
     hits, filtered_out = providers.run(
         provider,
         request,
         endpoint=endpoint,
-        api_key=limits.api_key() if api_key is None else api_key,
+        api_key=configured.api_key if api_key is None else api_key,
         timeout=timeout if timeout else limits.timeout_seconds(),
     )
     elapsed = int((time.monotonic() - started) * 1000)

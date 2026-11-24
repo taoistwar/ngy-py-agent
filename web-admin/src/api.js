@@ -533,4 +533,20 @@ export async function updateAgentsMdConfig(enabled, maxBytes) {
   })
 }
 
+// The backend and credentials of the web_search tool. The page's value replaces
+// WEB_SEARCH_* from .env and is applied to the next search, not the next restart.
+export async function fetchWebSearchConfig() {
+  return requestJson(`${API_BASE}/api/admin/web-search`)
+}
+
+export async function updateWebSearchConfig(payload) {
+  return requestJson(`${API_BASE}/api/admin/web-search`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
 

@@ -75,3 +75,25 @@ class RetentionConfigResponse(BaseModel):
     retention_days: int
     retention_source: str
     removed_tasks: int
+
+
+class WebSearchConfigRequest(BaseModel):
+    """Backend and credentials for the ``web_search`` tool."""
+
+    provider: str = Field(description="duckduckgo / tavily / serper / bing")
+    api_key: str = Field(default="", description="Key for the chosen backend; DuckDuckGo ignores it.")
+    base_url: str = Field(
+        default="",
+        max_length=1024,
+        description="Replaces the backend endpoint; empty uses the backend's own URL.",
+    )
+
+
+class WebSearchConfigResponse(BaseModel):
+    """The web search backend currently in force, and where it came from."""
+
+    provider: str
+    api_key: str
+    base_url: str
+    source: str
+    supported: list[str]

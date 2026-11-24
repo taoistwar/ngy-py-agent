@@ -83,3 +83,25 @@ class _SettingsMixin:
 
     def set_skills_root(self, skills_root: str) -> None:
         self._set_setting("skills_root", skills_root)
+
+    def get_web_search_config(self) -> dict[str, Any] | None:
+        value = self._get_setting("web_search_config")
+        if value is None:
+            return None
+        try:
+            payload = json.loads(value)
+        except (TypeError, ValueError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def set_web_search_config(self, provider: str, api_key: str, base_url: str) -> None:
+        # One row for the whole backend: "which source is in force" then has one
+        # answer, and switching provider cannot leave a stale key behind.
+        payload = json.dumps(
+            {
+                "provider": str(provider),
+                "api_key": str(api_key),
+                "base_url": str(base_url),
+            }
+        )
+        self._set_setting("web_search_config", payload)

@@ -19,6 +19,8 @@ set ``WEB_SEARCH_TIMEOUT_SECONDS=abc`` is worse than one that uses 15 seconds.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
+from typing import Optional
 
 # Which backend answers. The default needs no key so the tool works out of the
 # box; an API provider is opt-in with ``WEB_SEARCH_API_KEY``.
@@ -111,16 +113,61 @@ def default_num_results() -> int:
     )
 
 
+@dataclass(frozen=True)
+class BackendSettings:
+    """Where ``web_search`` goes: one backend, its key and its endpoint override."""
+
+    provider: str
+    api_key: str
+    base_url: str
+
+
+def env_backend() -> BackendSettings:
+    """The backend described by the environment, or the keyless default."""
+    return BackendSettings(
+        provider=(os.getenv(PROVIDER_ENV) or "").strip() or DEFAULT_PROVIDER,
+        api_key=(os.getenv(API_KEY_ENV) or "").strip(),
+        base_url=(os.getenv(BASE_URL_ENV) or "").strip(),
+    )
+
+
+# The admin page's saved row, applied by the API at startup and on every write.
+# A module-level value rather than a database read per call keeps the tool layer
+# free of ``dao`` imports; a search takes one snapshot so a save that lands
+# mid-call cannot mix the old provider with the new key.
+_runtime: Optional[BackendSettings] = None
+
+
+def configure(backend: BackendSettings) -> None:
+    """Install the saved backend for this process; called by the admin API."""
+    global _runtime
+    _runtime = backend
+
+
+def reset() -> None:
+    """Drop the saved backend and fall back to the environment (tests, reloads)."""
+    global _runtime
+    _runtime = None
+
+
+def backend() -> BackendSettings:
+    """The backend one search should use: the saved row, else the environment."""
+    configured = _runtime
+    if configured is not None:
+        return configured
+    return env_backend()
+
+
 def provider_name() -> str:
     """The configured backend name, or the keyless default."""
-    return (os.getenv(PROVIDER_ENV) or "").strip() or DEFAULT_PROVIDER
+    return backend().provider
 
 
 def api_key() -> str:
     """The configured API key; empty for providers that need none."""
-    return (os.getenv(API_KEY_ENV) or "").strip()
+    return backend().api_key
 
 
 def base_url() -> str:
     """The endpoint override, or empty to use the provider's own endpoint."""
-    return (os.getenv(BASE_URL_ENV) or "").strip()
+    return backend().base_url

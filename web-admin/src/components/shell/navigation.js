@@ -6,6 +6,7 @@ import {
   FolderIcon,
   OverviewIcon,
   PlugIcon,
+  SearchIcon,
   ServerIcon,
   SettingsIcon,
   ShieldCheckIcon,
@@ -50,6 +51,7 @@ export const NAV_GROUPS = [
     labelKey: "navGroupSystem",
     items: [
       { key: "config", labelKey: "menuConfig", icon: "settings" },
+      { key: "websearch", labelKey: "menuWebSearch", icon: "search" },
       { key: "permissions", labelKey: "menuPermissionRules", icon: "shield" },
       { key: "denylist", labelKey: "menuDenyList", icon: "shieldOff" },
     ],
@@ -67,6 +69,7 @@ export const NAV_ICONS = {
   cpu: CpuIcon,
   server: ServerIcon,
   settings: SettingsIcon,
+  search: SearchIcon,
   shield: ShieldCheckIcon,
   shieldOff: ShieldOffIcon,
 }

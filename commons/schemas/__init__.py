@@ -24,6 +24,8 @@ from commons.schemas.config import (
     PermissionModeConfigResponse,
     RetentionConfigRequest,
     RetentionConfigResponse,
+    WebSearchConfigRequest,
+    WebSearchConfigResponse,
 )
 from commons.schemas.llm import (
     ModelItemResponse,
@@ -138,6 +140,8 @@ __all__ = [
     "ToolTestRequest",
     "ToolTestResponse",
     "ToolTextResponse",
+    "WebSearchConfigRequest",
+    "WebSearchConfigResponse",
     "WorkspaceCreateRequest",
     "WorkspaceItemResponse",
     "WorkspaceListResponse",
