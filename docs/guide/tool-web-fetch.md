@@ -66,7 +66,7 @@
 | `builtin`（默认） | 本进程发请求：自己处理同域跳转、2 MiB 上限、HTML→Markdown、二进制落盘。不需要密钥。 |
 | `deepseek` | `POST https://api.deepseek.com/v1/tools/fetch`，`Authorization: Bearer <key>`，请求体 `{"url": "..."}`；返回 `{"title", "content"}`，`content` 是 Markdown。 |
 
-`deepsearch` 是 `deepseek` 的别名。后端、密钥与端点覆盖在 Web Admin 的“系统 → 网页抓取”页面配置，保存后写入数据库并对**下一次抓取**立即生效；页面从未保存过时，才回落到 `WEB_FETCH_*` 环境变量。超时仍由环境变量控制。抓取与搜索的密钥分别保存：如果两边都用 DeepSeek，需要在两个页面各填一次（可以填同一个密钥）。
+`deepsearch` 是 `deepseek` 的别名。后端、密钥与端点覆盖在 Web Admin 的“构建 → 工具 → 网页抓取”页面配置，保存后写入数据库并对**下一次抓取**立即生效；页面从未保存过时，才回落到 `WEB_FETCH_*` 环境变量。超时仍由环境变量控制。抓取与搜索的密钥分别保存：如果两边都用 DeepSeek，需要在两个页面各填一次（可以填同一个密钥）。
 
 选择 DeepSeek 后有三处行为差异，必须知道：
 

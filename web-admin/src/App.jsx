@@ -92,13 +92,11 @@ import {
   RetentionManager,
 } from "./components/admin/SettingsPanels"
 import SkillManager from "./components/admin/SkillManager"
-import WebFetchManager from "./components/admin/WebFetchManager"
-import WebSearchManager from "./components/admin/WebSearchManager"
+import ToolsPage from "./components/admin/ToolsPage"
 import AppSidebar from "./components/shell/AppSidebar"
 import AppTopbar from "./components/shell/AppTopbar"
 import { DEFAULT_MENU } from "./components/shell/navigation"
 import OverviewPage from "./pages/OverviewPage"
-import ToolManager from "./components/admin/ToolManager"
 import WorkspaceManager from "./components/admin/WorkspaceManager"
 import AgentPicker from "./components/AgentPicker"
 import { AgentIcon, agentIconName } from "./components/agentIcons"
@@ -2376,12 +2374,6 @@ export default function App() {
         refreshAgentsMd().catch(() => {})
         refreshPermissionMode().catch(() => {})
       }
-      if (activeMenu === "websearch") {
-        refreshWebSearch().catch(() => {})
-      }
-      if (activeMenu === "webfetch") {
-        refreshWebFetch().catch(() => {})
-      }
       if (activeMenu === "permissions") {
         refreshPermissionRules().catch(() => {})
       }
@@ -2650,11 +2642,25 @@ export default function App() {
             translate={translate}
           />
         ) : activeMenu === "tools" ? (
-          <ToolManager
+          <ToolsPage
             tools={tools}
             agents={agents}
             locale={locale}
-            onRefresh={refreshTools}
+            webSearchConfig={webSearchConfig}
+            webFetchConfig={webFetchConfig}
+            onRefreshTools={refreshTools}
+            onRefreshWebSearch={() =>
+              refreshWebSearch().catch((refreshError) =>
+                setError(refreshError?.message || translate("errorLoadFailed"))
+              )
+            }
+            onRefreshWebFetch={() =>
+              refreshWebFetch().catch((refreshError) =>
+                setError(refreshError?.message || translate("errorLoadFailed"))
+              )
+            }
+            onSaveWebSearch={updateWebSearch}
+            onSaveWebFetch={updateWebFetch}
             translate={translate}
           />
         ) : activeMenu === "skills" ? (
@@ -2746,28 +2752,6 @@ export default function App() {
               translate={translate}
             />
           </div>
-        ) : activeMenu === "websearch" ? (
-          <WebSearchManager
-            config={webSearchConfig}
-            onSave={updateWebSearch}
-            onRefresh={() =>
-              refreshWebSearch().catch((refreshError) =>
-                setError(refreshError?.message || translate("errorLoadFailed"))
-              )
-            }
-            translate={translate}
-          />
-        ) : activeMenu === "webfetch" ? (
-          <WebFetchManager
-            config={webFetchConfig}
-            onSave={updateWebFetch}
-            onRefresh={() =>
-              refreshWebFetch().catch((refreshError) =>
-                setError(refreshError?.message || translate("errorLoadFailed"))
-              )
-            }
-            translate={translate}
-          />
         ) : activeMenu === "permissions" ? (
           <PermissionRulesManager
             rules={permissionRules}

@@ -86,7 +86,7 @@ function ToolGroup({ group, agents, translate, locale, onOpen }) {
   )
 }
 
-export default function ToolManager({ tools, agents, locale, onRefresh, translate }) {
+export default function ToolManager({ tools, agents, locale, translate }) {
   const [search, setSearch] = useState("")
   const [detailName, setDetailName] = useState("")
 
@@ -113,48 +113,38 @@ export default function ToolManager({ tools, agents, locale, onRefresh, translat
     [tools, detailName]
   )
 
+  // Rendered as one tab of the tools page: the panel, its title and the refresh
+  // button belong to that page, so only the inventory itself lives here.
   return (
-    <section className="panel model-manager">
-      <div className="panel-titlebar">
-        <div>
-          <h2>{translate("toolManagerTitle")}</h2>
-          <span className="hint">{translate("toolManagerHint")}</span>
-        </div>
-        <div className="manager-toolbar-actions">
-          <button type="button" className="btn btn-compact" onClick={onRefresh}>
-            {translate("toolListRefresh")}
-          </button>
-        </div>
-      </div>
-      <div className="panel-body">
-        <ManagerSearch
-          value={search}
-          onChange={setSearch}
-          placeholder={translate("toolSearchPlaceholder")}
-          clearLabel={translate("managerSearchClear")}
-          countLabel={translate("managerSearchResult")}
-          matched={filtered.length}
-          total={tools.length}
-        />
+    <>
+      <div className="hint">{translate("toolManagerHint")}</div>
+      <ManagerSearch
+        value={search}
+        onChange={setSearch}
+        placeholder={translate("toolSearchPlaceholder")}
+        clearLabel={translate("managerSearchClear")}
+        countLabel={translate("managerSearchResult")}
+        matched={filtered.length}
+        total={tools.length}
+      />
 
-        <div className="model-list">
-          {filtered.length === 0 ? (
-            <div className="empty">
-              {tools.length === 0 ? translate("toolListEmpty") : translate("managerSearchNoMatch")}
-            </div>
-          ) : (
-            groups.map((group) => (
-              <ToolGroup
-                key={group.category}
-                group={group}
-                agents={agents}
-                translate={translate}
-                locale={locale}
-                onOpen={setDetailName}
-              />
-            ))
-          )}
-        </div>
+      <div className="model-list">
+        {filtered.length === 0 ? (
+          <div className="empty">
+            {tools.length === 0 ? translate("toolListEmpty") : translate("managerSearchNoMatch")}
+          </div>
+        ) : (
+          groups.map((group) => (
+            <ToolGroup
+              key={group.category}
+              group={group}
+              agents={agents}
+              translate={translate}
+              locale={locale}
+              onOpen={setDetailName}
+            />
+          ))
+        )}
       </div>
 
       {detailTool && (
@@ -169,6 +159,6 @@ export default function ToolManager({ tools, agents, locale, onRefresh, translat
           translate={translate}
         />
       )}
-    </section>
+    </>
   )
 }

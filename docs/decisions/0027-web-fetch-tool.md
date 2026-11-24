@@ -91,6 +91,6 @@
 
 **2026-11-24：新增可配置的 `deepseek` 后端（DeepSeek Fetch API）。**
 
-原实现只有进程内抓取。现在 `web_fetch` 与 `web_search` 一样把“用哪个后端”作为部署配置：页面（系统 → 网页抓取）优先于 `WEB_FETCH_*`，保存后下一次抓取立即生效；`builtin` 仍是默认且无需密钥。
+原实现只有进程内抓取。现在 `web_fetch` 与 `web_search` 一样把“用哪个后端”作为部署配置：页面（构建 → 工具 → 网页抓取）优先于 `WEB_FETCH_*`，保存后下一次抓取立即生效；`builtin` 仍是默认且无需密钥。
 
 DeepSeek 在服务端抓取并返回 Markdown，因此 D3 的跨域跳转保证和 D6 的原始字节落盘在 `deepseek` 下不成立：跳转由对方处理，结果没有 `redirect_to`；PDF/图片也不会产生 `persisted_path`。这不是适配器能补回的差异，已写入工具指南。需要 D3/D6 的保证时使用 `builtin`。权限确认仍按请求 URL 的主机名执行，但只覆盖原始主机。

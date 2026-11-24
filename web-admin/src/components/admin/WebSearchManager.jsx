@@ -10,7 +10,7 @@ const SEARCH_PROVIDERS = [
   { value: "bing", label: "Bing Web Search", needsKey: true },
 ]
 
-export default function WebSearchManager({ config, onSave, onRefresh, translate }) {
+export default function WebSearchManager({ config, onSave, translate }) {
   const [provider, setProvider] = useState("")
   const [apiKey, setApiKey] = useState("")
   const [baseUrl, setBaseUrl] = useState("")
@@ -48,70 +48,62 @@ export default function WebSearchManager({ config, onSave, onRefresh, translate 
     }
   }
 
+  // Rendered as one tab of the tools page: the panel, its title and the refresh
+  // button belong to that page, so only the backend form lives here.
   return (
-    <section className="panel">
-      <div className="panel-titlebar">
-        <div>
-          <h2>{translate("webSearchTitle")}</h2>
-          <span className="hint">
-            {translate("webSearchCurrentSource")}:{" "}
-            {config?.source === "database"
-              ? translate("webSearchSourceDb")
-              : translate("webSearchSourceEnv")}
-          </span>
-        </div>
-        <button type="button" className="btn btn-compact" onClick={onRefresh}>
-          {translate("webSearchRefresh")}
+    <div className="tool-tab-scroll">
+      <div className="hint">
+        {translate("webSearchCurrentSource")}:{" "}
+        {config?.source === "database"
+          ? translate("webSearchSourceDb")
+          : translate("webSearchSourceEnv")}
+      </div>
+      <form className="form-grid" onSubmit={submit}>
+        <label>
+          <span>{translate("webSearchProvider")}</span>
+          <select
+            value={provider}
+            disabled={!config}
+            onChange={(event) => setProvider(event.target.value)}
+          >
+            {SEARCH_PROVIDERS.map((item) => (
+              <option value={item.value} key={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>{translate("webSearchApiKey")}</span>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={apiKey}
+            disabled={!config}
+            placeholder={translate("webSearchApiKeyPlaceholder")}
+            onChange={(event) => setApiKey(event.target.value)}
+          />
+        </label>
+        <label>
+          <span>{translate("webSearchBaseUrl")}</span>
+          <input
+            type="url"
+            value={baseUrl}
+            disabled={!config}
+            placeholder={translate("webSearchBaseUrlPlaceholder")}
+            onChange={(event) => setBaseUrl(event.target.value)}
+          />
+        </label>
+        <button type="submit" className="btn btn-primary" disabled={busy || !changed}>
+          {busy ? translate("webSearchSaving") : translate("webSearchSave")}
         </button>
-      </div>
-      <div className="panel-body">
-        <form className="form-grid" onSubmit={submit}>
-          <label>
-            <span>{translate("webSearchProvider")}</span>
-            <select
-              value={provider}
-              disabled={!config}
-              onChange={(event) => setProvider(event.target.value)}
-            >
-              {SEARCH_PROVIDERS.map((item) => (
-                <option value={item.value} key={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>{translate("webSearchApiKey")}</span>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={apiKey}
-              disabled={!config}
-              placeholder={translate("webSearchApiKeyPlaceholder")}
-              onChange={(event) => setApiKey(event.target.value)}
-            />
-          </label>
-          <label>
-            <span>{translate("webSearchBaseUrl")}</span>
-            <input
-              type="url"
-              value={baseUrl}
-              disabled={!config}
-              placeholder={translate("webSearchBaseUrlPlaceholder")}
-              onChange={(event) => setBaseUrl(event.target.value)}
-            />
-          </label>
-          <button type="submit" className="btn btn-primary" disabled={busy || !changed}>
-            {busy ? translate("webSearchSaving") : translate("webSearchSave")}
-          </button>
-        </form>
-        <div className="hint">{translate("webSearchHint")}</div>
-        {selected?.needsKey ? (
-          keyMissing ? <div className="hint">{translate("webSearchKeyMissing")}</div> : null
-        ) : (
-          <div className="hint">{translate("webSearchKeyless")}</div>
-        )}
-      </div>
-    </section>
+      </form>
+      <div className="hint">{translate("webSearchHint")}</div>
+      {selected?.needsKey ? (
+        keyMissing ? <div className="hint">{translate("webSearchKeyMissing")}</div> : null
+      ) : (
+        <div className="hint">{translate("webSearchKeyless")}</div>
+      )}
+    </div>
   )
 }

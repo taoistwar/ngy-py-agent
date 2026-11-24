@@ -7,7 +7,7 @@ const FETCH_PROVIDERS = [
   { value: "deepseek", label: "DeepSeek Fetch", needsKey: true },
 ]
 
-export default function WebFetchManager({ config, onSave, onRefresh, translate }) {
+export default function WebFetchManager({ config, onSave, translate }) {
   const [provider, setProvider] = useState("")
   const [apiKey, setApiKey] = useState("")
   const [baseUrl, setBaseUrl] = useState("")
@@ -45,73 +45,65 @@ export default function WebFetchManager({ config, onSave, onRefresh, translate }
     }
   }
 
+  // Rendered as one tab of the tools page: the panel, its title and the refresh
+  // button belong to that page, so only the backend form lives here.
   return (
-    <section className="panel">
-      <div className="panel-titlebar">
-        <div>
-          <h2>{translate("webFetchTitle")}</h2>
-          <span className="hint">
-            {translate("webFetchCurrentSource")}:{" "}
-            {config?.source === "database"
-              ? translate("webFetchSourceDb")
-              : translate("webFetchSourceEnv")}
-          </span>
-        </div>
-        <button type="button" className="btn btn-compact" onClick={onRefresh}>
-          {translate("webFetchRefresh")}
+    <div className="tool-tab-scroll">
+      <div className="hint">
+        {translate("webFetchCurrentSource")}:{" "}
+        {config?.source === "database"
+          ? translate("webFetchSourceDb")
+          : translate("webFetchSourceEnv")}
+      </div>
+      <form className="form-grid" onSubmit={submit}>
+        <label>
+          <span>{translate("webFetchProvider")}</span>
+          <select
+            value={provider}
+            disabled={!config}
+            onChange={(event) => setProvider(event.target.value)}
+          >
+            {FETCH_PROVIDERS.map((item) => (
+              <option value={item.value} key={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>{translate("webFetchApiKey")}</span>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={apiKey}
+            disabled={!config}
+            placeholder={translate("webFetchApiKeyPlaceholder")}
+            onChange={(event) => setApiKey(event.target.value)}
+          />
+        </label>
+        <label>
+          <span>{translate("webFetchBaseUrl")}</span>
+          <input
+            type="url"
+            value={baseUrl}
+            disabled={!config}
+            placeholder={translate("webFetchBaseUrlPlaceholder")}
+            onChange={(event) => setBaseUrl(event.target.value)}
+          />
+        </label>
+        <button type="submit" className="btn btn-primary" disabled={busy || !changed}>
+          {busy ? translate("webFetchSaving") : translate("webFetchSave")}
         </button>
-      </div>
-      <div className="panel-body">
-        <form className="form-grid" onSubmit={submit}>
-          <label>
-            <span>{translate("webFetchProvider")}</span>
-            <select
-              value={provider}
-              disabled={!config}
-              onChange={(event) => setProvider(event.target.value)}
-            >
-              {FETCH_PROVIDERS.map((item) => (
-                <option value={item.value} key={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>{translate("webFetchApiKey")}</span>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={apiKey}
-              disabled={!config}
-              placeholder={translate("webFetchApiKeyPlaceholder")}
-              onChange={(event) => setApiKey(event.target.value)}
-            />
-          </label>
-          <label>
-            <span>{translate("webFetchBaseUrl")}</span>
-            <input
-              type="url"
-              value={baseUrl}
-              disabled={!config}
-              placeholder={translate("webFetchBaseUrlPlaceholder")}
-              onChange={(event) => setBaseUrl(event.target.value)}
-            />
-          </label>
-          <button type="submit" className="btn btn-primary" disabled={busy || !changed}>
-            {busy ? translate("webFetchSaving") : translate("webFetchSave")}
-          </button>
-        </form>
-        <div className="hint">{translate("webFetchHint")}</div>
-        {selected?.needsKey ? (
-          keyMissing ? <div className="hint">{translate("webFetchKeyMissing")}</div> : null
-        ) : (
-          <div className="hint">{translate("webFetchBuiltinHint")}</div>
-        )}
-        {provider === "deepseek" ? (
-          <div className="hint">{translate("webFetchDeepseekHint")}</div>
-        ) : null}
-      </div>
-    </section>
+      </form>
+      <div className="hint">{translate("webFetchHint")}</div>
+      {selected?.needsKey ? (
+        keyMissing ? <div className="hint">{translate("webFetchKeyMissing")}</div> : null
+      ) : (
+        <div className="hint">{translate("webFetchBuiltinHint")}</div>
+      )}
+      {provider === "deepseek" ? (
+        <div className="hint">{translate("webFetchDeepseekHint")}</div>
+      ) : null}
+    </div>
   )
 }

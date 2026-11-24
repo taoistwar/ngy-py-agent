@@ -96,7 +96,7 @@
 | **回执（receipt）** | 一次抓取的结构化结果：`url`、`requested_url`、`code`/`code_text`、`content_type`/`media_type`/`encoding`、`bytes`、`duration_ms`、`redirected`、`response_truncated`、`title`、`provider`，加上正文三件套 `content`/`content_truncated`/`persisted_path`。失败是 `{"error", "reason", ...}`。 | `agent/tools/web_fetch/tool.py` |
 | **网络读取工具（`NETWORK_READ_TOOLS`）** | 声明为 `read` 但目标不是路径的工具清单。`web_fetch` 按 `web_urls.host_of(url)` 取目标主机名，同站第二个页面不再弹框、子域各自弹框；`web_search` 没有 URL，目标是工具自身（见下）。这类工具每次都问。 | `agent/tools/permissions.py` |
 | **`redirect_to`** | 跨域跳转的落点。`builtin` 后端**不跟随**跨域跳转（新站点没被批准过），而是把地址交还给模型另发一次调用；同域跳转（含 `http`→`https`）自动跟随，最多 5 跳。`deepseek` 由服务端抓取，无法报告这个字段。 | `agent/tools/web_fetch/fetch.py` |
-| **fetch 后端** | `builtin`（默认，本地请求 + HTML→Markdown，无需密钥）或 `deepseek`（DeepSeek Fetch API，Bearer 鉴权，返回 `title` + Markdown `content`）。页面（系统 → 网页抓取）优先于 `WEB_FETCH_*`。 | `agent/tools/web_fetch/providers.py` |
+| **fetch 后端** | `builtin`（默认，本地请求 + HTML→Markdown，无需密钥）或 `deepseek`（DeepSeek Fetch API，Bearer 鉴权，返回 `title` + Markdown `content`）。页面（构建 → 工具 → 网页抓取）优先于 `WEB_FETCH_*`。 | `agent/tools/web_fetch/providers.py` |
 | **`response_truncated` / `content_truncated`** | 前者：正文在 2 MiB 上限处被截断（页码原文不全）；后者：正文超出输出 token 预算、已落盘，`content` 只是预览。两者都不静默，模型据此决定要不要回读或缩小范围。 | `agent/tools/web_fetch/render.py` |
 | **`agent/tools/web_urls.py`** | 工具与权限门共用的 URL 规则：只允许 http/https、拒绝内嵌凭证、丢 fragment、主机名小写去尾点。两边必须给同一个答案，否则确认会重复或串站。 | `agent/tools/web_urls.py` |
 

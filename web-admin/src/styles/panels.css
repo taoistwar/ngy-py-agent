@@ -88,6 +88,23 @@
   overflow: auto;
 }
 
+/* The tools page groups three managers in one panel: its tab strip takes the
+   titlebar's left slot instead of the usual title + hint block. */
+.tool-tabs-panel .panel-titlebar > .tab-strip {
+  display: flex;
+}
+
+/* A web tool's config is a plain page, so the tab scrolls as a whole instead of
+   keeping one element pinned like the tool list does. */
+.tool-tabs-panel .panel-body > .tool-tab-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
 .config-stack {
   display: grid;
   gap: 16px;
