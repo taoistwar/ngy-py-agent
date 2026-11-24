@@ -72,6 +72,7 @@ def main() -> None:
         print("npm ci failed, fallback to npm install for local environment.")
         run(["npm", "install", "--no-audit", "--no-fund"], cwd=WEB_ADMIN)
     run(["npm", "run", "i18n:check"], cwd=WEB_ADMIN)
+    run(["npm", "run", "test:text"], cwd=WEB_ADMIN)
     run(["npm", "run", "build"], cwd=WEB_ADMIN)
 
     print("\nLocal CI checks passed.")

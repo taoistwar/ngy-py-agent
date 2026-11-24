@@ -357,6 +357,9 @@ function toolCallItems(dict, calls) {
     title: `${index + 1}. ${call.name || fieldLabel(dict, "name")}`,
     meta: "",
     text: call.args,
+    // The arguments are a JSON document the reader may want to reformat, unescape
+    // or read as unicode - the same display tools the standalone tool-call event has.
+    transforms: true,
   }))
 }
 
@@ -459,7 +462,15 @@ function buildLlmResponse({ data, dict }) {
   const content = data.content ?? message?.content
   const contentText = messageContentText(dict, content)
   if (contentText && contentText !== dict.text.emptyMessage) {
-    sections.push({ kind: "text", title: dict.text.sectionContent, text: contentText, mono: false })
+    // The answer is Markdown: it reads as prose by default and as source on demand,
+    // the same two modes the task result pane offers.
+    sections.push({
+      kind: "text",
+      title: dict.text.sectionContent,
+      text: contentText,
+      mono: false,
+      markdown: true,
+    })
   }
   if (calls.length > 0) {
     sections.push({ kind: "blocks", title: dict.text.sectionToolCalls, items: toolCallItems(dict, calls) })
@@ -487,12 +498,23 @@ function buildToolCall({ data, dict }) {
   const args = data.arguments
   if (isPlainObject(args) && Object.keys(args).length > 0) {
     // Flattening keeps a whole-file `content` argument a block instead of a table
-    // cell, and the rows read as "what this call is about".
+    // cell, and the rows read as "what this call is about". The blocks keep the
+    // display tools: an argument value is often the JSON a reader wants to reformat.
     const described = describeData(dict, args)
     fields.push(...described.fields)
-    sections.push(...described.sections)
+    sections.push(
+      ...described.sections.map((section) =>
+        section.kind === "text" ? { ...section, transforms: true } : section,
+      ),
+    )
   } else if (typeof args === "string" && args.trim()) {
-    sections.push({ kind: "text", title: dict.text.sectionArguments, text: args, mono: true })
+    sections.push({
+      kind: "text",
+      title: dict.text.sectionArguments,
+      text: args,
+      mono: true,
+      transforms: true,
+    })
   }
 
   return {

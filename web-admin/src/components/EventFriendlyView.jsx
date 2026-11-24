@@ -1,33 +1,6 @@
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 import { buildFriendlyEvent } from "../events/friendlyEvent"
-
-// Above this size a block is folded: one tool result can carry a whole file.
-const TEXT_PREVIEW_CHARS = 480
-const TEXT_PREVIEW_LINES = 10
-
-function CollapsibleText({ text, mono, translate }) {
-  const [expanded, setExpanded] = useState(false)
-  const lines = text.split("\n")
-  const isLong = text.length > TEXT_PREVIEW_CHARS || lines.length > TEXT_PREVIEW_LINES
-
-  let visible = text
-  if (isLong && !expanded) {
-    const byChars = text.slice(0, TEXT_PREVIEW_CHARS)
-    const byLines = lines.slice(0, TEXT_PREVIEW_LINES).join("\n")
-    visible = byChars.length <= byLines.length ? `${byChars}…` : `${byLines}…`
-  }
-
-  return (
-    <div className="event-friendly-text-wrap">
-      <pre className={`event-friendly-text ${mono ? "mono" : ""}`}>{visible}</pre>
-      {isLong && (
-        <button type="button" className="event-friendly-toggle" onClick={() => setExpanded((prev) => !prev)}>
-          {expanded ? translate("eventShowLess") : translate("eventShowMore")}
-        </button>
-      )}
-    </div>
-  )
-}
+import EventTextBlock from "./EventTextBlock"
 
 function KeyValueTable({ rows }) {
   return (
@@ -49,7 +22,13 @@ function Section({ section, translate }) {
     <div className="event-friendly-section">
       <p className="event-friendly-section-title">{section.title}</p>
       {section.kind === "text" && (
-        <CollapsibleText text={section.text} mono={section.mono} translate={translate} />
+        <EventTextBlock
+          text={section.text}
+          mono={section.mono}
+          markdown={section.markdown}
+          transforms={section.transforms}
+          translate={translate}
+        />
       )}
       {section.kind === "entries" && <KeyValueTable rows={section.rows} />}
       {section.kind === "blocks" && (
@@ -60,7 +39,15 @@ function Section({ section, translate }) {
                 <span className="event-friendly-item-title">{item.title}</span>
                 {item.meta && <span className="event-friendly-item-meta">{item.meta}</span>}
               </header>
-              {item.text && <CollapsibleText text={item.text} mono translate={translate} />}
+              {item.text && (
+                <EventTextBlock
+                  text={item.text}
+                  mono
+                  markdown={item.markdown}
+                  transforms={item.transforms}
+                  translate={translate}
+                />
+              )}
             </article>
           ))}
         </div>

@@ -541,6 +541,60 @@
   cursor: pointer;
 }
 
+/* Display-only tools above a text block: JSON format/minify, unicode and escaping.
+   They get their own row so the payload keeps the full width. */
+.event-text-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.event-text-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.event-text-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.event-text-tool {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 7px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.event-text-tool:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--text-strong);
+}
+
+.event-text-tool:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* The rendered answer, like the task result pane: it scrolls inside the card instead
+   of pushing the rest of the timeline down. */
+.event-friendly-markdown {
+  max-height: 460px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--surface-tint);
+}
+
 .event-friendly-items {
   display: flex;
   flex-direction: column;
@@ -627,6 +681,13 @@
 .event-overlay-body .event-friendly-text,
 .event-standalone-main .event-friendly-text {
   font-size: 13.5px;
+}
+
+/* Fullscreen and standalone pages have the room: the answer should not keep the
+   card-sized scroll box there. */
+.event-overlay-body .event-friendly-markdown,
+.event-standalone-main .event-friendly-markdown {
+  max-height: none;
 }
 
 .event-overlay-body .event-kv th,
