@@ -110,6 +110,7 @@
   "eventCleanHint": "勾选参数后点处理按钮，只改变这里的显示，日志内容不变。",
   "eventCleanFields": "参数（JSON 第一层字段）",
   "eventCleanReset": "还原",
+  "eventCleanFieldCopy": "复制该参数",
   "eventOpenInNewTab": "在新窗口打开",
   "eventFullscreen": "全屏查看",
   "eventFullscreenClose": "退出全屏",

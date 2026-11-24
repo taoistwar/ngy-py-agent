@@ -110,6 +110,7 @@
   "eventCleanHint": "Check the parameters, then apply a tool; only this view changes, the log keeps the original.",
   "eventCleanFields": "Parameters (first-level JSON fields)",
   "eventCleanReset": "Reset",
+  "eventCleanFieldCopy": "Copy this parameter",
   "eventOpenInNewTab": "Open in a new tab",
   "eventFullscreen": "View fullscreen",
   "eventFullscreenClose": "Exit fullscreen",

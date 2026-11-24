@@ -649,8 +649,29 @@
 .event-clean-field-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+}
+
+/* Checkbox and name are one hit target; the copy button beside them is not. */
+.event-clean-field-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   cursor: pointer;
+}
+
+/* The card is compact: the copy affordance stays a 22px target, like the result pane. */
+.event-clean-field-head .icon-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.event-clean-field-head .icon-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 .event-clean-field-name {

@@ -11,6 +11,7 @@
 import { useState } from "react"
 import { copyText } from "../utils/clipboard"
 import { TEXT_TRANSFORMS, fieldsToJsonText, isJsonText } from "../utils/textTransforms"
+import CopyIconButton from "./CopyIconButton"
 import Modal from "./admin/Modal"
 
 function initialEntries(fields) {
@@ -111,14 +112,24 @@ export default function EventTextCleanDialog({ fields, translate, onClose }) {
         <ul className="event-clean-fields">
           {entries.map((entry) => (
             <li className="event-clean-field" key={entry.name}>
-              <label className="event-clean-field-head">
-                <input
-                  type="checkbox"
-                  checked={entry.checked}
-                  onChange={() => toggleEntry(entry.name)}
+              <div className="event-clean-field-head">
+                <label className="event-clean-field-toggle">
+                  <input
+                    type="checkbox"
+                    checked={entry.checked}
+                    onChange={() => toggleEntry(entry.name)}
+                  />
+                  <span className="event-clean-field-name">{entry.name}</span>
+                </label>
+                {/* Copies the value as shown here, after any transform: often the
+                    reason to open this dialog is to take one parameter away. */}
+                <CopyIconButton
+                  text={entry.value}
+                  label={translate("eventCleanFieldCopy")}
+                  doneLabel={translate("detailResultCopyDone")}
+                  failedLabel={translate("detailResultCopyFailed")}
                 />
-                <span className="event-clean-field-name">{entry.name}</span>
-              </label>
+              </div>
               <pre className="event-clean-field-value">{entry.value}</pre>
             </li>
           ))}

@@ -639,6 +639,14 @@
   color: var(--danger-text-strong);
 }
 
+/* A copy button reports its own outcome: the tick stays green until the timer puts
+   the copy glyph back (see components/CopyIconButton.jsx). */
+.icon-btn.is-copied {
+  border-color: var(--success-border);
+  background: var(--surface-hover);
+  color: var(--success);
+}
+
 .icon-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;

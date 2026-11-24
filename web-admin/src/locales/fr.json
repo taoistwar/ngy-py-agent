@@ -110,6 +110,7 @@
   "eventCleanHint": "Cochez des paramètres puis appliquez un outil ; seule cette vue change, le journal garde l'original.",
   "eventCleanFields": "Paramètres (champs JSON de premier niveau)",
   "eventCleanReset": "Réinitialiser",
+  "eventCleanFieldCopy": "Copier ce paramètre",
   "eventOpenInNewTab": "Ouvrir dans un nouvel onglet",
   "eventFullscreen": "Afficher en plein écran",
   "eventFullscreenClose": "Quitter le plein écran",

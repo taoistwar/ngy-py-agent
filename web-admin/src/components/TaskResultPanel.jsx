@@ -13,26 +13,19 @@ import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { default as MonacoEditor } from "@monaco-editor/react"
 import { useTheme } from "../theme"
-import { copyText } from "../utils/clipboard"
 import { formatTokenTotal } from "../utils/contextUsage"
 import { formatDuration, safeStringify } from "../utils/format"
 import AutoHeightMonaco from "./AutoHeightMonaco"
 import CollapsibleSectionTitle from "./CollapsibleSectionTitle"
+import CopyIconButton from "./CopyIconButton"
 import MarkdownView from "./MarkdownView"
-import { CheckIcon, CloseIcon, CopyIcon, ExpandIcon } from "./icons"
+import { CloseIcon, ExpandIcon } from "./icons"
 
 // The overlay body is a flex column, so the editor can claim whatever is left.
 const FULLSCREEN_EDITOR_HEIGHT = "100%"
 
 const VIEW_RENDERED = "rendered"
 const VIEW_SOURCE = "source"
-
-const COPY_IDLE = "idle"
-const COPY_DONE = "done"
-const COPY_FAILED = "failed"
-
-// How long the copy button keeps its tick before going back to the copy glyph.
-const COPY_FEEDBACK_MS = 1600
 
 const SOURCE_EDITOR_OPTIONS = {
   readOnly: true,
@@ -163,58 +156,18 @@ function ResultUsage({ usage, durationMs, translate }) {
 }
 
 /**
- * Copies the answer's raw text - what is on screen may be rendered Markdown, but the
- * source is what pastes cleanly into an editor or a chat message.
- *
- * The outcome is reported in place (a tick, or a red glyph on failure) instead of a
- * toast: a toast would cover the answer the user is reading.
+ * The answer's raw text one click away: what is on screen may be rendered Markdown,
+ * but the source is what pastes cleanly into an editor or a chat message.
  */
 function ResultCopyButton({ text, disabled, translate }) {
-  const [state, setState] = useState(COPY_IDLE)
-  const timerRef = useRef(null)
-
-  // A re-run or another task changes the text; a stale tick would lie about it.
-  useEffect(() => {
-    setState(COPY_IDLE)
-    window.clearTimeout(timerRef.current)
-  }, [text])
-
-  // The pane can unmount while the feedback is still ticking down.
-  useEffect(() => () => window.clearTimeout(timerRef.current), [])
-
-  const copy = async () => {
-    const copied = await copyText(text)
-    setState(copied ? COPY_DONE : COPY_FAILED)
-    window.clearTimeout(timerRef.current)
-    timerRef.current = window.setTimeout(() => setState(COPY_IDLE), COPY_FEEDBACK_MS)
-  }
-
-  const label =
-    state === COPY_DONE
-      ? translate("detailResultCopyDone")
-      : state === COPY_FAILED
-        ? translate("detailResultCopyFailed")
-        : translate("detailResultCopy")
-
-  const className = [
-    "icon-btn",
-    state === COPY_DONE ? "is-copied" : "",
-    state === COPY_FAILED ? "icon-btn-danger" : "",
-  ]
-    .filter(Boolean)
-    .join(" ")
-
   return (
-    <button
-      type="button"
-      className={className}
-      title={label}
-      aria-label={label}
+    <CopyIconButton
+      text={text}
+      label={translate("detailResultCopy")}
+      doneLabel={translate("detailResultCopyDone")}
+      failedLabel={translate("detailResultCopyFailed")}
       disabled={disabled}
-      onClick={copy}
-    >
-      {state === COPY_DONE ? <CheckIcon /> : <CopyIcon />}
-    </button>
+    />
   )
 }
 

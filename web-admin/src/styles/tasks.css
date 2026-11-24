@@ -307,14 +307,6 @@
   height: 12px;
 }
 
-/* The copy button reports its own outcome: the tick stays green until the timer
-   puts the copy glyph back. */
-.task-result-actions .icon-btn.is-copied {
-  border-color: var(--success-border);
-  background: var(--surface-hover);
-  color: var(--success);
-}
-
 /* What the run cost, in the result header: total tokens (click for the input/output
    split) and the wall-clock time. The tip opens under the chip, inside the pane that
    already scrolls, so it never widens the header. */

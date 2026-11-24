@@ -110,6 +110,7 @@
   "eventCleanHint": "Отметьте параметры и примените инструмент; изменится только этот просмотр, журнал останется прежним.",
   "eventCleanFields": "Параметры (поля JSON первого уровня)",
   "eventCleanReset": "Сбросить",
+  "eventCleanFieldCopy": "Скопировать этот параметр",
   "eventOpenInNewTab": "Открыть в новой вкладке",
   "eventFullscreen": "Открыть во весь экран",
   "eventFullscreenClose": "Выйти из полноэкранного режима",

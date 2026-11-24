@@ -110,6 +110,7 @@
   "eventCleanHint": "勾選參數後點處理按鈕，只改變這裡的顯示，日誌內容不變。",
   "eventCleanFields": "參數（JSON 第一層欄位）",
   "eventCleanReset": "還原",
+  "eventCleanFieldCopy": "複製該參數",
   "eventOpenInNewTab": "在新分頁開啟",
   "eventFullscreen": "全螢幕檢視",
   "eventFullscreenClose": "結束全螢幕",
