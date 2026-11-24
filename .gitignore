@@ -9,7 +9,7 @@ wheels/
 # Node.js-generated files
 node_modules/
 # Throwaway build output from a local check (the real build goes to dist/)
-web-admin/dist-check/
+web-admin/dist-*/
 
 # Virtual environments
 .venv

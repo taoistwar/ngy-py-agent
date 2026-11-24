@@ -6,9 +6,11 @@
 import assert from "node:assert/strict"
 import {
   escapeText,
+  fieldsToJsonText,
   formatJsonText,
   fromUnicodeEscapes,
   isJsonText,
+  jsonFieldEntries,
   minifyJsonText,
   toUnicodeEscapes,
   unescapeText,
@@ -56,5 +58,29 @@ assert.equal(unescapeText(escapeText(multiline)), multiline)
 assert.equal(unescapeText("a\\u0041"), "a\\u0041")
 // An unknown escape stays verbatim instead of being swallowed.
 assert.equal(unescapeText("a\\qb"), "a\\qb")
+
+// ------------------------------------------------------- parameter field view
+
+// A tool call's arguments are cleaned per parameter, so the dialog needs the
+// first-level fields with their values as text.
+const toolArgs = jsonFieldEntries('{"command":"ls -la","description":"List files"}')
+assert.deepEqual(toolArgs, [
+  { name: "command", value: "ls -la" },
+  { name: "description", value: "List files" },
+])
+// A nested value is shown as pretty JSON so the chips can reformat it.
+assert.deepEqual(jsonFieldEntries('{"opts":{"a":1}}'), [
+  { name: "opts", value: '{\n  "a": 1\n}' },
+])
+// Only objects have named fields: an array has none, and text is not JSON.
+assert.equal(jsonFieldEntries("[1, 2]"), null)
+assert.equal(jsonFieldEntries("ls -la"), null)
+assert.equal(jsonFieldEntries(""), null)
+// The cleaned parameters come back as a document, ready to copy.
+assert.equal(
+  fieldsToJsonText([{ name: "command", value: "ls -la" }]),
+  '{\n  "command": "ls -la"\n}',
+)
+assert.equal(fieldsToJsonText([]), "{}")
 
 console.log("text transforms OK")

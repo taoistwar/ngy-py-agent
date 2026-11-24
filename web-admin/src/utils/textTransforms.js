@@ -5,6 +5,19 @@
 // not edits: the stored event is never touched, and every function returns the input
 // unchanged when the operation does not apply (format/minify on non-JSON, say).
 
+// The display tools in the order the UI shows them: this list is what the chip row
+// under a block and the parameter dialog both render. ``jsonOnly`` greys a chip out
+// on text that is not JSON: formatting prose or a shell command would either do
+// nothing or silently rewrite it. The label is a message key, not a translated word.
+export const TEXT_TRANSFORMS = [
+  { label: "eventTextFormat", apply: formatJsonText, jsonOnly: true },
+  { label: "eventTextMinify", apply: minifyJsonText, jsonOnly: true },
+  { label: "eventTextToUnicode", apply: toUnicodeEscapes },
+  { label: "eventTextToChinese", apply: fromUnicodeEscapes },
+  { label: "eventTextEscape", apply: escapeText },
+  { label: "eventTextUnescape", apply: unescapeText },
+]
+
 /** True when ``text`` is a JSON object or array; format/minify are JSON-only. */
 export function isJsonText(text) {
   if (typeof text !== "string") return false
@@ -114,4 +127,40 @@ export function unescapeText(text) {
     index += 1
   }
   return out
+}
+
+/**
+ * Top-level fields of a JSON object, each as ``{ name, value }`` with the value
+ * rendered as text: a string stays as it is, anything else becomes pretty JSON.
+ * Returns ``null`` for everything that is not a JSON object, because the cleaning
+ * dialog works per named parameter and an array has none.
+ */
+export function jsonFieldEntries(text) {
+  if (typeof text !== "string") return null
+  const trimmed = text.trim()
+  if (!trimmed.startsWith("{")) return null
+  let parsed
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null
+  return Object.entries(parsed).map(([name, value]) => ({
+    name,
+    value: typeof value === "string" ? value : JSON.stringify(value, null, 2),
+  }))
+}
+
+/**
+ * The given ``{ name, value }`` pairs as a JSON document, for copying a cleaned
+ * payload out of the dialog. Values are written as strings: the dialog shows them
+ * as text, so a nested field comes back as pretty-printed text, not re-typed JSON.
+ */
+export function fieldsToJsonText(fields) {
+  const data = {}
+  for (const field of fields || []) {
+    data[field.name] = field.value
+  }
+  return JSON.stringify(data, null, 2)
 }

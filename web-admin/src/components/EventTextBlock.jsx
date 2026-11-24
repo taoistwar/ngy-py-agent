@@ -6,15 +6,8 @@
 // from the block's own copy, so the log entry stays the record it always was.
 
 import { useEffect, useMemo, useState } from "react"
-import {
-  escapeText,
-  formatJsonText,
-  fromUnicodeEscapes,
-  isJsonText,
-  minifyJsonText,
-  toUnicodeEscapes,
-  unescapeText,
-} from "../utils/textTransforms"
+import { TEXT_TRANSFORMS, isJsonText, jsonFieldEntries } from "../utils/textTransforms"
+import EventTextCleanDialog from "./EventTextCleanDialog"
 import MarkdownView from "./MarkdownView"
 
 // Above this size a block is folded: one tool result can carry a whole file.
@@ -23,17 +16,6 @@ const TEXT_PREVIEW_LINES = 10
 
 const VIEW_RENDERED = "rendered"
 const VIEW_SOURCE = "source"
-
-// ``jsonOnly`` greys a chip out on text that is not JSON: formatting plain prose or a
-// shell command would either do nothing or silently rewrite it.
-const TRANSFORMS = [
-  { label: "eventTextFormat", apply: formatJsonText, jsonOnly: true },
-  { label: "eventTextMinify", apply: minifyJsonText, jsonOnly: true },
-  { label: "eventTextToUnicode", apply: toUnicodeEscapes },
-  { label: "eventTextToChinese", apply: fromUnicodeEscapes },
-  { label: "eventTextEscape", apply: escapeText },
-  { label: "eventTextUnescape", apply: unescapeText },
-]
 
 function isLong(text) {
   return text.length > TEXT_PREVIEW_CHARS || text.split("\n").length > TEXT_PREVIEW_LINES
@@ -62,10 +44,12 @@ export default function EventTextBlock({
   // What is on screen may be a transformed copy; a new event resets it (a transform
   // of the previous event shown under the new one's title would be a lie).
   const [value, setValue] = useState(text)
+  const [cleaning, setCleaning] = useState(false)
 
   useEffect(() => {
     setValue(text)
     setExpanded(false)
+    setCleaning(false)
   }, [text])
 
   // React reuses this instance when the panel switches to another event's block: a
@@ -76,6 +60,9 @@ export default function EventTextBlock({
   }, [markdown])
 
   const valueIsJson = useMemo(() => isJsonText(value), [value])
+  // The cleaning dialog works per named parameter, so it only makes sense on a JSON
+  // object; the chip row hides the button for text that has no fields to list.
+  const cleanFields = useMemo(() => jsonFieldEntries(value), [value])
   const long = isLong(value)
   const hasText = value.trim() !== ""
   const showTools = transforms && hasText
@@ -88,7 +75,7 @@ export default function EventTextBlock({
         <div className="event-text-controls">
           {showTools && (
             <div className="event-text-tools" role="group" aria-label={translate("eventTextToolsAria")}>
-              {TRANSFORMS.map((item) => (
+              {TEXT_TRANSFORMS.map((item) => (
                 <button
                   key={item.label}
                   type="button"
@@ -99,6 +86,17 @@ export default function EventTextBlock({
                   {translate(item.label)}
                 </button>
               ))}
+              {/* Opens the same tools on single parameters of this JSON object;
+                  kept last and marked because it leaves the block for a dialog. */}
+              {cleanFields && (
+                <button
+                  type="button"
+                  className="event-text-tool event-text-tool-clean"
+                  onClick={() => setCleaning(true)}
+                >
+                  {translate("eventTextClean")}
+                </button>
+              )}
             </div>
           )}
           {showRenderTabs && (
@@ -144,6 +142,13 @@ export default function EventTextBlock({
             </button>
           )}
         </div>
+      )}
+      {cleaning && cleanFields && (
+        <EventTextCleanDialog
+          fields={cleanFields}
+          translate={translate}
+          onClose={() => setCleaning(false)}
+        />
       )}
     </div>
   )
