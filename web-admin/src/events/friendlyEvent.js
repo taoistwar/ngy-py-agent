@@ -335,6 +335,12 @@ function responseThinking(data) {
     .trim()
 }
 
+// Roles whose content is prose written for the model: the system prompt and the user
+// instructions read as Markdown by default and as source on demand, the same two modes
+// the task result offers. Assistant history and tool output stay verbatim - they are
+// data (often JSON), and reflowing them would misrepresent what was sent.
+const PROSE_ROLES = new Set(["system", "user"])
+
 function messageItems(dict, messages) {
   return messages.map((message, index) => {
     const calls = toolCallsOf(message)
@@ -348,6 +354,7 @@ function messageItems(dict, messages) {
           ? fillTemplate(dict.text.messageToolMeta, { tools: calls.map((call) => call.name).join(", ") })
           : "",
       text: messageContentText(dict, message?.content),
+      markdown: PROSE_ROLES.has(String(message?.role || "").toLowerCase()),
     }
   })
 }
