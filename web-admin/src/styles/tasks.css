@@ -136,6 +136,136 @@
   background: var(--panel-header);
 }
 
+/* The conversation's plan (``todo_write``). Pinned under the tab strip, above the
+   scrolling body, so a running task's log and its checklist are visible together. */
+.todo-panel {
+  display: grid;
+  gap: 7px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-inset);
+}
+
+.todo-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.todo-panel-title {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.todo-panel-count {
+  color: var(--text-soft);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.todo-panel-progress {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line-soft);
+}
+
+.todo-panel-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.todo-panel-list {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.todo-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.todo-item-marker {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+.todo-item-marker svg {
+  width: 10px;
+  height: 10px;
+}
+
+.todo-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.todo-item-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.todo-item.is-in_progress .todo-item-text {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.todo-item.is-in_progress .todo-item-marker {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  animation: todo-item-pulse 1.8s ease-in-out infinite;
+}
+
+.todo-item.is-completed .todo-item-marker {
+  border-color: var(--success-border);
+  color: var(--success);
+}
+
+.todo-item.is-completed .todo-item-text {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+@keyframes todo-item-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todo-item.is-in_progress .todo-item-marker {
+    animation: none;
+  }
+}
+
 /* Detail tabs read as a segmented control, not browser tabs. */
 .tab-strip {
   display: flex;

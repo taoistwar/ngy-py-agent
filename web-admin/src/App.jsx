@@ -78,6 +78,7 @@ import TaskPromptPanel from "./components/TaskPromptPanel"
 import TaskResultPanel from "./components/TaskResultPanel"
 import TaskRowActions from "./components/TaskRowActions"
 import TaskToolbarActions from "./components/TaskToolbarActions"
+import TodoPanel from "./components/TodoPanel"
 import { SearchIcon, SkillIcon } from "./components/icons"
 import AgentManager from "./components/admin/AgentManager"
 import DenyListManager from "./components/admin/DenyListManager"
@@ -892,7 +893,21 @@ function TaskDetail({ task, result, agents, translate, onChangesReverted }) {
   )
 }
 
-function TaskDetailPage({ task, taskResult, agents, taskTab, setTaskTab, events, hasMoreEvents, isLoadingEvents, onLoadMore, onChangesReverted, translate, locale }) {
+function TaskDetailPage({
+  task,
+  taskResult,
+  agents,
+  taskTab,
+  setTaskTab,
+  events,
+  hasMoreEvents,
+  isLoadingEvents,
+  onLoadMore,
+  onChangesReverted,
+  todos,
+  translate,
+  locale,
+}) {
   return (
     <section className="panel">
       <div className="task-page-titlebar">
@@ -913,6 +928,10 @@ function TaskDetailPage({ task, taskResult, agents, taskTab, setTaskTab, events,
           </button>
         </div>
       </div>
+      {/* Above both tabs: a running task opens its log, and the plan is what that
+          log is executing. Rendered from the task detail response, which is polled
+          every second while a task is selected. */}
+      <TodoPanel todos={todos} translate={translate} />
       <div className="panel-body">
         {taskTab === "detail" ? (
           // Remounted per task: the Monaco editors only read ``defaultValue`` once,
@@ -2613,6 +2632,7 @@ export default function App() {
                 agents={agents}
                 taskTab={taskTab}
                 setTaskTab={setTaskTab}
+                todos={selectedTask?.todos}
                 events={events}
                 hasMoreEvents={hasMoreEvents}
                 isLoadingEvents={isLoadingEvents}
