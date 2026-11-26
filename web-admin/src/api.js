@@ -13,12 +13,34 @@ function toTextOrJson(response) {
   })
 }
 
+// A rejected request carries either a sentence (our handlers) or FastAPI's list of
+// validation items, one per bad field. Both are flattened to a string: handing the
+// list to ``new Error`` printed "[object Object]" and hid which field was wrong.
+function describeDetail(detail) {
+  if (typeof detail === "string") return detail
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "string") return item
+        const loc = Array.isArray(item?.loc) ? item.loc.filter((part) => part !== "body") : []
+        const message = item?.msg || JSON.stringify(item)
+        return loc.length > 0 ? `${loc.join(".")}: ${message}` : message
+      })
+      .join("; ")
+  }
+  if (detail && typeof detail === "object") return JSON.stringify(detail)
+  return ""
+}
+
 async function requestJson(url, options = {}) {
   const response = await fetch(url, options)
   const payload = await toTextOrJson(response)
 
   if (!response.ok) {
-    const detail = payload?.detail || payload?.message || `Request failed with status ${response.status}`
+    const detail =
+      describeDetail(payload?.detail) ||
+      describeDetail(payload?.message) ||
+      `Request failed with status ${response.status}`
     throw new Error(detail)
   }
 
@@ -361,6 +383,12 @@ export async function fetchTaskChangeDiff(taskId, path) {
 export async function revertTask(taskId, { paths = null, force = false } = {}) {
   return requestJson(`${API_BASE}/api/tasks/${taskId}/revert`, {
     method: "POST",
+    // Without this header the browser labels a string body ``text/plain``, and the
+    // server reads the body as bytes instead of JSON: every undo answered 422 with
+    // "Input should be a valid dictionary" (editing and re-running a turn both undo).
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ paths, force }),
   })
 }
