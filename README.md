@@ -14,7 +14,7 @@ cd web-admin
 npm install
 npm run build
 cd ..
-uv run python main.py --web
+uv run python main.py
 ```
 
 默认地址：`http://127.0.0.1:8001`。

@@ -39,7 +39,7 @@ cd ..
 ### 3.2 启动服务
 
 ```bash
-uv run python main.py --web
+uv run python main.py
 ```
 
 默认地址：`http://127.0.0.1:8001`。
@@ -47,13 +47,12 @@ uv run python main.py --web
 需要换个监听地址或端口时：
 
 ```bash
-uv run python main.py --web --host 0.0.0.0 --port 8080
+uv run python main.py --host 0.0.0.0 --port 8080
 ```
 
 启动参数：
 
 ```text
---web                启动管理界面 + API（唯一入口）
 --host HOST          监听地址（默认 127.0.0.1）
 --port PORT          监听端口（默认 8001）
 --reload             运行时热重载（生产环境不要开）
@@ -86,7 +85,7 @@ cp .env.example .env
 ### 4.1 启动后端
 
 ```bash
-uv run python main.py --web --reload
+uv run python main.py --reload
 ```
 
 默认监听 `http://127.0.0.1:8001`。建议同时设置：

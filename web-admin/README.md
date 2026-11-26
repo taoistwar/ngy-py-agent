@@ -5,7 +5,7 @@ Web Admin 负责任务管理、任务详情与任务明细展示。
 ## 启动
 
 ```bash
-uv run python main.py --web
+uv run python main.py
 ```
 
 默认地址：`http://127.0.0.1:8001`

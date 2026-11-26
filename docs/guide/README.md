@@ -24,7 +24,7 @@
 
 依赖安装、生产启动、开发启动（含前端构建与 Vite 调试）统一见 [快速开始](../quickstart.md)。
 
-要点：唯一入口是 `--web`（管理界面 + API）。单次运行（`--query`）与交互式 CLI（`--interactive`）都已移除：一次性任务走 Web Admin 的 `POST /api/tasks` 或在界面里提交，多轮对话就是 Web Admin 里的会话。provider、模型与步数都在数据库与「全局配置」里，不再有对应的命令行参数。
+要点：服务只有 Web Admin 一个入口（管理界面 + API），`uv run python main.py` 直接启动，没有别的模式开关。单次运行（`--query`）与交互式 CLI（`--interactive`）都已移除：一次性任务走 Web Admin 的 `POST /api/tasks` 或在界面里提交，多轮对话就是 Web Admin 里的会话。provider、模型与步数都在数据库与「全局配置」里，不再有对应的命令行参数。
 
 ## 备注
 

@@ -213,11 +213,6 @@ def main() -> None:
         description="Run the Web Admin server (API + frontend).",
     )
     parser.add_argument(
-        "--web",
-        action="store_true",
-        help="Run Web Admin (API + frontend).",
-    )
-    parser.add_argument(
         "--host",
         default=os.getenv("WEB_MONITOR_HOST", "127.0.0.1"),
         help="Web Admin host, default 127.0.0.1.",
@@ -231,15 +226,9 @@ def main() -> None:
     parser.add_argument(
         "--reload",
         action="store_true",
-        help="Enable reload in Web Admin mode.",
+        help="Restart the server when source files change.",
     )
     args = parser.parse_args()
-
-    if not args.web:
-        # The CLI entry points are gone. A single query is what ``POST /api/tasks`` does,
-        # and a multi-turn conversation is a session in the Web Admin, with the endpoints
-        # and models configured in the database rather than in the environment.
-        parser.error("--web is required.")
 
     _run_web_server(host=args.host, port=args.port, reload=args.reload)
 

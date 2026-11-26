@@ -476,7 +476,7 @@ npm run i18n:check
 
 | 文件 | 放什么 | 不放什么 |
 | --- | --- | --- |
-| `main.py` | FastAPI app 装配、CORS、静态前端与兜底路由、健康检查、服务入口（`--web` / `--host` / `--port` / `--reload`） | 业务路由、运行期状态 |
+| `main.py` | FastAPI app 装配、CORS、静态前端与兜底路由、健康检查、服务入口（`--host` / `--port` / `--reload`） | 业务路由、运行期状态 |
 | `commons/schemas/` | 所有请求/响应 pydantic 模型，按资源一个模块（`tasks` / `config` / `llm` / `permissions` / `sessions` / `workspace` / `agents` / `tools`）；`__init__.py` 全量 re-export，调用方只认一个导入路径 | 任何行为 |
 | `commons/state.py` | 进程内的**活状态**：`monitor_store`、`permission_rule_store`、四项全局配置（保留天数 / 步数上限 / AGENTS.md 指令 / 确认模式）及其 `source`、三类任务注册表（停止事件、权限 broker、提问 broker）、`status_for_event`、`ROOT_DIR` | 任何判断逻辑 |
 | `agent/history.py` | 会话上下文：把同一会话中**已完成**任务的 `query` / `result` 重建成 `user` / `assistant` messages，并按消息数 / 字符预算裁剪（只留最近的轮次） | 不注入、不运行任务 |

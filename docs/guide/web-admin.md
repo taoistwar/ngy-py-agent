@@ -1,7 +1,7 @@
 # Web Admin 管理中心
 
 ```bash
-uv run python main.py --web
+uv run python main.py
 ```
 
 启动后访问：
@@ -27,7 +27,6 @@ http://127.0.0.1:8001
 ## 参数说明（关键）
 
 ```text
---web
 --host HOST          监听地址（默认 127.0.0.1）
 --port PORT          监听端口（默认 8001）
 --reload             运行时热重载

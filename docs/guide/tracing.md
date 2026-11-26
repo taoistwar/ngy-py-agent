@@ -4,7 +4,7 @@
 
 ```bash
 # 临时开一次，输出到控制台
-OTEL_TRACING_ENABLED=true OTEL_TRACES_EXPORTER=console uv run python main.py --web
+OTEL_TRACING_ENABLED=true OTEL_TRACES_EXPORTER=console uv run python main.py
 ```
 
 长期开启就写进 `.env`（字段见 `.env.example`）：

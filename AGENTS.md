@@ -42,7 +42,7 @@
 - 语法检查：
   - `python -m compileall -q main.py agent commons dao routes task_recovery`
 - 冒烟验证：
-  - `uv run python main.py --help`（应只列出 `--web` 入口及 `--host` / `--port` / `--reload`）
+  - `uv run python main.py --help`（应只列出 `--host` / `--port` / `--reload`）
 
 ## 环境说明
 
