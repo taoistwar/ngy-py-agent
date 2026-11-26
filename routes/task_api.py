@@ -374,6 +374,9 @@ async def get_task(task_id: str) -> TaskDetailResponse:
         raise HTTPException(status_code=404, detail="Task not found.")
     result = extract_task_result(trace.get("events"))
     usage = task_usage_summary(trace)
+    # The plan belongs to the session, so every task of the conversation shows the
+    # same list - including the one that has not touched it.
+    session_todos = state.monitor_store.get_session_todos(trace.get("session_id"))
     broker = state.get_task_permission_broker(task_id)
     pending = broker.pending() if broker is not None else None
     return TaskDetailResponse(
@@ -394,6 +397,7 @@ async def get_task(task_id: str) -> TaskDetailResponse:
         result=result,
         pending_permission=pending.to_payload() if pending is not None else None,
         pending_question=state.pending_question(task_id),
+        todos=list((session_todos or {}).get("todos") or []),
         events=trace["events"],
     )
 

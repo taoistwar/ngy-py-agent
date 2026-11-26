@@ -16,6 +16,12 @@ from agent.agent_loop.runtime import (
 )
 from agent.agent_loop.snip_compact import apply_snip_compact
 from agent.agent_loop.steps import run_tool
+from agent.agent_loop.todo_context import append_todo_context
+from agent.agent_loop.todo_reminder import (
+    TODO_WRITE_TOOL_NAME,
+    TodoReminder,
+    append_to_last_tool_message,
+)
 from agent.agents_md import (
     AgentsMdInstructions,
     AgentsMdSettings,
@@ -75,6 +81,9 @@ def run_react_loop(
     should_stop: Optional[Callable[[], bool]] = None,
     permission_broker: Optional[PermissionBroker] = None,
     user_question_broker: Optional[UserQuestionBroker] = None,
+    # The conversation's plan (``todo_write``). The app layer binds the session's
+    # board; ``None`` keeps the plan in memory for this run.
+    todo_board: Any = None,
 ) -> str:
     _, registry, provider, request_tools = _build_runtime(
         provider_name=provider_name,
@@ -85,6 +94,7 @@ def run_react_loop(
         agent_config=agent_config,
         task_id=task_id or "",
         should_stop=should_stop,
+        todo_board=todo_board,
     )
 
     if permission_broker is not None:
@@ -133,6 +143,13 @@ def run_react_loop(
         instructions = load_instructions(base_dir, agents_md_settings)
         if instructions is not None:
             system_prompt = append_project_instructions(system_prompt, instructions)
+        # Where the work stands, when an earlier task in this conversation left a
+        # plan: without it a follow-up task starts by replacing a half-done list.
+        # Read defensively like ``base_dir``: a caller may hand in a registry of its
+        # own (the loop's tests do), and a plan is not worth failing a run over.
+        board = getattr(registry, "todo_board", None)
+        if board is not None:
+            system_prompt = append_todo_context(system_prompt, board.snapshot())
         messages = [
             {
                 "role": "system",
@@ -206,6 +223,11 @@ def run_react_loop(
     # to the run: a compaction must never shorten a result the model has not read, and
     # "read" is only meaningful for requests this loop made (ADR 0016).
     seen_results: Set[str] = set()
+    # Only when the plan tool exists: a mode without ``todo_write`` (ask, plan) must
+    # not be nudged about a tool it cannot call.
+    reminder = (
+        TodoReminder() if TODO_WRITE_TOOL_NAME in getattr(registry, "tools", {}) else None
+    )
 
     for step in range(first_step, max_steps + 1):
         if should_stop is not None and should_stop():
@@ -339,6 +361,30 @@ def run_react_loop(
                     task_id=task_id,
                     step=step,
                 )
+
+                # After the budget sweep, so the nudge is not the part that got moved
+                # to a file. It rides on the last tool result: that is what the model
+                # reads next, and a user message would read as the user saying it.
+                if reminder is not None:
+                    notice = reminder.record(name for name, _, _ in turn.tool_calls)
+                    if notice is not None and append_to_last_tool_message(
+                        messages, batch_start, notice
+                    ):
+                        _emit(
+                            event_sink,
+                            task_id,
+                            TaskEvent(
+                                task_id=task_id or "",
+                                category=EventCategory.DEBUG,
+                                title="Todo reminder sent",
+                                data={
+                                    "step": step,
+                                    "rounds_without_todo": reminder.every,
+                                    **current_trace_ids(),
+                                },
+                                collapsed=True,
+                            ),
+                        )
 
             if pending_images and not stopped:
                 image_message = build_image_message(pending_images, provider)

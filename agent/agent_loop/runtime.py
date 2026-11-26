@@ -61,6 +61,7 @@ def _build_runtime(
     agent_config: Optional[Dict[str, Any]] = None,
     task_id: str = "",
     should_stop: Optional[Callable[[], bool]] = None,
+    todo_board: Any = None,
 ) -> tuple[str, ToolRegistry, Any, Optional[List[Dict[str, Any]]]]:
     provider_name = canonicalize_provider(provider_name or TOOL_SCHEMA_PROVIDER)
     registry_options = {
@@ -75,6 +76,9 @@ def _build_runtime(
         # The undo history for this run. Built here rather than inside the registry
         # so which directory a run may record stays a decision of the loop (ADR 0020).
         "checkpoint_store": CheckpointStore.for_run(base_dir, task_id),
+        # The conversation's plan (``todo_write``). The app layer binds the session's
+        # board; ``None`` keeps the plan in memory for this run.
+        "todo_board": todo_board,
     }
     if not enable_tools:
         registry = ToolRegistry(enabled_tools=[], **registry_options)

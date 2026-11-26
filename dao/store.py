@@ -19,6 +19,7 @@ from dao.schema import _SchemaMixin
 from dao.sessions import _SessionMixin
 from dao.settings import _SettingsMixin
 from dao.tasks import _TaskMixin
+from dao.todos import _TodoMixin
 
 
 class _SqliteTaskStore(
@@ -29,6 +30,7 @@ class _SqliteTaskStore(
     _AgentMixin,
     _SettingsMixin,
     _TaskMixin,
+    _TodoMixin,
 ):
     """SQLite-based task and event persistence."""
 

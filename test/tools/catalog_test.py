@@ -23,6 +23,9 @@ from agent.tools.bindings import ToolBindings  # noqa: E402
 from agent.tools.catalog import build_all_specs  # noqa: E402
 
 EXPECTED_ORDER = (
+    # Planning is listed first: it is what the model should reach for before a
+    # multi-step task turns into unrelated tool calls.
+    "todo_write",
     "code_interpreter",
     "glob",
     "grep",

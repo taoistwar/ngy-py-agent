@@ -31,8 +31,10 @@ from agent.runtime.naming import (
 )
 from agent.runtime.purge import purge_expired_tasks, purge_expired_tasks_with_log
 from agent.runtime.runner import run_task
+from agent.runtime.todos import MonitorTodoStore
 
 __all__ = [
+    "MonitorTodoStore",
     "agent_runtime_config",
     "build_event",
     "build_provider_config",

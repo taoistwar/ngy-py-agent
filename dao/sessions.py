@@ -102,6 +102,8 @@ class _SessionMixin:
                 (session_id,),
             )
             self._conn.execute("DELETE FROM tasks WHERE session_id = ?", (session_id,))
+            # The plan is scoped to the conversation it belonged to.
+            self._conn.execute("DELETE FROM session_todos WHERE session_id = ?", (session_id,))
             cursor = self._conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
             self._conn.commit()
             return (cursor.rowcount or 0) > 0

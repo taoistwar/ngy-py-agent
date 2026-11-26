@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
 from agent.tools.read_ledger import ReadLedger
+from agent.tools.todo_store import TodoBoard
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,10 @@ class ToolBindings:
     ledger: Optional[ReadLedger] = None
     # Extra roots the file tools may read from (the output directory).
     extra_read_roots: Sequence[str] = ()
+    # The plan the conversation is working through (``todo_write``). A board rather
+    # than a store: it already carries the session and task ids, and ``None`` falls
+    # back to an in-memory plan for this run (see ``agent/tools/todo_store.py``).
+    todo_board: Optional[TodoBoard] = None
     # The channel a tool uses to ask the user something and wait for an answer:
     # questions in, a ``user_question.QuestionResult`` out (``None`` = nobody can be
     # asked). Bound as a callable because tools have no task identity and no event

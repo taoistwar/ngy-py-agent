@@ -1,8 +1,9 @@
 """SQLite persistence: every table the web admin reads or writes lives in this package.
 
-One module per concern: tasks, sessions, events and settings in :mod:`dao.store` (split
-across mixins), provider endpoints and their models in :mod:`dao.llm` (which shares the
-connection and lock through ``self.llm``), and MCP server presets in :mod:`dao.mcp`.
+One module per concern: tasks, sessions, events, settings and the session-scoped plan
+(:mod:`dao.todos`) in :mod:`dao.store` (split across mixins), provider endpoints and
+their models in :mod:`dao.llm` (which shares the connection and lock through
+``self.llm``), and MCP server presets in :mod:`dao.mcp`.
 Same database file, one schema owner per concern.
 
 The public surface is the store singleton: callers import ``_SqliteTaskStore`` and

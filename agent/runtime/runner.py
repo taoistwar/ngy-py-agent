@@ -15,6 +15,7 @@ from agent.runtime.config import (
 )
 from agent.runtime.events import build_event, emit_debug
 from agent.runtime.naming import name_task_and_session
+from agent.runtime.todos import MonitorTodoStore
 from agent.telemetry import (
     TaskSpanHandle,
     attach_task_span,
@@ -23,6 +24,7 @@ from agent.telemetry import (
     end_task_span,
 )
 from agent.tools.permissions import PermissionBroker
+from agent.tools.todo_store import TodoBoard
 from agent.tools.user_question import UserQuestionBroker
 from commons import state
 from commons.schemas import RunTaskRequest
@@ -206,6 +208,11 @@ def _execute_task(
             should_stop=stop_event.is_set if stop_event is not None else None,
             permission_broker=permission_broker,
             user_question_broker=question_broker,
+            # The conversation's plan, kept in the database so the next task in this
+            # session continues it and the web admin can render it (``dao.todos``).
+            # Built here because the session id is this layer's knowledge, not the
+            # loop's: the tool only ever sees its own board.
+            todo_board=TodoBoard(MonitorTodoStore(), request.session_id or "", task_id),
         )
         if stop_event is not None and stop_event.is_set():
             emit_debug(_sink, task_id, "Task stopped", {"result": result, **current_trace_ids()})

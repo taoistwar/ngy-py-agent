@@ -91,6 +91,19 @@ class _SchemaMixin:
                 )
                 """
             )
+            # One plan per conversation, replaced whole by ``todo_write``. It lives
+            # beside the session rather than beside the task because a follow-up task
+            # continues the same checklist (see ``dao/todos.py``).
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS session_todos (
+                    session_id TEXT PRIMARY KEY,
+                    items TEXT NOT NULL,
+                    task_id TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
             self._ensure_task_columns()
             self._ensure_session_columns()
             self._ensure_agent_columns()

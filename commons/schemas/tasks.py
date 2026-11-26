@@ -109,6 +109,11 @@ class TaskDetailResponse(BaseModel):
     # Same for a pending question batch: the dialog is rendered from this, not from
     # the event stream, so a late client still sees it.
     pending_question: dict[str, Any] | None = None
+    # The plan this task's *session* is working through (``todo_write``). Session
+    # scoped on purpose: the panel keeps showing it after the task that wrote it
+    # finished, and a follow-up task continues it. Returned here rather than on its
+    # own endpoint so the existing task poll refreshes it.
+    todos: list[dict[str, Any]] = Field(default_factory=list)
     events: list[dict[str, Any]]
 
 

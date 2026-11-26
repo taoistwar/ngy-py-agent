@@ -22,6 +22,7 @@ from agent.tools.glob import spec as glob
 from agent.tools.grep import spec as grep
 from agent.tools.read_file import spec as read_file
 from agent.tools.spec import ToolSpec
+from agent.tools.todo_write import spec as todo_write
 from agent.tools.vault_http import spec as vault_http
 from agent.tools.web_browser import spec as web_browser
 from agent.tools.web_fetch import spec as web_fetch
@@ -31,6 +32,10 @@ from agent.tools.write_stdin import spec as write_stdin
 
 # The order here is the order the model sees the tools in, so it stays stable.
 _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
+    # Planning comes before the tools that act, so it is listed first: the model
+    # reads the list top down, and ``todo_write`` is what it should reach for before
+    # a multi-step task turns into a series of unrelated tool calls.
+    todo_write.build_spec,
     code_interpreter.build_spec,
     # Find before read: ``glob`` locates a file by name, ``grep`` locates the code
     # inside it, ``web_search`` finds the page that documents it, ``web_fetch``

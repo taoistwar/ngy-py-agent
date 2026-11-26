@@ -146,6 +146,7 @@ def build_tool_registry_from_names(
     task_id: str = "",
     should_stop: Optional[Callable[[], bool]] = None,
     checkpoint_store: Any = None,
+    todo_board: Any = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry from an explicit tool-name allow list (``None`` = all tools)."""
     options = {
@@ -158,6 +159,9 @@ def build_tool_registry_from_names(
         "should_stop": should_stop,
         # The run's undo history (ADR 0020).
         "checkpoint_store": checkpoint_store,
+        # The conversation's plan (``todo_write``); ``None`` keeps it in memory for
+        # the run.
+        "todo_board": todo_board,
     }
     if tool_names is None:
         return ToolRegistry(**options)
@@ -173,6 +177,7 @@ def build_tool_registry(
     task_id: str = "",
     should_stop: Optional[Callable[[], bool]] = None,
     checkpoint_store: Any = None,
+    todo_board: Any = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry restricted to the tools allowed for ``mode``."""
     return build_tool_registry_from_names(
@@ -184,6 +189,7 @@ def build_tool_registry(
         task_id=task_id,
         should_stop=should_stop,
         checkpoint_store=checkpoint_store,
+        todo_board=todo_board,
     )
 
 

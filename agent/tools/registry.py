@@ -27,6 +27,7 @@ from agent.tools.permissions import (
 )
 from agent.tools.read_ledger import ReadLedger
 from agent.tools.spec import CATEGORY_OTHER, ToolText
+from agent.tools.todo_store import TodoBoard
 from agent.tools.user_question import STATUS_NO_CLIENT, QuestionResult, UserQuestionBroker
 
 
@@ -88,6 +89,7 @@ class ToolRegistry:
         user_question_broker: Optional[UserQuestionBroker] = None,
         should_stop: Optional[Callable[[], bool]] = None,
         checkpoint_store: Optional[Any] = None,
+        todo_board: Optional[TodoBoard] = None,
     ):
         self.base_dir = base_dir
         self.max_tokens = max_tokens
@@ -119,6 +121,11 @@ class ToolRegistry:
         # Shared by read/edit/write, so write_file can tell whether this run has
         # already held the whole content it is about to replace.
         self.read_ledger = ReadLedger()
+        # The conversation's plan (``todo_write``). The board is built by the app
+        # layer, which is the one that knows which session the run belongs to (the
+        # registry is constructed before that identity exists, as with the brokers);
+        # ``None`` means the run keeps the plan in memory instead of in the database.
+        self.todo_board = todo_board if todo_board is not None else TodoBoard()
         # Scratch space for large command output. It is readable but never
         # writable by the file tools (see docs/decisions/0005-exec-tool.md).
         self.output_directory = output_root_path(self.base_dir, self.session_id)
@@ -160,6 +167,7 @@ class ToolRegistry:
             # Bound as a method, not as the broker: the broker may not exist yet, and
             # whether anyone can be asked is a per-call question (ADR 0010 D1).
             ask_user=self.ask_user,
+            todo_board=self.todo_board,
         )
 
         for spec in build_all_specs(bindings):
