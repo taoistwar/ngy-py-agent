@@ -12,6 +12,14 @@
   gap: 8px;
 }
 
+/* The three views are one panel now: the tab strip takes the titlebar's left slot
+   and the hint each view used to carry sits right under it. */
+.schedule-panel .panel-titlebar > .schedule-tabbar {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 /* ------------------------------------------------------------------ schedule card */
 
 .schedule-list {

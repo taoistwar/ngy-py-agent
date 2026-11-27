@@ -718,6 +718,7 @@
   "scheduleRunningTitle": "Выполняется сейчас",
   "scheduleRunningHint": "Задачи, запущенные расписанием и ещё выполняющиеся",
   "scheduleRunningEmpty": "Сейчас нет выполняющихся задач по расписанию.",
+  "scheduleTabAria": "Панели задач по расписанию",
   "scheduleFormPermission": "Подтверждение",
   "scheduleFormPermissionGlobal": "Как в глобальных настройках",
   "scheduleFormPermissionHint": "Запуск по расписанию никто не подтверждает: чтобы он завершался сам, выберите «автоматически разрешать»."

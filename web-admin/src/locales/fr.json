@@ -718,6 +718,7 @@
   "scheduleRunningTitle": "En cours",
   "scheduleRunningHint": "Tâches lancées par une planification et toujours actives",
   "scheduleRunningEmpty": "Aucune tâche planifiée n'est en cours.",
+  "scheduleTabAria": "Panneaux des tâches planifiées",
   "scheduleFormPermission": "Confirmation",
   "scheduleFormPermissionGlobal": "Suivre le réglage global",
   "scheduleFormPermissionHint": "Personne ne répond aux confirmations pour une tâche planifiée : fixez « approbation automatique » si l'exécution doit se terminer seule."

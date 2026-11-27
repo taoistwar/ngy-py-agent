@@ -718,6 +718,7 @@
   "scheduleRunningTitle": "Läuft gerade",
   "scheduleRunningHint": "Von Zeitplänen gestartete und noch laufende Aufgaben",
   "scheduleRunningEmpty": "Keine geplante Aufgabe läuft gerade.",
+  "scheduleTabAria": "Bereiche der geplanten Aufgaben",
   "scheduleFormPermission": "Bestätigung",
   "scheduleFormPermissionGlobal": "Globale Einstellung folgen",
   "scheduleFormPermissionHint": "Bei einem Zeitplan antwortet niemand auf Bestätigungen: für unbeaufsichtigte Läufe „automatisch genehmigen“ festlegen."

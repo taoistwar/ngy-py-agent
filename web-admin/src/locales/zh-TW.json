@@ -718,6 +718,7 @@
   "scheduleRunningTitle": "執行中的任務",
   "scheduleRunningHint": "由定時任務啟動、仍在執行的任務",
   "scheduleRunningEmpty": "目前沒有執行中的定時任務。",
+  "scheduleTabAria": "定時任務面板頁籤",
   "scheduleFormPermission": "確認方式",
   "scheduleFormPermissionGlobal": "跟隨全域設定",
   "scheduleFormPermissionHint": "定時執行沒有人回答確認：需要自動跑完請固定為「自動批准」。"
