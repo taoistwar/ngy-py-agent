@@ -48,7 +48,7 @@
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `GET` | `/api/schedules` | 列表（含 `next_run_at` / `last_run_status` / `running`） |
-| `POST` | `/api/schedules` | 新建：`cron`、`prompt`，可选 `name` / `agent_id` / `model_id` / `workspace_id` / `enabled` / `recurring` |
+| `POST` | `/api/schedules` | 新建：`cron`、`prompt`，可选 `name` / `agent_id` / `model_id` / `workspace_id` / `permission_mode` / `enabled` / `recurring` |
 | `PUT` | `/api/schedules/{id}` | 局部更新，未出现的字段不动；`{"enabled": false}` 即暂停 |
 | `DELETE` | `/api/schedules/{id}` | 删除定义与运行记录 |
 | `POST` | `/api/schedules/{id}/run` | 立即运行一次（`trigger` 记为 `manual`） |
@@ -63,6 +63,6 @@
 
 ## 注意
 
-- 定时任务无人值守：如果任务的确认模式是「逐次确认」，它会停在 `waiting` 等人在任务台里回答，直到超时失败。「运行中的任务」会把这类任务列出来。
+- 定时任务无人值守：确认方式默认跟随全局设置，而全局若是「逐次确认」，运行会停在 `waiting` 等人在任务台里回答，直到超时失败（「运行中的任务」会把它列出来）。要让它自己跑完，在表单里把「确认方式」固定为 `auto_approve`；固定为 `deny_all` 则等于只让 Agent 读、不执行命令。
 - 时区跟随服务进程的本地时间；跨时区部署时以服务器时钟为准。
 - 删除或替换模型、工作区后，已有定时任务不会跟着改：工作区被删则该次运行不带工作区，模型被删则该次运行记为 `failed`。

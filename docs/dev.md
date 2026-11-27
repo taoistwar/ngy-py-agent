@@ -678,6 +678,10 @@ npm run i18n:check
 
 一次性任务（`recurring=false`）开跑后把自己置为 `enabled=0`：记录还在，但不会再排下一次。
 
+### 确认方式（无人值守）
+
+`permission_mode` 默认空字符串 = 跟随全局；固定成 `ask` / `auto_approve` / `deny_all` 时，`fire_schedule` 原样带进 `RunTaskRequest.permission_mode`。这是"这次运行不需要人"的唯一表达方式——全局是 `ask` 时，无人值守的运行会停在 `waiting` 直到超时。固定的值不随全局设置变化，改了全局也不会改掉已经在等待确认的任务。
+
 ### 测试
 
 - `test/agent/scheduling/cron_test.py`：字段校验、`*/15` 的偏移、周日 0/7、日与周的 OR 语义、下次触发（含"永不到来"）；
