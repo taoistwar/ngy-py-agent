@@ -606,6 +606,7 @@
   "toolDetailNoAgents": "Ни один агент не включает этот инструмент",
   "toolDetailDescription": "Описание инструмента",
   "toolDetailLanguageToggle": "Переключить язык описания",
+  "toolDetailParamsLanguageToggle": "Переключить язык параметров",
   "toolPermissionNone": "Без подтверждения",
   "toolPermissionRead": "Подтверждает чувствительное чтение",
   "toolPermissionWrite": "Подтверждает запись",

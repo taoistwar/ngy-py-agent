@@ -606,6 +606,7 @@
   "toolDetailNoAgents": "Kein Agent aktiviert dieses Werkzeug",
   "toolDetailDescription": "Werkzeugbeschreibung",
   "toolDetailLanguageToggle": "Sprache der Beschreibung wechseln",
+  "toolDetailParamsLanguageToggle": "Sprache der Parameter wechseln",
   "toolPermissionNone": "Keine Bestätigung",
   "toolPermissionRead": "Bestätigt sensible Lesezugriffe",
   "toolPermissionWrite": "Bestätigt Schreibzugriffe",

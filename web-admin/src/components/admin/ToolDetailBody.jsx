@@ -4,22 +4,9 @@
 // to the field that feeds it.
 
 import { LanguagesIcon } from "../icons"
-import { ParamSchema } from "./AgentDetail"
+import { ParamHead, ParamSchema } from "./AgentDetail"
 import ParameterInput from "./ParameterInput"
 import { permissionLabel, resolveAgentNames, scopeSummary } from "./toolMeta"
-
-/** Name and type of a parameter above its test input. */
-function ParamInputHead({ param, translate }) {
-  return (
-    <div className="agent-param-head">
-      <code className="agent-param-name">{param.name}</code>
-      <span className="agent-param-type">{param.type}</span>
-      {param.required ? (
-        <span className="badge badge-builtin">{translate("agentToolRequired")}</span>
-      ) : null}
-    </div>
-  )
-}
 
 function TestResultBody({ result, translate }) {
   if (!result) {
@@ -131,6 +118,9 @@ export default function ToolDetailBody({
 }) {
   const hasSchema = Boolean(tool.parameters) && Object.keys(tool.parameters).length > 0
   const translatedParams = translation?.parameters || {}
+  // Same condition the description toggle uses: a locale without a translation
+  // has only English, so neither button is offered.
+  const hasTranslation = Boolean(translation?.description)
 
   return (
     <div className="tool-detail-grid">
@@ -170,8 +160,23 @@ export default function ToolDetailBody({
         </section>
       </div>
 
+      {/* The same switch as the description's: either button flips both, so the two
+          halves of the dialog never show different languages. Both hide together
+          when there is no translation to switch to. */}
       <div className="agent-section-head">
         <span>{translate("agentToolParams")}</span>
+        {hasTranslation ? (
+          <button
+            type="button"
+            className={`icon-btn ${showEnglish ? "is-active" : ""}`}
+            title={translate("toolDetailParamsLanguageToggle")}
+            aria-label={translate("toolDetailParamsLanguageToggle")}
+            aria-pressed={showEnglish}
+            onClick={onToggleLanguage}
+          >
+            <LanguagesIcon />
+          </button>
+        ) : null}
       </div>
       {/* The run action heads the form it submits. */}
       <div className="agent-section-head">
@@ -189,6 +194,7 @@ export default function ToolDetailBody({
             value={values?.[param.name]}
             onChange={onChange}
             translate={translate}
+            showEnglish={showEnglish}
             translatedDescription={translatedParams[param.name]}
           />
         ))
@@ -218,18 +224,19 @@ export default function ToolDetailBody({
 }
 
 /** One grid row: the schema card on the left, its input on the right. */
-function ParamRow({ param, value, onChange, translate, translatedDescription }) {
+function ParamRow({ param, value, onChange, translate, showEnglish, translatedDescription }) {
   return (
     <>
       <div className="agent-param">
         <ParamSchema
           param={param}
           translate={translate}
-          translatedDescription={translatedDescription}
+          translatedDescription={showEnglish ? "" : translatedDescription}
+          bilingual={false}
         />
       </div>
       <div className="agent-param">
-        <ParamInputHead param={param} translate={translate} />
+        <ParamHead param={param} translate={translate} />
         <ParameterInput
           param={param}
           value={value}

@@ -18,22 +18,37 @@ export function normalizeParameters(parameters) {
   }))
 }
 
-/** One parameter's schema text: name, type, required flag, descriptions. */
-export function ParamSchema({ param, translate, translatedDescription }) {
+/** A parameter's name, type and required flag, above its description. */
+export function ParamHead({ param, translate }) {
+  return (
+    <div className="agent-param-head">
+      <code className="agent-param-name">{param.name}</code>
+      <span className="agent-param-type">{param.type}</span>
+      {param.required && (
+        <span className="badge badge-builtin">{translate("agentToolRequired")}</span>
+      )}
+    </div>
+  )
+}
+
+/**
+ * One parameter's schema text.
+ *
+ * `bilingual` stacks the locale's translation under the English source, which is
+ * what the agent page does. `false` renders a single language - the translation
+ * when `translatedDescription` carries one, English otherwise - because a caller
+ * with a language switch has already decided which one to show.
+ */
+export function ParamSchema({ param, translate, translatedDescription, bilingual = true }) {
+  const english = param.description || translate("agentToolNoDescription")
+  const localized = translatedDescription || ""
+
   return (
     <>
-      <div className="agent-param-head">
-        <code className="agent-param-name">{param.name}</code>
-        <span className="agent-param-type">{param.type}</span>
-        {param.required && (
-          <span className="badge badge-builtin">{translate("agentToolRequired")}</span>
-        )}
-      </div>
-      <span className="agent-param-desc">
-        {param.description || translate("agentToolNoDescription")}
-      </span>
-      {translatedDescription ? (
-        <span className="agent-param-desc agent-desc-i18n">{translatedDescription}</span>
+      <ParamHead param={param} translate={translate} />
+      <span className="agent-param-desc">{bilingual || !localized ? english : localized}</span>
+      {bilingual && localized ? (
+        <span className="agent-param-desc agent-desc-i18n">{localized}</span>
       ) : null}
     </>
   )

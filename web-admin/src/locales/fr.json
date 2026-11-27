@@ -606,6 +606,7 @@
   "toolDetailNoAgents": "Aucun agent n'active cet outil",
   "toolDetailDescription": "Description de l'outil",
   "toolDetailLanguageToggle": "Changer la langue de la description",
+  "toolDetailParamsLanguageToggle": "Changer la langue des paramètres",
   "toolPermissionNone": "Aucune confirmation",
   "toolPermissionRead": "Confirme les lectures sensibles",
   "toolPermissionWrite": "Confirme les écritures",

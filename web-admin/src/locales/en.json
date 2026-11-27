@@ -606,6 +606,7 @@
   "toolDetailNoAgents": "No agent enables this tool",
   "toolDetailDescription": "Tool description",
   "toolDetailLanguageToggle": "Switch description language",
+  "toolDetailParamsLanguageToggle": "Switch parameter language",
   "toolPermissionNone": "No confirmation",
   "toolPermissionRead": "Confirms sensitive reads",
   "toolPermissionWrite": "Confirms writes",
