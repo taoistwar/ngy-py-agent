@@ -647,3 +647,39 @@ npm run i18n:check
 - `transcript_test.py`：纯决策——复用结果、未知调用、最后一条回答直接收尾、步数耗尽、provider 改写回退、缺基线返回 `None`；
 - `launch_test.py`：认领只一次、进程内在跑的任务不动、模型消失/无基线转 `failed`、有进展不计入预算；
 - `startup_test.py`：真的走 `TestClient(main.app)` 的 lifespan，确认钩子接上且两次启动只起一个线程。
+
+## 17. 定时任务（`agent/runtime/scheduling/`）
+
+一条定时任务 = 一个 cron 表达式 + 一段提示词。到点后**先建会话、再建任务**，这次尝试连同它创建的会话与任务记进运行记录。时钟是进程级的后台线程，在 `main._lifespan` 里启动、退出时停止。
+
+### 代码位置
+
+| 位置 | 职责 |
+| --- | --- |
+| `agent/runtime/scheduling/cron.py` | 纯函数：`validate_cron` / `cron_matches` / `next_fire_after`。五字段（分 时 日 月 周），本地时间 |
+| `agent/runtime/scheduling/runner.py` | `fire_schedule(schedule, trigger)`：判断上一次是否还在飞 → 建会话 → 建任务 → 写运行记录 |
+| `agent/runtime/scheduling/loop.py` | 后台线程：每 2 秒 `tick()` 一次，认领并触发到点的任务；`start_scheduler` / `stop_scheduler` 幂等 |
+| `agent/runtime/launcher.py` | `launch_task()`：路由与调度器共用的"解析模型/会话 → 建行 → 起线程" |
+| `dao/scheduled.py` | `schedules` 与 `schedule_runs` 两表的读写；`claim_schedule_fire` 的原子认领 |
+| `routes/schedule_api.py` | CRUD、启停、立即运行、运行记录、运行中列表 |
+| `commons/schemas/schedules.py` | 请求 / 响应模型 |
+
+### 四条必须守住的约定
+
+1. **每次运行一个会话。** 会话是这次运行的工作目录与对话边界；复用上一个会话会让第二次运行接着上一次的对话往下走，还会让"这次改了什么"无法按运行区分。顺序固定为会话在前、任务在后：任务创建时就要读会话历史与基目录。
+2. **认领在触发之前，认领靠一条 UPDATE。** `last_fired` 记 `YYYY-MM-DD HH:MM`，`claim_schedule_fire` 用 `WHERE last_fired != ?` 做条件更新：同一分钟内的两次 tick、或"触发后立刻重启"都不会重复开跑。
+3. **上一次还在飞就跳过，并且把跳过记下来。** 任务状态是 `running` / `waiting`（等确认）都算在飞。跳过也写一条 `schedule_runs`，否则"09:00 为什么没跑"没有答案；同一调度器不会把一个没人看的任务越堆越多。
+4. **运行记录只记"启没启动起来"。** `schedule_runs.status` 是 `started` / `failed` / `skipped`，任务跑成什么样读 `tasks.status`（列表时 JOIN）。状态只有一份，就不会出现"记录说成功、任务其实失败"。
+
+### 触发方式
+
+- `cron`：定时线程到点触发；
+- `manual`：`POST /api/schedules/{id}/run`。走同一条 `fire_schedule`，所以立即运行也会留下运行记录，也受"上一次还在飞"的约束。
+
+一次性任务（`recurring=false`）开跑后把自己置为 `enabled=0`：记录还在，但不会再排下一次。
+
+### 测试
+
+- `test/agent/scheduling/cron_test.py`：字段校验、`*/15` 的偏移、周日 0/7、日与周的 OR 语义、下次触发（含"永不到来"）；
+- `test/agent/scheduling/runner_test.py`：会话先于任务的调用顺序、每次运行新会话、在飞则跳过、一次性自动暂停、坏模型记为 `failed`、工作区被删不留悬空引用、tick 的幂等与暂停；
+- `test/schedule_api_test.py`：CRUD 与校验、暂停/恢复、立即运行产生会话+任务+记录、运行记录的先后与状态、运行中列表随任务结束而清空、lifespan 起停调度线程。

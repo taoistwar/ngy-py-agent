@@ -5,6 +5,7 @@
 ## 内容索引
 
 - [Web Admin 管理中心](web-admin.md)：任务台用法与启动参数。
+- [定时任务](scheduled-tasks.md)：cron 表达式、运行记录、运行中的任务与相关接口。
 - [可观测（Tracing）](tracing.md)：开启方式、span 结构、从任务找 trace。
 - [API：任务与撤销](api-tasks.md)：任务/事件接口、停止、撤销改动、断点续跑、明细保留。
 - [API：智能体、MCP 与技能](api-agents.md)
