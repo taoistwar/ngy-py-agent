@@ -59,6 +59,12 @@ export default function MemoryManager({
     setMaxChars(String(config?.max_prompt_chars ?? 4000))
   }, [config])
 
+  // The page-level refresh only runs on the five-second tick, so entering the menu
+  // would show the fallbacks ("source: -", "no memories") as if they were the data.
+  useEffect(() => {
+    Promise.resolve(onRefresh()).catch(() => {})
+  }, [onRefresh])
+
   const filtered = useMemo(() => {
     const keyword = search.trim().toLowerCase()
     if (!keyword) return memories

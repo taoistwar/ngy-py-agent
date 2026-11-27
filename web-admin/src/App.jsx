@@ -2481,7 +2481,11 @@ export default function App() {
         refreshSkills().catch(() => {})
       }
       if (activeMenu === "memories") {
-        refreshMemories().catch(() => {})
+        // Not swallowed like the other refreshes: this one decides what the page shows,
+        // and a silent failure would leave the panel reading its defaults as if saved.
+        refreshMemories().catch((memoriesError) =>
+          setError(memoriesError?.message || translate("errorLoadFailed"))
+        )
       }
       if (activeMenu === "mcp") {
         refreshMcpServers().catch(() => {})
