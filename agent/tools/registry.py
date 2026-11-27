@@ -6,6 +6,7 @@ from typing import Any, Callable, ClassVar, Dict, List, Mapping, Optional, Seque
 
 from agent.models import EventCategory, ToolOutcome
 from agent.provider import canonicalize_provider
+from agent.tools.background import BackgroundTasks
 from agent.tools.bindings import ToolBindings
 from agent.tools.catalog import build_all_specs
 from agent.tools.code_interpreter import code_interpreter as _code_interpreter
@@ -92,6 +93,7 @@ class ToolRegistry:
         checkpoint_store: Optional[Any] = None,
         todo_board: Optional[TodoBoard] = None,
         task_board: Optional[TaskBoard] = None,
+        background: Optional[BackgroundTasks] = None,
     ):
         self.base_dir = base_dir
         self.max_tokens = max_tokens
@@ -137,6 +139,10 @@ class ToolRegistry:
         # by the app layer, which is the one that knows the workspace and the
         # conversation a claim belongs to.
         self.task_board = task_board if task_board is not None else TaskBoard()
+        # Background commands this run starts. ``exec_command`` records them here and
+        # the loop collects them between turns (ADR 0034); ``None`` is a valid
+        # configuration - the command still runs, the run just does not get told.
+        self.background = background
         # Scratch space for large command output. It is readable but never
         # writable by the file tools (see docs/decisions/0005-exec-tool.md).
         self.output_directory = output_root_path(self.base_dir, self.session_id)
@@ -183,6 +189,7 @@ class ToolRegistry:
             run_subagent=self.run_subagent,
             todo_board=self.todo_board,
             task_board=self.task_board,
+            background=self.background,
         )
 
         for spec in build_all_specs(bindings):

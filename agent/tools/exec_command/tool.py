@@ -3,6 +3,10 @@
 ``list_background``/``stop_background`` are the in-process view of the sessions
 ``run_in_background`` leaves behind; the task-scoped reaping lives in
 ``agent.agent_loop`` (ADR 0008).
+
+A background start is also recorded in the run's ledger
+(:mod:`agent.tools.background`), which is how the model is told the command ended
+instead of having to poll for it (ADR 0034).
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from agent.models import EventCategory, ToolOutcome
 from agent.tools import process_store
+from agent.tools.background import BackgroundTasks
 from agent.tools.exec_command.errors import ExecError
 from agent.tools.exec_command.runtime import TERMINATE_GRACE_SECONDS, exec_impl
 
@@ -54,6 +59,7 @@ def make_exec_tool(
     output_directory: Optional[Path] = None,
     task_id: str = "",
     should_stop: Optional[Callable[[], bool]] = None,
+    background: Optional[BackgroundTasks] = None,
 ):
     """Bind the exec_command tool to a workspace root and an output directory."""
 
@@ -87,6 +93,18 @@ def make_exec_tool(
                 event_category=EventCategory.EXEC,
                 event_title=f"Command rejected: {(command or '').strip()[:60]}",
                 details={"success": False, **payload},
+            )
+
+        if background is not None and details.get("background"):
+            # Recorded after a successful start only: a refused background command
+            # (session limit, no shell) has nothing to report later.
+            background.track(
+                session_id=str(details.get("session_id") or ""),
+                pid=int(details.get("pid") or 0),
+                command=str(command or ""),
+                description=str(details.get("description") or ""),
+                log_path=str(details.get("persistedOutputPath") or ""),
+                tty=bool(details.get("tty")),
             )
 
         headline = (command or "").strip().splitlines()

@@ -63,6 +63,7 @@ def _build_runtime(
     should_stop: Optional[Callable[[], bool]] = None,
     todo_board: Any = None,
     task_board: Any = None,
+    background: Any = None,
 ) -> tuple[str, ToolRegistry, Any, Optional[List[Dict[str, Any]]]]:
     provider_name = canonicalize_provider(provider_name or TOOL_SCHEMA_PROVIDER)
     registry_options = {
@@ -83,6 +84,9 @@ def _build_runtime(
         # The project's task board (``task_*``); bound by the app layer for the same
         # reason, and in memory when nobody bound it.
         "task_board": task_board,
+        # The run's background ledger: ``exec_command`` records what it started here
+        # and the loop reports what has ended (ADR 0034).
+        "background": background,
     }
     if not enable_tools:
         registry = ToolRegistry(enabled_tools=[], **registry_options)

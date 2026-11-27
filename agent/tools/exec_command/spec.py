@@ -33,6 +33,9 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
             # A foreground command may run for minutes; the stop flag is what keeps
             # "stop" from meaning "stop after it finishes" (ADR 0019).
             should_stop=bindings.should_stop,
+            # Where a background command is recorded so its end reaches the model as
+            # a notification instead of a poll (ADR 0034).
+            background=bindings.background,
         ),
         description=build_exec_description(),
         parameters=EXEC_PARAMETERS,

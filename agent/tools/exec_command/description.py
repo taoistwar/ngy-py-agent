@@ -89,8 +89,10 @@ def build_exec_description(shell: Optional[Any] = None) -> str:
         "'interrupted' is true. Output above the response budget is written to a file and the "
         "result carries a short preview plus that path, which read_file can read back. "
         "'run_in_background' starts the command without waiting and returns its pid, a session_id "
-        "and the log path; feed that session_id to write_stdin to type into it and read its output. "
-        "The command keeps running until it exits or the task ends, when it is stopped. Give a short "
+        "and the log path. When the command ends, a <task_notification> with its exit code and the "
+        "tail of its output arrives at the start of a later turn, so do not poll for it; use "
+        "write_stdin only while it is still running, to type into it. The command keeps running "
+        "until it exits or the task ends, when it is stopped. Give a short "
         "'description' of what the command "
         "does: the user is shown it when confirming the command, and it is recorded for the audit "
         "trail. "
@@ -129,8 +131,10 @@ EXEC_PARAMETERS: Dict[str, Any] = {
             "type": "boolean",
             "description": (
                 "Start the command and return immediately instead of waiting. The result carries "
-                "the pid, a session_id (pass it to write_stdin to interact) and the log path. The "
-                "command is stopped when the task ends. Defaults to false."
+                "the pid, a session_id (pass it to write_stdin to interact while it runs) and the "
+                "log path. When the command ends, a <task_notification> with its exit code and the "
+                "tail of its output arrives in a later turn. The command is stopped when the task "
+                "ends. Defaults to false."
             ),
         },
         "tty": {

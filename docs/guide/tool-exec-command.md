@@ -7,9 +7,30 @@
 | `command` | string | 必填 | 交给当前平台 shell 执行的命令行。 |
 | `timeout` | integer（**毫秒**） | `120000` | 上限 `1800000`（30 分钟）。超时会终止整棵进程树，结果里 `interrupted: true`。 |
 | `description` | string | — | 一句话说明这条命令做什么，用于权限确认弹窗与审计记录。 |
-| `run_in_background` | boolean | `false` | 立即返回 `pid` / `session_id` / 日志路径；之后用 `write_stdin` 打字并取新输出。 |
+| `run_in_background` | boolean | `false` | 立即返回 `pid` / `session_id` / 日志路径；结束时由后续轮次自动通知（见下文），运行期间可用 `write_stdin` 打字。 |
 | `tty` | boolean | `false` | `true` 时把命令挂到**伪终端**而不是普通管道。 |
 | `dangerouslyDisableSandbox` | boolean | `false` | 跳过额外的约束层；资源上限与整树终止不可关闭。 |
+
+## 后台命令：占位结果 + 完成通知
+
+`run_in_background: true` 时工具**立刻**返回占位结果（`pid`、`session_id`、日志路径），命令作为会话继续运行，Agent Loop 不等它。命令结束时不会再有一次「工具结果」——那次调用已经用占位结果回应过了，一次工具调用只有一个结果——所以完成信息以一条独立消息回到对话里：
+
+```text
+<task_notification>
+Background command finished: Install dependencies (exit code 0)
+session 4a9c1e02 (pid 18344); output: <输出目录>/20261127-101500-812233.log
+
+Last output:
+added 212 packages in 8s
+</task_notification>
+```
+
+规则（[ADR 0034](../decisions/0034-background-notifications.md)）：
+
+- **收集时机**：每轮模型调用前，把「本次运行启动、且已经结束」的命令一次性放进一条 `user` 消息；同一条命令只通知一次。
+- **不轮询**：模型不需要用 `write_stdin` 或 `read_file` 反复看是否结束；`write_stdin` 只用于仍然在跑的会话（打字、取增量输出）。通知里带退出码和日志末尾 600 字符，要全文再用 `read_file` 读日志路径。
+- **归属**：台账（`agent/tools/background.py`）是**每次运行**一份，只有本运行启动的命令会被通知；子 agent 启动的后台命令记在父运行的台账里，由父循环通知。
+- **收尾**：通知即收尾——报告的同时释放会话句柄，与 `write_stdin` 发现进程结束时做的事一致；任务结束时进程树仍会被统一停掉（ADR 0008），因此不会有跨任务遗留的后台进程。
 
 ## `tty`：什么时候要，代价是什么
 

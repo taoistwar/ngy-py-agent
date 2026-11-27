@@ -148,6 +148,7 @@ def build_tool_registry_from_names(
     checkpoint_store: Any = None,
     todo_board: Any = None,
     task_board: Any = None,
+    background: Any = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry from an explicit tool-name allow list (``None`` = all tools)."""
     options = {
@@ -165,6 +166,9 @@ def build_tool_registry_from_names(
         "todo_board": todo_board,
         # The project's task board (``task_*``); same fallback.
         "task_board": task_board,
+        # The run's background ledger (``exec_command`` records what it started);
+        # ``None`` means the run is not notified when a command ends.
+        "background": background,
     }
     if tool_names is None:
         return ToolRegistry(**options)
@@ -182,6 +186,7 @@ def build_tool_registry(
     checkpoint_store: Any = None,
     todo_board: Any = None,
     task_board: Any = None,
+    background: Any = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry restricted to the tools allowed for ``mode``."""
     return build_tool_registry_from_names(
@@ -195,6 +200,7 @@ def build_tool_registry(
         checkpoint_store=checkpoint_store,
         todo_board=todo_board,
         task_board=task_board,
+        background=background,
     )
 
 

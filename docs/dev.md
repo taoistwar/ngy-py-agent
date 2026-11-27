@@ -326,6 +326,16 @@ npm run i18n:check
 - 输出超预算**落盘并返回 `persistedOutputPath`**，而不是只截断，与 ADR 0005 D4/D8 一致。
 - 已知限制：**管道会话**里需要终端的程序不会真的交互（`top`、密码提示、行编辑）；要终端就显式用 `tty=true`，不要把管道行为说成 TTY。原理与取舍见 [ADR 0008](decisions/0008-write-stdin-tool.md) 与 [ADR 0009](decisions/0009-exec-tty.md)。
 
+### 后台命令的完成通知（`<task_notification>`）
+
+- 台账 `BackgroundTasks`（`agent/tools/background.py`）**每次运行一份**，由 `run_react_loop` 创建（参数为 `None` 时自建），经 `_build_runtime` → `ToolRegistry` → `ToolBindings.background` 交给 `exec_command`；`registry.background = None` 是合法配置——命令照跑，只是没人告诉模型。
+- **不另起 waiter 线程**：`process_store` 的会话随时会被 `write_stdin` retire、被下一次注册 `sweep()` 清掉，第二套等待逻辑要重复它的所有权与清理规则；循环反正还要再跑一轮，"下一轮之前告诉你"就是通知的承诺（见 [ADR 0034](decisions/0034-background-notifications.md)）。
+- `collect()` 一次做三件事：判定已结束（`session is None` 或 `not running()`）→ 取 `exit_code`、`retire` 会话、从台账删除 → 带上日志末尾 `TAIL_CHARS = 600`。取不到退出码（会话已被 `write_stdin` 收走）写 `exit code unknown`，不猜。
+- 注入点是**步首**，顺序固定为 `apply_snip_compact` → `inject_background_results` → `prepare_context`：先压缩，通知才不会被当成"可挪走的旧工具结果"；`user` 消息也不在 `result_budget` 的处理范围内（那层只看 `batch_start` 之后的 `tool` 消息）。
+- 通知**绝不复用** `tool_call_id`：那次调用已经有占位结果了，重复 id 会让 transcript 非法（`task_recovery` 按 `tool_call_id` 重建对话）。同一步的多条完成合并进一条 `user` 消息，避免一次多出一条。
+- 子 agent 用父 registry（[ADR 0032](decisions/0032-subagent-tool.md)），所以子 agent 启动的后台命令记在**父**台账、由父循环通知：不丢，也不重复。
+- 已知限制：循环不再继续（模型启动后台命令后直接结束任务）就没有通知，命令也会在任务边界被停掉；台账只在内存里，进程重启后通知随会话一起消失。
+
 ### 大输出与只读附加根
 
 - 命令输出超过 token 预算就落盘到系统临时目录，模型拿到预览 + 路径，用 `read_file` 分段读回。

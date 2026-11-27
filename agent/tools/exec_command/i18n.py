@@ -64,8 +64,9 @@ def build_description(shell: Optional[Any] = None) -> str:
         "'timeout' 单位是毫秒（默认 120000，最大 1800000）；超时后整个进程树会被停止，"
         "'interrupted' 为 true。超出响应预算的输出会写入文件，结果里给出简短预览和该文件路径，"
         "可以用 read_file 读回。'run_in_background' 不等待命令结束就返回，给出 pid、session_id "
-        "和日志路径；把这个 session_id 交给 write_stdin 就能向它输入并读取输出。命令会一直运行"
-        "到退出或任务结束，任务结束时会被停止。给 'description' 写一句简短说明，讲清命令在做"
+        "和日志路径。命令结束时，后续轮次会收到一条 <task_notification>（退出码与输出末尾），"
+        "不必轮询；只有它仍在运行时才用 write_stdin 向它输入。命令会一直运行到退出或任务结束，"
+        "任务结束时会被停止。给 'description' 写一句简短说明，讲清命令在做"
         "什么：确认命令时会给用户看，也会记入审计。"
         f"{_tty_hint(shell)}"
         "'dangerouslyDisableSandbox' 只跳过额外的隔离层（完整性级别）；资源限制与进程树终止"
@@ -84,8 +85,9 @@ ZH_CN_PARAMETERS: Dict[str, str] = {
         "（例如 '安装 lodash 工具库'）。执行前会显示在确认框里，并记入审计。"
     ),
     "run_in_background": (
-        "启动命令后立即返回，不等待结果。结果里带 pid、session_id（交给 write_stdin 交互）"
-        "和日志路径。任务结束时命令会被停止。默认 false。"
+        "启动命令后立即返回，不等待结果。结果里带 pid、session_id（运行期间交给 write_stdin 交互）"
+        "和日志路径。结束时后续轮次会收到一条 <task_notification>（退出码与输出末尾）。"
+        "任务结束时命令会被停止。默认 false。"
     ),
     "tty": "true 为命令分配 PTY；false 或省略则使用普通管道。",
     "dangerouslyDisableSandbox": (
@@ -147,8 +149,9 @@ def build_description_zh_tw(shell: Optional[Any] = None) -> str:
         "'timeout' 單位是毫秒（預設 120000，最大 1800000）；逾時後整個行程樹會被停止，"
         "'interrupted' 為 true。超出回應預算的輸出會寫入檔案，結果裡給出簡短預覽和該檔案路徑，"
         "可以用 read_file 讀回。'run_in_background' 不等待命令結束就傳回，給出 pid、session_id "
-        "和日誌路徑；把這個 session_id 交給 write_stdin 就能向它輸入並讀取輸出。命令會一直執行"
-        "到結束或任務結束，任務結束時會被停止。給 'description' 寫一句簡短說明，講清命令在做"
+        "和日誌路徑。命令結束時，後續輪次會收到一條 <task_notification>（退出碼與輸出末尾），"
+        "不必輪詢；只有它仍在執行時才用 write_stdin 向它輸入。命令會一直執行到結束或任務結束，"
+        "任務結束時會被停止。給 'description' 寫一句簡短說明，講清命令在做"
         "什麼：確認命令時會給使用者看，也會記入稽核。"
         f"{_tty_hint_zh_tw(shell)}"
         "'dangerouslyDisableSandbox' 只跳過額外的隔離層（完整性等級）；資源限制與行程樹終止"
@@ -167,8 +170,9 @@ ZH_TW_PARAMETERS: Dict[str, str] = {
         "（例如 '安裝 lodash 工具庫'）。執行前會顯示在確認框裡，並記入稽核。"
     ),
     "run_in_background": (
-        "啟動命令後立即傳回，不等待結果。結果裡帶 pid、session_id（交給 write_stdin 互動）"
-        "和日誌路徑。任務結束時命令會被停止。預設 false。"
+        "啟動命令後立即傳回，不等待結果。結果裡帶 pid、session_id（執行期間交給 write_stdin 互動）"
+        "和日誌路徑。結束時後續輪次會收到一條 <task_notification>（退出碼與輸出末尾）。"
+        "任務結束時命令會被停止。預設 false。"
     ),
     "tty": "true 為命令分配 PTY；false 或省略則使用普通管線。",
     "dangerouslyDisableSandbox": (
@@ -237,8 +241,10 @@ def build_description_fr(shell: Optional[Any] = None) -> str:
         "'interrupted' passe à true. La sortie qui dépasse le budget de réponse est écrite dans "
         "un fichier, dont le résultat donne un aperçu court et le chemin, relisible avec "
         "read_file. 'run_in_background' rend la main sans attendre la fin et fournit pid, "
-        "session_id et chemin du journal ; passez ce session_id à write_stdin pour écrire et lire "
-        "la sortie. La commande tourne jusqu'à sa fin ou jusqu'à la fin de la tâche, qui l'arrête. "
+        "session_id et chemin du journal. À la fin de la commande, une <task_notification> avec le "
+        "code de sortie et la fin de la sortie arrive au début d'un tour ultérieur : inutile "
+        "d'interroger ; write_stdin ne sert que pendant l'exécution, pour y écrire. La commande "
+        "tourne jusqu'à sa fin ou jusqu'à la fin de la tâche, qui l'arrête. "
         "Renseignez 'description' avec une phrase simple expliquant ce que fait la commande : "
         "elle est montrée à l'utilisateur lors de la confirmation et enregistrée pour l'audit. "
         f"{_tty_hint_fr(shell)}"
@@ -261,8 +267,9 @@ FR_PARAMETERS: Dict[str, str] = {
     ),
     "run_in_background": (
         "Rend la main dès le lancement sans attendre le résultat. Le résultat contient pid, "
-        "session_id (à passer à write_stdin pour interagir) et le chemin du journal. La commande "
-        "est arrêtée à la fin de la tâche. false par défaut."
+        "session_id (à passer à write_stdin pendant l'exécution) et le chemin du journal. À la fin, "
+        "une <task_notification> avec le code de sortie arrive à un tour ultérieur. La commande est "
+        "arrêtée à la fin de la tâche. false par défaut."
     ),
     "tty": "true alloue un PTY à la commande ; false ou absent utilise un tube normal.",
     "dangerouslyDisableSandbox": (
@@ -332,9 +339,11 @@ def build_description_de(shell: Optional[Any] = None) -> str:
         "1800000); nach Ablauf wird der gesamte Prozessbaum gestoppt und 'interrupted' ist true. "
         "Ausgabe über dem Antwortbudget wird in eine Datei geschrieben, das Ergebnis nennt eine "
         "kurze Vorschau und den Pfad, der mit read_file zurückgelesen werden kann. "
-        "'run_in_background' kehrt sofort zurück und liefert pid, session_id und Logpfad; diese "
-        "session_id an write_stdin geben, um Eingaben zu senden und Ausgabe zu lesen. Der Befehl "
-        "läuft bis zu seinem Ende oder bis zum Aufgabenende, das ihn stoppt. In 'description' "
+        "'run_in_background' kehrt sofort zurück und liefert pid, session_id und Logpfad. Endet "
+        "der Befehl, kommt zu Beginn eines späteren Zugs eine <task_notification> mit Exit-Code "
+        "und dem Ende der Ausgabe - also nicht pollen; write_stdin dient nur dem Eingeben, solange "
+        "er läuft. Der Befehl läuft bis zu seinem Ende oder bis zum Aufgabenende, das ihn stoppt. "
+        "In 'description' "
         "einen kurzen Satz schreiben, was der Befehl tut: er wird dem Benutzer bei der Bestätigung "
         "gezeigt und für die Prüfung protokolliert. "
         f"{_tty_hint_de(shell)}"
@@ -356,8 +365,9 @@ DE_PARAMETERS: Dict[str, str] = {
     ),
     "run_in_background": (
         "Kehrt direkt nach dem Start zurück, ohne auf das Ergebnis zu warten. Das Ergebnis enthält "
-        "pid, session_id (an write_stdin geben) und den Logpfad. Beim Aufgabenende wird der "
-        "Befehl gestoppt. Standard false."
+        "pid, session_id (an write_stdin geben, solange er läuft) und den Logpfad. Am Ende kommt "
+        "eine <task_notification> mit dem Exit-Code in einem späteren Zug. Beim Aufgabenende wird "
+        "der Befehl gestoppt. Standard false."
     ),
     "tty": "true weist dem Befehl ein PTY zu; false oder weggelassen nutzt eine normale Pipe.",
     "dangerouslyDisableSandbox": (
@@ -428,9 +438,11 @@ def build_description_ru(shell: Optional[Any] = None) -> str:
         "'interrupted' становится true. Вывод сверх бюджета ответа записывается в файл, в "
         "результате даётся короткий предпросмотр и путь к этому файлу, который можно прочитать "
         "через read_file. 'run_in_background' возвращает управление сразу и даёт pid, "
-        "session_id и путь к журналу; передайте этот session_id в write_stdin, чтобы отправлять "
-        "ввод и читать вывод. Команда работает до своего завершения или до конца задачи, "
-        "который её останавливает. В 'description' напишите короткое пояснение, что делает "
+        "session_id и путь к журналу. Когда команда завершится, в начале одного из следующих "
+        "шагов придёт <task_notification> с кодом возврата и концом вывода - опрашивать не "
+        "нужно; write_stdin нужен только для ввода, пока она работает. Команда работает до "
+        "своего завершения или до конца задачи, который её останавливает. В 'description' "
+        "напишите короткое пояснение, что делает "
         "команда: оно показывается пользователю при подтверждении и попадает в аудит. "
         f"{_tty_hint_ru(shell)}"
         "'dangerouslyDisableSandbox' пропускает только дополнительный слой изоляции (уровень "
@@ -451,8 +463,9 @@ RU_PARAMETERS: Dict[str, str] = {
     ),
     "run_in_background": (
         "Возвращает управление сразу после запуска, не дожидаясь результата. В результате есть "
-        "pid, session_id (передать в write_stdin) и путь к журналу. По завершении задачи "
-        "команда останавливается. По умолчанию false."
+        "pid, session_id (передавать в write_stdin, пока команда работает) и путь к журналу. "
+        "По завершении придёт <task_notification> с кодом возврата в одном из следующих шагов. "
+        "По завершении задачи команда останавливается. По умолчанию false."
     ),
     "tty": "true выделяет команде PTY; false или отсутствие значения — обычный канал.",
     "dangerouslyDisableSandbox": (

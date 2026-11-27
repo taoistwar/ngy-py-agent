@@ -2,6 +2,7 @@
 
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from agent.agent_loop.background_context import inject_background_results
 from agent.agent_loop.compact_history import compact_history
 from agent.agent_loop.config import DEFAULT_MAX_STEPS
 from agent.agent_loop.messages import _with_base_dir, _with_history
@@ -43,6 +44,7 @@ from agent.modes import (
 )
 from agent.provider import ProviderConfig
 from agent.telemetry import current_trace_ids, react_step_span
+from agent.tools.background import BackgroundTasks
 from agent.tools.permissions import PermissionBroker
 from agent.tools.user_question import UserQuestionBroker
 from agent.vision import build_image_message, redact_image_payload, supports_images
@@ -88,7 +90,15 @@ def run_react_loop(
     # The project's task board (``task_*``); bound by the app layer, in memory when
     # nobody bound it.
     task_board: Any = None,
+    # The run's background ledger (``exec_command(run_in_background=True)``). One is
+    # created below when the caller does not supply it, because the notification
+    # channel is a property of the loop, not of a caller (ADR 0034).
+    background: Optional[BackgroundTasks] = None,
 ) -> str:
+    # The ledger exists even when nobody passed one: without it ``exec_command`` still
+    # starts background commands (they are sessions, ADR 0008), the model just never
+    # hears that they ended.
+    background = background if background is not None else BackgroundTasks(task_id or "")
     _, registry, provider, request_tools = _build_runtime(
         provider_name=provider_name,
         provider_config=provider_config,
@@ -100,6 +110,7 @@ def run_react_loop(
         should_stop=should_stop,
         todo_board=todo_board,
         task_board=task_board,
+        background=background,
     )
 
     if permission_broker is not None:
@@ -260,6 +271,11 @@ def run_react_loop(
             task_id=task_id,
             step=step,
         )
+        # What the model started in the background and has ended since the last turn.
+        # Before the request is built, so the report is part of the context it answers
+        # from - and never as a tool result: that call was already answered with a
+        # placeholder (ADR 0034).
+        inject_background_results(messages, background, event_sink, task_id or "", step)
         # The conditional third step: only when the estimate is over the limit, and
         # before ``mark_seen`` below claims the results that just arrived unread.
         context = prepare_context(
