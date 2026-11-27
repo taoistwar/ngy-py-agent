@@ -717,5 +717,8 @@
   "scheduleRunSkipped": "已跳过",
   "scheduleRunningTitle": "运行中的任务",
   "scheduleRunningHint": "由定时任务启动、仍在执行的任务",
-  "scheduleRunningEmpty": "当前没有运行中的定时任务。"
+  "scheduleRunningEmpty": "当前没有运行中的定时任务。",
+  "scheduleFormPermission": "确认方式",
+  "scheduleFormPermissionGlobal": "跟随全局设置",
+  "scheduleFormPermissionHint": "定时运行没有人回答确认：需要自动跑完请固定为「自动批准」。"
 }

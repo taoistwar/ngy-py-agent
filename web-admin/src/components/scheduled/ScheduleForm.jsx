@@ -3,6 +3,7 @@
 // help page nobody opens.
 import { useState } from "react"
 import { agentDisplayName } from "../admin/shared"
+import { PERMISSION_MODE_VALUES, permissionModeLabel } from "./permissionOptions"
 
 const DEFAULT_CRON = "0 9 * * *"
 
@@ -22,6 +23,7 @@ export default function ScheduleForm({
   const [agentId, setAgentId] = useState(schedule?.agent_id || "")
   const [modelId, setModelId] = useState(schedule?.model_id || "")
   const [workspaceId, setWorkspaceId] = useState(schedule?.workspace_id || "")
+  const [permissionMode, setPermissionMode] = useState(schedule?.permission_mode || "")
   const [enabled, setEnabled] = useState(schedule ? schedule.enabled : true)
   const [recurring, setRecurring] = useState(schedule ? schedule.recurring : true)
   const [busy, setBusy] = useState(false)
@@ -51,6 +53,7 @@ export default function ScheduleForm({
         agent_id: effectiveAgentId,
         model_id: modelId || null,
         workspace_id: workspaceId || null,
+        permission_mode: permissionMode,
         enabled,
         recurring,
       })
@@ -139,7 +142,22 @@ export default function ScheduleForm({
             ))}
           </select>
         </label>
+        <label>
+          <span>{translate("scheduleFormPermission")}</span>
+          <select
+            value={permissionMode}
+            onChange={(event) => setPermissionMode(event.target.value)}
+          >
+            <option value="">{translate("scheduleFormPermissionGlobal")}</option>
+            {PERMISSION_MODE_VALUES.map((mode) => (
+              <option key={mode} value={mode}>
+                {permissionModeLabel(translate, mode)}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
+      <span className="hint">{translate("scheduleFormPermissionHint")}</span>
 
       <div className="schedule-form-checks">
         <label className="schedule-check">

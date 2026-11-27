@@ -717,5 +717,8 @@
   "scheduleRunSkipped": "Ignorée",
   "scheduleRunningTitle": "En cours",
   "scheduleRunningHint": "Tâches lancées par une planification et toujours actives",
-  "scheduleRunningEmpty": "Aucune tâche planifiée n'est en cours."
+  "scheduleRunningEmpty": "Aucune tâche planifiée n'est en cours.",
+  "scheduleFormPermission": "Confirmation",
+  "scheduleFormPermissionGlobal": "Suivre le réglage global",
+  "scheduleFormPermissionHint": "Personne ne répond aux confirmations pour une tâche planifiée : fixez « approbation automatique » si l'exécution doit se terminer seule."
 }

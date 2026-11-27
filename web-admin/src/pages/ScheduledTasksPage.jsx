@@ -18,6 +18,7 @@ import { formatTime } from "../utils/format"
 import RunningScheduleTasks from "../components/scheduled/RunningScheduleTasks"
 import ScheduleForm from "../components/scheduled/ScheduleForm"
 import ScheduleRunsPanel from "../components/scheduled/ScheduleRunsPanel"
+import { permissionModeLabel } from "../components/scheduled/permissionOptions"
 
 const REFRESH_MS = 5000
 const RUNS_LIMIT = 50
@@ -272,6 +273,14 @@ export default function ScheduledTasksPage({
                           {translate("scheduleLastRun")}:{" "}
                           {formatTime(schedule.last_run_at) || translate("scheduleNever")}
                         </span>
+                        {/* Only shown when pinned: "follows the global mode" is the
+                            normal case and would be noise on every row. */}
+                        {schedule.permission_mode ? (
+                          <span>
+                            {translate("scheduleFormPermission")}:{" "}
+                            {permissionModeLabel(translate, schedule.permission_mode)}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                     <div className="schedule-actions">

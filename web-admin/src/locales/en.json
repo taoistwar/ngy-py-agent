@@ -717,5 +717,8 @@
   "scheduleRunSkipped": "Skipped",
   "scheduleRunningTitle": "Running now",
   "scheduleRunningHint": "Tasks started by schedules and still in flight",
-  "scheduleRunningEmpty": "No scheduled task is running."
+  "scheduleRunningEmpty": "No scheduled task is running.",
+  "scheduleFormPermission": "Confirmation",
+  "scheduleFormPermissionGlobal": "Follow the global setting",
+  "scheduleFormPermissionHint": "Nobody answers confirmations on a schedule: pin auto approve when a run has to finish on its own."
 }
