@@ -175,7 +175,7 @@
   "taskFormProvider": "Provider",
   "retentionTitle": "Retention Settings",
   "retentionSourceLabel": "Retention source",
-  "retentionSourceEnv": "environment",
+  "retentionSourceDefault": "default",
   "retentionSourceDb": "database",
   "retentionCurrentSource": "Current source",
   "retentionSetDays": "Set retention days",

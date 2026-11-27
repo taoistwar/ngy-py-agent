@@ -14,7 +14,7 @@ def purge_expired_tasks_with_log(scope: str) -> int:
     removed = purge_expired_tasks()
     if removed > 0:
         print(
-            f"[Task cleanup] {scope}: TASK_RETENTION_DAYS={state.task_retention_days}, "
+            f"[Task cleanup] {scope}: retention_days={state.task_retention_days}, "
             f"removed={removed} expired tasks."
         )
     return removed

@@ -247,7 +247,7 @@ export function RetentionManager({ retentionConfig, onSave, onRefresh, translate
             {translate("retentionCurrentSource")}:{" "}
             {retentionConfig?.retention_source === "database"
               ? translate("retentionSourceDb")
-              : translate("retentionSourceEnv")}
+              : translate("retentionSourceDefault")}
           </span>
         </div>
         <button type="button" className="btn btn-compact" onClick={onRefresh}>

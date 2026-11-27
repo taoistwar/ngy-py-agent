@@ -44,7 +44,7 @@ denylist_store = ToolDenyList()
 
 # Config resolved at startup from env + database, and rewritten by the admin API.
 task_retention_days: int = TASK_RETENTION_DEFAULT_DAYS
-task_retention_source: str = "env"
+task_retention_source: str = "default"
 agent_max_steps: int = DEFAULT_MAX_STEPS
 agent_max_steps_source: str = "default"
 permission_mode: PermissionMode = PermissionMode.ASK

@@ -114,7 +114,6 @@ npm run dev
 
 - `NGY_PY_AGENT_MODE=dev`：开发模式标记。
 - `WEB_MONITOR_HOST` / `WEB_MONITOR_PORT`：监听地址与端口的默认值（命令行参数优先）。
-- `TASK_RETENTION_DAYS`：任务保留天数。
 - `TRANSCRIPT_MAX_MESSAGES`、`CONTEXT_CHAR_LIMIT`、`CONTEXT_SUMMARY_ENABLED`：上下文与压缩相关。
 - `TOOL_DENYLIST_CONFIG`：工具黑名单规则文件路径。
 - `OTEL_*`：可观测开关，默认关闭。

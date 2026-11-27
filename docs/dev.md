@@ -18,7 +18,6 @@
 - `NGY_PY_AGENT_MODE=dev`
 - `WEB_MONITOR_HOST=127.0.0.1`
 - `WEB_MONITOR_PORT=8001`
-- `TASK_RETENTION_DAYS=36600`（默认 36600 天，约 100 年）
 - `TRANSCRIPT_MAX_MESSAGES=50`（对话窗口条数上限，超出后旧消息归档到 `<workspace>/.ngy-agent/.transcripts/`，`<= 0` 关闭，见 [ADR 0015](decisions/0015-snip-compact.md)）
 - `CONTEXT_CHAR_LIMIT`（整段上下文的字符上限，超出后缩短模型已读过的旧工具结果；未配置时取模型 `max_input_tokens × 4`，再退回 200,000，`<= 0` 关闭，见 [ADR 0016](decisions/0016-micro-compact.md)）
 - `CONTEXT_SUMMARY_ENABLED=0`（关闭压缩管线的第四步——历史摘要。该步是唯一会额外发起模型调用的压缩步骤，见 [ADR 0017](decisions/0017-compact-history.md)）
@@ -49,7 +48,7 @@
 - 后端优先读取：
   - `web-admin/dist/index.html`
   - 如果 `dist` 不存在则读取 `web-admin/index.html`
-- 全局配置（最大步数、工具确认模式、AGENTS.md 项目指令、任务保留天数）存于 `settings` 表（`agent_max_steps`、`permission_mode`、`agents_md_config`、`task_retention_days` 四键），可在 Web Admin「全局配置」页修改。确认模式与保留天数有同名环境变量作默认值且库值优先；**最大步数与 AGENTS.md 没有环境变量**，库值缺失时取代码默认（`DEFAULT_MAX_STEPS = 9`，见 `agent/agent_loop/config.py`；AGENTS.md 为开启、单文件 32768 字节，见 `agent/agents_md.py`），因此 `.env` 里再写 `REACT_MAX_STEPS`、`AGENTS_MD_ENABLED`、`AGENTS_MD_MAX_BYTES` 都不会生效。`agents_md_config` 是一行 JSON（`{"enabled": ..., "max_bytes": ...}`），两个字段共享一个来源标签。
+- 全局配置（最大步数、工具确认模式、AGENTS.md 项目指令、任务保留天数）存于 `settings` 表（`agent_max_steps`、`permission_mode`、`agents_md_config`、`task_retention_days` 四键），可在 Web Admin「全局配置」页修改。确认模式有同名环境变量作默认值且库值优先；**最大步数、AGENTS.md 与任务保留天数没有环境变量**，库值缺失时取代码默认（保留天数 `TASK_RETENTION_DEFAULT_DAYS = 36600`，约 100 年；最大步数 `DEFAULT_MAX_STEPS = 9`，见 `agent/agent_loop/config.py`；AGENTS.md 为开启、单文件 32768 字节，见 `agent/agents_md.py`），因此 `.env` 里再写 `REACT_MAX_STEPS`、`AGENTS_MD_ENABLED`、`AGENTS_MD_MAX_BYTES` 都不会生效。`agents_md_config` 是一行 JSON（`{"enabled": ..., "max_bytes": ...}`），两个字段共享一个来源标签。
 - 任务详情的结果区：`src/components/TaskResultPanel.jsx` 负责「渲染 / 源码」切换与全屏阅读（portal 覆盖层，Esc 关闭）；Markdown 由 `src/components/MarkdownView.jsx` 渲染，解析在 `src/utils/markdown.js`（块级）与 `src/utils/markdownInline.js`（行内），排版样式在 `src/styles/markdown.css`。渲染产出 React 元素而非 HTML 字符串，模型输出里的标签只会显示成文本。
 - 任务窗口的上下文占用：`src/components/ContextMeter.jsx` 渲染一个 18px 的环形进度（SVG `stroke-dasharray`，-90° 起点、圆头端点），悬停/聚焦时向上弹出面板给出百分比、`已用 / 上限`、输入输出明细与上限来源。数字格式化在 `src/utils/contextUsage.js`（1024 进制、一位小数，≥80% 变黄、≥95% 变红）。它随发送按钮一起右对齐，跟随会话与所选模型，每 5 秒读一次 `GET /api/sessions/{id}/context`，任务开始/结束时立即再读一次。
 
@@ -96,7 +95,7 @@ ws.onmessage = (event) => {
 ## 7. 持久化与备份管理
 
 - 任务与明细落库文件：`monitor_tasks.db`（SQLite）
-- 重启服务后历史仍保留（取决于 `TASK_RETENTION_DAYS` / 管理中心配置）
+- 重启服务后历史仍保留（取决于管理中心配置的保留天数）
 - 可通过后端 API 实时调整保留天数：`PUT /api/admin/retention`
 
 ## 8. 前端国际化（i18n）文案维护

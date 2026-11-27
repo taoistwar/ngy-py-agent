@@ -175,7 +175,7 @@
   "taskFormProvider": "Anbieter",
   "retentionTitle": "Aufbewahrung",
   "retentionSourceLabel": "Quelle der Aufbewahrung",
-  "retentionSourceEnv": "Umgebung",
+  "retentionSourceDefault": "Standard",
   "retentionSourceDb": "Datenbank",
   "retentionCurrentSource": "Aktuelle Quelle",
   "retentionSetDays": "Aufbewahrungstage festlegen",

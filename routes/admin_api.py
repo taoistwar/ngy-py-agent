@@ -228,22 +228,11 @@ def _checked_http_endpoint(raw: Any, what: str) -> str:
     return url
 
 
-def _get_env_task_retention_days() -> int:
-    raw = os.getenv("TASK_RETENTION_DAYS", str(TASK_RETENTION_DEFAULT_DAYS)).strip()
-    try:
-        days = int(raw)
-    except ValueError:
-        return TASK_RETENTION_DEFAULT_DAYS
-    if days < 0:
-        return 0
-    return days
-
-
 def _load_task_retention_config() -> tuple[int, str]:
-    env_days = _get_env_task_retention_days()
+    """The stored row, else the code default; retention has no environment fallback."""
     db_days = state.monitor_store.get_task_retention_days()
     if db_days is None:
-        return env_days, "env"
+        return TASK_RETENTION_DEFAULT_DAYS, "default"
     return db_days, "database"
 
 

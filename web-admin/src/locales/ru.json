@@ -175,7 +175,7 @@
   "taskFormProvider": "Провайдер",
   "retentionTitle": "Настройки хранения",
   "retentionSourceLabel": "Источник настройки",
-  "retentionSourceEnv": "переменная окружения",
+  "retentionSourceDefault": "по умолчанию",
   "retentionSourceDb": "база данных",
   "retentionCurrentSource": "Текущий источник",
   "retentionSetDays": "Задать срок хранения",

@@ -68,14 +68,10 @@ TASK_RESUME_MAX_ATTEMPTS=0 uv run python main.py
 - `GET /api/admin/retention`：读取当前保留配置。
   - 返回字段：
     - `retention_days`：当前保留天数
-    - `retention_source`：`env` 或 `database`
+    - `retention_source`：`default` 或 `database`
     - `removed_tasks`：最近一次清理移除数量（`GET` 返回 0）
 - `PUT /api/admin/retention`：设置保留天数。
   - 请求体：`{"retention_days": 30}`
   - `0` 表示关闭清理（保留全部任务明细）
 
-默认 `.env` 也支持：
-
-```
-TASK_RETENTION_DAYS=36600
-```
+保留天数只存于数据库，不再读取 `TASK_RETENTION_DAYS` 环境变量；未设置时使用代码默认值 36600 天（约 100 年）。

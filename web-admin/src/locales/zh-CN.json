@@ -175,7 +175,7 @@
   "taskFormProvider": "模型提供者",
   "retentionTitle": "保留设置",
   "retentionSourceLabel": "保留来源",
-  "retentionSourceEnv": "环境变量",
+  "retentionSourceDefault": "默认值",
   "retentionSourceDb": "数据库",
   "retentionCurrentSource": "当前来源",
   "retentionSetDays": "设置保留天数",

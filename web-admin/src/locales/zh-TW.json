@@ -175,7 +175,7 @@
   "taskFormProvider": "供應商",
   "retentionTitle": "保留設定",
   "retentionSourceLabel": "保留設定來源",
-  "retentionSourceEnv": "環境變數",
+  "retentionSourceDefault": "預設值",
   "retentionSourceDb": "資料庫",
   "retentionCurrentSource": "目前來源",
   "retentionSetDays": "設定保留天數",
