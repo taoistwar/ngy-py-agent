@@ -15,6 +15,7 @@ from agent.tools.denylist import (
     REASON_DENYLIST_ERROR,
     ToolDenyList,
 )
+from agent.tools.memory_store import MemoryBook
 from agent.tools.output_store import (
     output_root_path,
     workspace_result_directory,
@@ -93,6 +94,7 @@ class ToolRegistry:
         checkpoint_store: Optional[Any] = None,
         todo_board: Optional[TodoBoard] = None,
         task_board: Optional[TaskBoard] = None,
+        memory_book: Optional[MemoryBook] = None,
         background: Optional[BackgroundTasks] = None,
     ):
         self.base_dir = base_dir
@@ -139,6 +141,10 @@ class ToolRegistry:
         # by the app layer, which is the one that knows the workspace and the
         # conversation a claim belongs to.
         self.task_board = task_board if task_board is not None else TaskBoard()
+        # What earlier conversations learned (``memory_save`` / ``memory_search``). The
+        # app layer binds the database library and the deployment's on/off switch, so
+        # ``None`` here means "nobody bound one" and keeps it in memory (ADR 0035).
+        self.memory_book = memory_book if memory_book is not None else MemoryBook()
         # Background commands this run starts. ``exec_command`` records them here and
         # the loop collects them between turns (ADR 0034); ``None`` is a valid
         # configuration - the command still runs, the run just does not get told.
@@ -189,6 +195,7 @@ class ToolRegistry:
             run_subagent=self.run_subagent,
             todo_board=self.todo_board,
             task_board=self.task_board,
+            memory_book=self.memory_book,
             background=self.background,
         )
 

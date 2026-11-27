@@ -74,6 +74,10 @@ MODE_CONFIGS: Dict[str, Dict[str, Any]] = {
             # Searching is read-only too, and it is how the page worth fetching is
             # found in the first place (ADR 0028).
             "web_search",
+            # Reading what earlier conversations learned is read-only, and it is the
+            # one tool that makes an answer consistent with them. ``memory_save`` stays
+            # out: this mode promises not to change state (ADR 0035).
+            "memory_search",
             "ask_user_question",
         ],
         "skills": ["cite_sources"],
@@ -148,6 +152,7 @@ def build_tool_registry_from_names(
     checkpoint_store: Any = None,
     todo_board: Any = None,
     task_board: Any = None,
+    memory_book: Any = None,
     background: Any = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry from an explicit tool-name allow list (``None`` = all tools)."""
@@ -166,6 +171,8 @@ def build_tool_registry_from_names(
         "todo_board": todo_board,
         # The project's task board (``task_*``); same fallback.
         "task_board": task_board,
+        # The cross-session memory library (``memory_*``); same fallback.
+        "memory_book": memory_book,
         # The run's background ledger (``exec_command`` records what it started);
         # ``None`` means the run is not notified when a command ends.
         "background": background,
@@ -186,6 +193,7 @@ def build_tool_registry(
     checkpoint_store: Any = None,
     todo_board: Any = None,
     task_board: Any = None,
+    memory_book: Any = None,
     background: Any = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry restricted to the tools allowed for ``mode``."""
@@ -200,6 +208,7 @@ def build_tool_registry(
         checkpoint_store=checkpoint_store,
         todo_board=todo_board,
         task_board=task_board,
+        memory_book=memory_book,
         background=background,
     )
 

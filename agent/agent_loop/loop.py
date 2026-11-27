@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from agent.agent_loop.background_context import inject_background_results
 from agent.agent_loop.compact_history import compact_history
 from agent.agent_loop.config import DEFAULT_MAX_STEPS
+from agent.agent_loop.memory_context import append_memory_context
 from agent.agent_loop.messages import _with_base_dir, _with_history
 from agent.agent_loop.micro_compact import mark_seen, prepare_context
 from agent.agent_loop.model_turn import run_model_turn
@@ -45,6 +46,7 @@ from agent.modes import (
 from agent.provider import ProviderConfig
 from agent.telemetry import current_trace_ids, react_step_span
 from agent.tools.background import BackgroundTasks
+from agent.tools.memory_notes import DEFAULT_MAX_PROMPT_CHARS
 from agent.tools.permissions import PermissionBroker
 from agent.tools.user_question import UserQuestionBroker
 from agent.vision import build_image_message, redact_image_payload, supports_images
@@ -90,6 +92,10 @@ def run_react_loop(
     # The project's task board (``task_*``); bound by the app layer, in memory when
     # nobody bound it.
     task_board: Any = None,
+    # What earlier conversations learned (``memory_*``). Bound by the app layer too: it
+    # is the one that knows where the library lives and whether memory is switched on
+    # (ADR 0035).
+    memory_book: Any = None,
     # The run's background ledger (``exec_command(run_in_background=True)``). One is
     # created below when the caller does not supply it, because the notification
     # channel is a property of the loop, not of a caller (ADR 0034).
@@ -110,6 +116,7 @@ def run_react_loop(
         should_stop=should_stop,
         todo_board=todo_board,
         task_board=task_board,
+        memory_book=memory_book,
         background=background,
     )
 
@@ -149,6 +156,9 @@ def run_react_loop(
         print(f"Provider tool schemas: {(request_tools or [])[:1]}")
 
     instructions: Optional[AgentsMdInstructions] = None
+    # The memory index this run put in front of the model, for the task log. Empty
+    # whenever the prompt was caller-composed (``initial_messages``) or memory is off.
+    recalled: List[Dict[str, Any]] = []
     if initial_messages is not None:
         # A rebuilt transcript or a caller-owned conversation is used verbatim: its
         # system prompt was composed by whoever built it, and re-adding the workspace
@@ -179,6 +189,17 @@ def run_react_loop(
         board = getattr(registry, "todo_board", None)
         if board is not None:
             system_prompt = append_todo_context(system_prompt, board.snapshot())
+        # What earlier conversations learned. The index only: bodies are read through
+        # ``memory_search``, which is what keeps this block bounded no matter how large
+        # the library grows (ADR 0035).
+        memory_book = getattr(registry, "memory_book", None)
+        recalled = memory_book.snapshot() if memory_book is not None else []
+        if recalled:
+            system_prompt = append_memory_context(
+                system_prompt,
+                recalled,
+                max_chars=getattr(memory_book, "max_prompt_chars", DEFAULT_MAX_PROMPT_CHARS),
+            )
         messages = [
             {
                 "role": "system",
@@ -206,6 +227,24 @@ def run_react_loop(
                 category=EventCategory.DEBUG,
                 title="Loaded AGENTS.md",
                 data=instructions.describe(),
+                collapsed=True,
+            ),
+        )
+
+    if recalled:
+        # Which notes this task started with. A surprising answer is often a stale note,
+        # and without this line there is no way to see that one was in play.
+        _emit(
+            event_sink,
+            task_id,
+            TaskEvent(
+                task_id=task_id or "",
+                category=EventCategory.DEBUG,
+                title="Recalled memories",
+                data={
+                    "count": len(recalled),
+                    "names": [str(record.get("name") or "") for record in recalled],
+                },
                 collapsed=True,
             ),
         )

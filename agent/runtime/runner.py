@@ -6,7 +6,7 @@ import threading
 from typing import Any
 
 from agent.agent_loop import run_react_loop
-from agent.models import EventCategory, TaskEvent, TaskStatus
+from agent.models import EventCategory, EventSink, TaskEvent, TaskStatus
 from agent.runtime.board import board_for_run
 from agent.runtime.config import (
     build_provider_config,
@@ -15,6 +15,8 @@ from agent.runtime.config import (
     resolve_permission_mode,
 )
 from agent.runtime.events import build_event, emit_debug
+from agent.runtime.memories import memory_book_for_run
+from agent.runtime.memory_extract import extract_after_task
 from agent.runtime.naming import name_task_and_session
 from agent.runtime.todos import MonitorTodoStore
 from agent.telemetry import (
@@ -79,6 +81,40 @@ def run_task(
     finally:
         detach_task_span(token)
         end_task_span(otel_handle)
+
+
+def _extract_memories_after_task(
+    task_id: str,
+    query: str,
+    result: str,
+    provider_name: str,
+    provider_config: Any,
+    sink: EventSink,
+) -> None:
+    """Keep what this task learned on a thread of its own (ADR 0035).
+
+    Started after ``finish_task`` rather than before it: the answer is already complete,
+    and nobody should wait on an extraction they did not ask for. A failure in here is
+    invisible by design - memory is a convenience, and the task it came from is already
+    recorded.
+    """
+    # Read defensively: this layer is also called from tests and embedders whose state
+    # object predates the feature, and "no switches" has to mean "do not extract".
+    if not (
+        getattr(state, "memories_enabled", False)
+        and getattr(state, "memories_auto_extract", False)
+    ):
+        return
+
+    def _emit(title: str, data: dict[str, Any]) -> None:
+        emit_debug(sink, task_id, title, data)
+
+    threading.Thread(
+        target=extract_after_task,
+        args=(task_id, query, result, provider_name, provider_config),
+        kwargs={"emit": _emit},
+        daemon=True,
+    ).start()
 
 
 def _execute_task(
@@ -164,6 +200,9 @@ def _execute_task(
             daemon=True,
         ).start()
 
+    # The answer this task produced, kept for the memory extractor. Set only on the
+    # success path, so the extraction below cannot run for a failed or stopped task.
+    learned = ""
     try:
         permission_broker = PermissionBroker(
             task_id=task_id,
@@ -217,6 +256,10 @@ def _execute_task(
             # The project's task board: the workspace's, shared by every conversation
             # in it, with this conversation recorded as the claimant (``task_*``).
             task_board=board_for_run(request.session_id, task_id),
+            # What earlier conversations learned: the index goes into the prompt and
+            # ``memory_save`` / ``memory_search`` write and read through the same book.
+            # Built here because the deployment's on/off switch lives in this layer.
+            memory_book=memory_book_for_run(task_id),
         )
         if stop_event is not None and stop_event.is_set():
             emit_debug(_sink, task_id, "Task stopped", {"result": result, **current_trace_ids()})
@@ -226,6 +269,7 @@ def _execute_task(
         else:
             emit_debug(_sink, task_id, "Task finished", {"result": result, **current_trace_ids()})
             state.monitor_store.finish_task(task_id, success=True, result=result)
+            learned = result
     except Exception as exc:  # noqa: BLE001 - a failed task must still be recorded as failed
         emit_debug(
             _sink,
@@ -253,3 +297,10 @@ def _execute_task(
         state.clear_task_permission(task_id)
         state.clear_task_questions(task_id)
         state.clear_task_stop(task_id)
+
+    # After the cleanup and outside the try: memory is a convenience, and an extraction
+    # that failed to start must not turn a finished task into a failed one (ADR 0035).
+    if learned:
+        _extract_memories_after_task(
+            task_id, request.query, learned, provider, provider_config, _sink
+        )

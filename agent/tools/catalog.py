@@ -20,6 +20,8 @@ from agent.tools.edit_file import spec as edit_file
 from agent.tools.exec_command import spec as exec_command
 from agent.tools.glob import spec as glob
 from agent.tools.grep import spec as grep
+from agent.tools.memory_save import spec as memory_save
+from agent.tools.memory_search import spec as memory_search
 from agent.tools.read_file import spec as read_file
 from agent.tools.spec import ToolSpec
 from agent.tools.subagent import spec as subagent
@@ -43,6 +45,12 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     # reads the list top down, and ``todo_write`` is what it should reach for before
     # a multi-step task turns into a series of unrelated tool calls.
     todo_write.build_spec,
+    # Knowledge from earlier conversations sits next to planning: both are context the
+    # conversation keeps for itself, not work done on the machine. Read before write, so
+    # a model that is about to record something first sees what it already recorded
+    # (ADR 0035).
+    memory_search.build_spec,
+    memory_save.build_spec,
     # The task board is the same idea one level up: ``todo_write`` orders the steps of
     # *this* conversation, the board orders the project's work across conversations.
     # Their order is create -> sequence -> read -> claim -> finish, which is also the
@@ -91,9 +99,12 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
 # Tools a subagent never gets. Delegation is one level deep, and planning belongs to
 # the conversation that keeps the plan: the child answers one brief with a context it
 # throws away when it returns, so creating, sequencing or claiming project tasks there
-# would be both overreach and extra tokens (ADR 0032 D2, ADR 0033).
+# would be both overreach and extra tokens (ADR 0032 D2, ADR 0033). ``memory_save`` is
+# excluded for the same reason and one more: what the child learned belongs in its
+# report to the parent, which is the run that knows whether it still matters later
+# (ADR 0035). ``memory_search`` stays - reading a note is how a brief gets answered.
 CHILD_EXCLUDED_TOOLS = frozenset(
-    [subagent.NAME]
+    [subagent.NAME, memory_save.NAME]
     + [
         module.NAME
         for module in (task_create, task_update, task_list, task_get, task_claim, task_complete)

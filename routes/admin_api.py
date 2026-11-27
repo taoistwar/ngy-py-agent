@@ -31,6 +31,8 @@ from agent.tools.denylist import (
     ToolDenyRule,
     parse_rules,
 )
+from agent.tools.memory_notes import DEFAULT_MAX_PROMPT_CHARS as MEMORY_PROMPT_DEFAULT_CHARS
+from agent.tools.memory_notes import MAX_PROMPT_CHARS as MEMORY_MAX_PROMPT_CHARS
 from agent.tools.permissions import PermissionMode, normalize_mode
 from agent.tools.web_fetch import limits as web_fetch_limits
 from agent.tools.web_fetch import providers as web_fetch_providers
@@ -245,6 +247,32 @@ def _load_task_retention_config() -> tuple[int, str]:
     return db_days, "database"
 
 
+def _clamp_memory_prompt_chars(raw: Any) -> int:
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return MEMORY_PROMPT_DEFAULT_CHARS
+    return max(0, min(MEMORY_MAX_PROMPT_CHARS, value))
+
+
+def _load_memory_config() -> tuple[bool, bool, int, str]:
+    """The cross-session memory switches: the stored row, else the code's defaults.
+
+    No environment variables: a feature that ships on has one answer, and an operator
+    who wants it off can say so on the page (the same reasoning as the skill library's
+    root, minus the env fallback it needs for a folder that may not exist yet).
+    """
+    stored = state.monitor_store.get_memory_config()
+    if not stored:
+        return True, True, MEMORY_PROMPT_DEFAULT_CHARS, "default"
+    return (
+        bool(stored.get("enabled", True)),
+        bool(stored.get("auto_extract", True)),
+        _clamp_memory_prompt_chars(stored.get("max_prompt_chars")),
+        "database",
+    )
+
+
 def load_startup_config() -> None:
     """Resolve env + database into the live state; called once before serving."""
     state.task_retention_days, state.task_retention_source = _load_task_retention_config()
@@ -253,6 +281,12 @@ def load_startup_config() -> None:
     state.agents_md_enabled = agents_md.enabled
     state.agents_md_max_bytes = agents_md.max_bytes
     state.agents_md_source = agents_md_source
+    (
+        state.memories_enabled,
+        state.memories_auto_extract,
+        state.memories_max_prompt_chars,
+        state.memories_source,
+    ) = _load_memory_config()
     state.permission_mode, state.permission_mode_source = _load_permission_mode_config()
     # The tool layer keeps no database handle, so the effective search backend is
     # pushed into it here and on every admin write (see ``web_search_limits``).

@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
 from agent.tools.background import BackgroundTasks
+from agent.tools.memory_store import MemoryBook
 from agent.tools.read_ledger import ReadLedger
 from agent.tools.task_store import TaskBoard
 from agent.tools.todo_store import TodoBoard
@@ -58,6 +59,10 @@ class ToolBindings:
     # work item with prerequisites and an owner, shared by every conversation in the
     # workspace. ``None`` keeps the board in memory for this run.
     task_board: Optional[TaskBoard] = None
+    # What earlier conversations learned (``memory_save`` / ``memory_search``). A book
+    # rather than a store: it also carries the prompt budget and whether the deployment
+    # switched memory off, and ``None`` keeps it in memory for this run (ADR 0035).
+    memory_book: Optional[MemoryBook] = None
     # Background commands this run started, so the loop can tell the model when one
     # ends (``exec_command(run_in_background=True)``). ``None`` means nobody collects
     # them - the command still runs, the model just is not notified (ADR 0034).

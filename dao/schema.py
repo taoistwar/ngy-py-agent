@@ -122,6 +122,24 @@ class _SchemaMixin:
                 )
                 """
             )
+            # Cross-session memory (ADR 0035): notes an earlier conversation kept on
+            # purpose, keyed by the slug the model chose. The prompt index is read from
+            # here on every run, which is why the name is unique - saving it again
+            # replaces the note instead of growing the library (``dao/memories.py``).
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memories (
+                    memory_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    type TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    body TEXT NOT NULL,
+                    source_task_id TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
             self._ensure_task_columns()
             self._ensure_session_columns()
             self._ensure_agent_columns()

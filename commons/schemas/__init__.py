@@ -39,6 +39,14 @@ from commons.schemas.llm import (
     ProviderListResponse,
     ProviderUpdateRequest,
 )
+from commons.schemas.memories import (
+    MemoryConfigRequest,
+    MemoryConfigResponse,
+    MemoryCreateRequest,
+    MemoryItemResponse,
+    MemoryListResponse,
+    MemoryUpdateRequest,
+)
 from commons.schemas.permissions import (
     DenyArgumentRequest,
     DenyRuleItem,
@@ -115,6 +123,12 @@ __all__ = [
     "MaxStepsConfigRequest",
     "MaxStepsConfigResponse",
     "McpServerConfig",
+    "MemoryConfigRequest",
+    "MemoryConfigResponse",
+    "MemoryCreateRequest",
+    "MemoryItemResponse",
+    "MemoryListResponse",
+    "MemoryUpdateRequest",
     "ModelItemResponse",
     "ModelListResponse",
     "ModelUpdateRequest",

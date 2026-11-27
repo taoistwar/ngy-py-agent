@@ -37,6 +37,7 @@ from routes import (
     admin_api,
     agent_api,
     llm_api,
+    memory_api,
     schedule_api,
     task_api,
     tool_api,
@@ -125,6 +126,7 @@ app.include_router(tool_api.router)
 app.include_router(task_api.router)
 app.include_router(schedule_api.router)
 app.include_router(admin_api.router)
+app.include_router(memory_api.router)
 
 
 def _configure_telemetry() -> None:

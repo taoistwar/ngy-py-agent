@@ -29,6 +29,8 @@ from agent.runtime.config import (
 )
 from agent.runtime.events import build_event, emit_debug, extract_task_result
 from agent.runtime.launcher import LaunchedTask, TaskLaunchError, launch_task
+from agent.runtime.memories import MonitorMemoryStore, memory_book_for_run
+from agent.runtime.memory_extract import extract_after_task, extract_memories
 from agent.runtime.naming import (
     default_session_name,
     is_first_task_in_session,
@@ -52,6 +54,7 @@ from agent.runtime.todos import MonitorTodoStore
 __all__ = [
     "LaunchedTask",
     "MonitorBoardStore",
+    "MonitorMemoryStore",
     "MonitorTodoStore",
     "TaskLaunchError",
     "agent_runtime_config",
@@ -63,11 +66,14 @@ __all__ = [
     "cron_matches",
     "default_session_name",
     "emit_debug",
+    "extract_after_task",
+    "extract_memories",
     "extract_task_result",
     "fire_schedule",
     "global_max_steps",
     "is_first_task_in_session",
     "launch_task",
+    "memory_book_for_run",
     "name_task_and_session",
     "next_fire_after",
     "purge_expired_tasks",

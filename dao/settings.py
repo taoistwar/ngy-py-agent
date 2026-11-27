@@ -77,6 +77,21 @@ class _SettingsMixin:
     def set_permission_mode(self, mode: str) -> None:
         self._set_setting("permission_mode", str(mode))
 
+    def get_memory_config(self) -> dict[str, Any] | None:
+        return self._get_json_setting("memory_config")
+
+    def set_memory_config(self, enabled: bool, auto_extract: bool, max_prompt_chars: int) -> None:
+        # One row for the whole feature: "is memory on" and "how much of it enters the
+        # prompt" then have one answer and one source (ADR 0035).
+        self._set_json_setting(
+            "memory_config",
+            {
+                "enabled": bool(enabled),
+                "auto_extract": bool(auto_extract),
+                "max_prompt_chars": int(max_prompt_chars),
+            },
+        )
+
     def get_skills_root(self) -> str | None:
         value = self._get_setting("skills_root")
         return None if value is None else str(value)

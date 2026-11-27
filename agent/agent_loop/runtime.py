@@ -63,6 +63,7 @@ def _build_runtime(
     should_stop: Optional[Callable[[], bool]] = None,
     todo_board: Any = None,
     task_board: Any = None,
+    memory_book: Any = None,
     background: Any = None,
 ) -> tuple[str, ToolRegistry, Any, Optional[List[Dict[str, Any]]]]:
     provider_name = canonicalize_provider(provider_name or TOOL_SCHEMA_PROVIDER)
@@ -84,6 +85,10 @@ def _build_runtime(
         # The project's task board (``task_*``); bound by the app layer for the same
         # reason, and in memory when nobody bound it.
         "task_board": task_board,
+        # What earlier conversations learned (``memory_save`` / ``memory_search``). The
+        # app layer binds the database library and the on/off switch; the loop reads the
+        # same book back from the registry to build the prompt index (ADR 0035).
+        "memory_book": memory_book,
         # The run's background ledger: ``exec_command`` records what it started here
         # and the loop reports what has ended (ADR 0034).
         "background": background,

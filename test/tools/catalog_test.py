@@ -26,6 +26,10 @@ EXPECTED_ORDER = (
     # Planning is listed first: it is what the model should reach for before a
     # multi-step task turns into unrelated tool calls.
     "todo_write",
+    # What earlier conversations learned sits next to planning, read before write: a
+    # model about to record something should see what it already recorded (ADR 0035).
+    "memory_search",
+    "memory_save",
     # The board is the same idea one level up, and listed in the order a model uses
     # it: create the nodes, sequence them, read, then claim and finish.
     "task_create",
