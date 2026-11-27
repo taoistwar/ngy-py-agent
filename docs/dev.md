@@ -333,7 +333,7 @@ npm run i18n:check
 - `collect()` 一次做三件事：判定已结束（`session is None` 或 `not running()`）→ 取 `exit_code`、`retire` 会话、从台账删除 → 带上日志末尾 `TAIL_CHARS = 600`。取不到退出码（会话已被 `write_stdin` 收走）写 `exit code unknown`，不猜。
 - 注入点是**步首**，顺序固定为 `apply_snip_compact` → `inject_background_results` → `prepare_context`：先压缩，通知才不会被当成"可挪走的旧工具结果"；`user` 消息也不在 `result_budget` 的处理范围内（那层只看 `batch_start` 之后的 `tool` 消息）。
 - 通知**绝不复用** `tool_call_id`：那次调用已经有占位结果了，重复 id 会让 transcript 非法（`task_recovery` 按 `tool_call_id` 重建对话）。同一步的多条完成合并进一条 `user` 消息，避免一次多出一条。
-- 子 agent 用父 registry（[ADR 0032](decisions/0032-subagent-tool.md)），所以子 agent 启动的后台命令记在**父**台账、由父循环通知：不丢，也不重复。
+- 子 agent 的 registry 是新建的（工具集减去 `subagent` 自身，见 [ADR 0032](decisions/0032-subagent-tool.md)），台账靠 `_build_child_registry` 显式传过去；`todo_board` 则故意不传。子 agent 启动的后台命令因此记在**父**台账、由父循环通知：不丢，也不重复。
 - 已知限制：循环不再继续（模型启动后台命令后直接结束任务）就没有通知，命令也会在任务边界被停掉；台账只在内存里，进程重启后通知随会话一起消失。
 
 ### 大输出与只读附加根

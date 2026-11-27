@@ -21,7 +21,9 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from agent.agent_loop import run_react_loop  # noqa: E402
-from agent.tools.background import BackgroundCommand, BackgroundResult  # noqa: E402
+from agent.agent_loop.subagent import _build_child_registry  # noqa: E402
+from agent.tools.background import BackgroundCommand, BackgroundResult, BackgroundTasks  # noqa: E402
+from agent.tools.registry import ToolRegistry  # noqa: E402
 
 
 class _Registry:
@@ -143,6 +145,27 @@ class LoopInjectionTest(unittest.TestCase):
         self.run_loop(ledger)
 
         self.assertEqual(ledger.collect_calls, 1)
+
+
+class SubagentLedgerTest(unittest.TestCase):
+    """A command a subagent started still belongs to the run that started it.
+
+    The child registry is a new object, so the ledger only survives the hand-off if it
+    is handed over explicitly - and the parent loop is the only thing that reports
+    finished commands (ADR 0034).
+    """
+
+    def test_the_child_registry_records_into_the_parent_ledger(self):
+        ledger = BackgroundTasks(task_id="task-background")
+
+        child = _build_child_registry(ToolRegistry(task_id="task-background", background=ledger))
+
+        self.assertIs(child.background, ledger)
+
+    def test_a_run_without_a_ledger_hands_nothing_over(self):
+        child = _build_child_registry(ToolRegistry(task_id="task-background"))
+
+        self.assertIsNone(child.background)
 
 
 if __name__ == "__main__":

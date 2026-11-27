@@ -242,6 +242,10 @@ def _build_child_registry(parent: Any) -> ToolRegistry:
         # A subagent's plan is its own: sharing the board would let a delegated task
         # replace the plan the parent conversation is working through.
         todo_board=None,
+        # The run's background ledger, on the other hand, is shared: the parent loop is
+        # the only thing that reports finished commands, so a command the subagent
+        # started has to be recorded where that loop will look (ADR 0034).
+        background=getattr(parent, "background", None),
     )
     _adopt_dynamic_tools(parent, child, names)
     return child
