@@ -20,6 +20,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (  # noqa: E4
 )
 
 from agent.agent_loop import run_react_loop  # noqa: E402
+from agent.models import EventCategory  # noqa: E402
 from agent.telemetry.config import TelemetryConfig  # noqa: E402
 from agent.telemetry.setup import init_telemetry, shutdown_telemetry  # noqa: E402
 
@@ -160,9 +161,16 @@ class LoopTracingTest(unittest.TestCase):
         by_title = {event.title: event for event in events}
         self.assertEqual(by_title["Starting ReAct loop"].data["trace_id"], format(task.context.trace_id, "032x"))
         self.assertEqual(by_title["Starting ReAct loop"].data["span_id"], format(task.context.span_id, "016x"))
-        self.assertEqual(by_title["LLM request Step 1"].data["span_id"], format(chat.context.span_id, "016x"))
+        # Both halves of a turn are titled by their step, so the category is what
+        # tells the request from the answer.
+        request = next(event for event in events if event.category is EventCategory.LLM_REQUEST)
+        self.assertEqual(request.title, "Step 1")
+        self.assertEqual(request.data["span_id"], format(chat.context.span_id, "016x"))
         self.assertEqual(by_title["echo : hi"].data["span_id"], format(tool.context.span_id, "016x"))
         self.assertEqual(by_title["echo : hi"].data["trace_id"], format(task.context.trace_id, "032x"))
+        # The result belongs to the call above it, so it only repeats the tool name.
+        result = next(event for event in events if event.category is EventCategory.TOOL_RESULT)
+        self.assertEqual(result.title, "echo")
         # The closing event is emitted after the step span ends, so it belongs to the
         # task span; the trace still leads back to the whole call tree.
         self.assertEqual(by_title["ReAct run completed"].data["span_id"], format(task.context.span_id, "016x"))

@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 from agent.models import EventCategory, ToolOutcome
 from agent.tools import process_store
 from agent.tools.background import BackgroundTasks
+from agent.tools.exec_command.description import EXEC_TOOL_NAME
 from agent.tools.exec_command.errors import ExecError
 from agent.tools.exec_command.runtime import TERMINATE_GRACE_SECONDS, exec_impl
 
@@ -114,7 +115,7 @@ def make_exec_tool(
         return ToolOutcome(
             model_text=model_text,
             event_category=EventCategory.EXEC,
-            event_title=f"Command: {title_source[:60]}",
+            event_title=f"{EXEC_TOOL_NAME} : {title_source[:60]}",
             details=details,
         )
 

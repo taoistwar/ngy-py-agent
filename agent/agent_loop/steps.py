@@ -87,7 +87,7 @@ def run_tool(
             TaskEvent(
                 task_id=task_id or "",
                 category=EventCategory.TOOL_RESULT,
-                title=f"Tool result: {name}",
+                title=name,
                 data={**tool_result_payload.model_dump(), **current_trace_ids()},
                 collapsed=True,
             ),

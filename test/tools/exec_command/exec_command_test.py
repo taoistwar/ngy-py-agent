@@ -27,6 +27,7 @@ if str(_REPO_ROOT) not in sys.path:
 from agent.models import EventCategory  # noqa: E402
 from agent.tools.exec_command import (  # noqa: E402
     EXEC_PARAMETERS,
+    EXEC_TOOL_NAME,
     build_exec_description,
     list_background,
     stop_background,
@@ -114,7 +115,9 @@ class ExecToolTest(unittest.TestCase):
         self.assertIn("hello", outcome.details["stdout"])
         self.assertFalse(outcome.details["interrupted"])
         self.assertEqual(outcome.details["cwd"], str(self.root))
-        self.assertIn("Say hello", outcome.event_title)
+        # The title names the tool, not the word "command": the row is already tagged
+        # as a command, and the tool name is what the reader can look up.
+        self.assertEqual(outcome.event_title, f"{EXEC_TOOL_NAME} : Say hello")
 
     def test_runs_in_the_workspace_root(self):
         command = "Get-Location | Select-Object -ExpandProperty Path" if self.powershell else "pwd"

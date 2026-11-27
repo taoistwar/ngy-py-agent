@@ -229,7 +229,7 @@ def run_model_turn(
             TaskEvent(
                 task_id=task_id or "",
                 category=EventCategory.LLM_REQUEST,
-                title=f"LLM request Step {step}",
+                title=f"Step {step}",
                 data={**request_data_dict, **current_trace_ids()},
                 collapsed=True,
             ),
@@ -314,7 +314,7 @@ def run_model_turn(
             TaskEvent(
                 task_id=task_id or "",
                 category=EventCategory.LLM_RESPONSE,
-                title=f"LLM response Step {step}",
+                title=f"Step {step}",
                 data={**response_data_dict, **current_trace_ids()},
                 collapsed=True,
             ),
