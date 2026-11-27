@@ -266,6 +266,197 @@
   }
 }
 
+/* The project's task board (``task_*``), under the conversation's plan. Same shell,
+   one line per work item, ordered by what needs attention: in progress, ready,
+   blocked, done. */
+.board-panel {
+  display: grid;
+  gap: 7px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-inset);
+}
+
+.board-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.board-panel-title {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.board-panel-count {
+  color: var(--text-soft);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-panel-progress {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line-soft);
+}
+
+.board-panel-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.board-panel-list {
+  display: grid;
+  gap: 5px;
+  max-height: 186px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.board-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.board-item-marker {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+.board-item-marker svg {
+  width: 10px;
+  height: 10px;
+}
+
+.board-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.board-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.board-item-subject {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-item.is-in_progress .board-item-subject {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.board-item.is-in_progress .board-item-marker {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  animation: board-item-pulse 1.8s ease-in-out infinite;
+}
+
+.board-item.is-completed .board-item-marker {
+  border-color: var(--success-border);
+  color: var(--success);
+}
+
+.board-item.is-completed .board-item-subject {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.board-item.is-blocked .board-item-subject {
+  color: var(--muted);
+}
+
+.board-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.board-item-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.board-item-chip.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.board-item-chip.is-ready {
+  border-color: var(--success-border);
+  color: var(--success);
+}
+
+.board-item-chip.is-blocked {
+  max-width: 100%;
+  overflow: hidden;
+  border-color: var(--warning-border);
+  color: var(--warning);
+  text-overflow: ellipsis;
+}
+
+.board-item-owner {
+  overflow: hidden;
+  color: var(--muted-dim);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes board-item-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-item.is-in_progress .board-item-marker {
+    animation: none;
+  }
+}
+
 /* Detail tabs read as a segmented control, not browser tabs. */
 .tab-strip {
   display: flex;

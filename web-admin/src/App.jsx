@@ -73,6 +73,7 @@ import PermissionPrompt from "./components/PermissionPrompt"
 import QuestionPrompt from "./components/QuestionPrompt"
 import RevertChangesDialog from "./components/RevertChangesDialog"
 import SessionTabs from "./components/SessionTabs"
+import TaskBoardPanel from "./components/TaskBoardPanel"
 import TaskChangesDialog from "./components/TaskChangesDialog"
 import TaskPromptPanel from "./components/TaskPromptPanel"
 import TaskResultPanel from "./components/TaskResultPanel"
@@ -905,6 +906,7 @@ function TaskDetailPage({
   onLoadMore,
   onChangesReverted,
   todos,
+  board,
   translate,
   locale,
 }) {
@@ -928,10 +930,12 @@ function TaskDetailPage({
           </button>
         </div>
       </div>
-      {/* Above both tabs: a running task opens its log, and the plan is what that
-          log is executing. Rendered from the task detail response, which is polled
-          every second while a task is selected. */}
+      {/* Above both tabs: a running task opens its log, and these are what that log
+          is executing - the conversation's steps first, then the project's board.
+          Both come from the task detail response, which is polled every second while
+          a task is selected. */}
       <TodoPanel todos={todos} translate={translate} />
+      <TaskBoardPanel board={board} translate={translate} />
       <div className="panel-body">
         {taskTab === "detail" ? (
           // Remounted per task: the Monaco editors only read ``defaultValue`` once,
@@ -2633,6 +2637,7 @@ export default function App() {
                 taskTab={taskTab}
                 setTaskTab={setTaskTab}
                 todos={selectedTask?.todos}
+                board={selectedTask?.board}
                 events={events}
                 hasMoreEvents={hasMoreEvents}
                 isLoadingEvents={isLoadingEvents}
