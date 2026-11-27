@@ -125,10 +125,55 @@ class _SchemaMixin:
             self._ensure_task_columns()
             self._ensure_session_columns()
             self._ensure_agent_columns()
-            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_events_task_id_id ON events(task_id, id)")
+            # Scheduled tasks: the definition ("0 9 * * *" + prompt) and one row per
+            # attempt, pointing at the session and task that attempt created. The
+            # task keeps its own status, so a run row never has to be kept in sync.
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schedules (
+                    schedule_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL DEFAULT '',
+                    cron TEXT NOT NULL,
+                    prompt TEXT NOT NULL,
+                    agent_id TEXT NOT NULL DEFAULT 'build',
+                    model_id TEXT,
+                    workspace_id TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    recurring INTEGER NOT NULL DEFAULT 1,
+                    last_fired TEXT,
+                    last_run_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schedule_runs (
+                    run_id TEXT PRIMARY KEY,
+                    schedule_id TEXT NOT NULL,
+                    trigger TEXT NOT NULL,
+                    session_id TEXT NOT NULL DEFAULT '',
+                    task_id TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL,
+                    error TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_task_id_id ON events(task_id, id)"
+            )
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at)")
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id)")
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_workspace_id ON sessions(workspace_id)")
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_schedule_runs_schedule "
+                "ON schedule_runs(schedule_id, created_at)"
+            )
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_schedule_runs_task ON schedule_runs(task_id)"
+            )
             self._conn.commit()
 
         # Outside the block above: the LLM store takes the same lock itself, and the

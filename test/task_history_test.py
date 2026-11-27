@@ -22,6 +22,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from agent.runtime import launcher  # noqa: E402
 from commons import state  # noqa: E402
 from commons.schemas import RunTaskRequest  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
@@ -54,7 +55,9 @@ class TaskHistoryApiTest(unittest.TestCase):
             recorded.update(kwargs)
             recorded_in_thread.set()
 
-        with patch.object(task_api, "run_task", fake_run_task):
+        # The worker thread is started by the launcher now: the route delegates the
+        # whole create-and-run step to it.
+        with patch.object(launcher, "run_task", fake_run_task):
             response = asyncio.run(
                 task_api.create_task(
                     RunTaskRequest(

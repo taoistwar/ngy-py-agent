@@ -16,6 +16,7 @@ from dao.base import TASK_DB_PATH, _TaskStoreBase
 from dao.board_tasks import _BoardTaskMixin
 from dao.forks import _ForkMixin
 from dao.llm import LlmStore
+from dao.scheduled import _ScheduleMixin
 from dao.schema import _SchemaMixin
 from dao.sessions import _SessionMixin
 from dao.settings import _SettingsMixin
@@ -33,6 +34,7 @@ class _SqliteTaskStore(
     _BoardTaskMixin,
     _TaskMixin,
     _TodoMixin,
+    _ScheduleMixin,
 ):
     """SQLite-based task and event persistence."""
 

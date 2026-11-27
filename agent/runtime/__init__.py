@@ -28,6 +28,7 @@ from agent.runtime.config import (
     resolve_skills_root,
 )
 from agent.runtime.events import build_event, emit_debug, extract_task_result
+from agent.runtime.launcher import LaunchedTask, TaskLaunchError, launch_task
 from agent.runtime.naming import (
     default_session_name,
     is_first_task_in_session,
@@ -37,23 +38,38 @@ from agent.runtime.naming import (
 )
 from agent.runtime.purge import purge_expired_tasks, purge_expired_tasks_with_log
 from agent.runtime.runner import run_task
+from agent.runtime.scheduling import (
+    cron_matches,
+    fire_schedule,
+    next_fire_after,
+    start_scheduler,
+    stop_scheduler,
+    tick,
+    validate_cron,
+)
 from agent.runtime.todos import MonitorTodoStore
 
 __all__ = [
+    "LaunchedTask",
     "MonitorBoardStore",
     "MonitorTodoStore",
+    "TaskLaunchError",
     "agent_runtime_config",
     "board_for_run",
     "board_view",
     "build_event",
     "build_provider_config",
     "checkpoint_store_for_task",
+    "cron_matches",
     "default_session_name",
     "emit_debug",
     "extract_task_result",
+    "fire_schedule",
     "global_max_steps",
     "is_first_task_in_session",
+    "launch_task",
     "name_task_and_session",
+    "next_fire_after",
     "purge_expired_tasks",
     "purge_expired_tasks_with_log",
     "resolve_agents_md_settings",
@@ -63,6 +79,10 @@ __all__ = [
     "resolve_session_base_dir",
     "resolve_skills_root",
     "run_task",
+    "start_scheduler",
+    "stop_scheduler",
+    "tick",
     "update_session_title",
     "update_task_name",
+    "validate_cron",
 ]

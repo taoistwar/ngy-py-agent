@@ -21,7 +21,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from uvicorn import run as uvicorn_run
 
-from agent.runtime import purge_expired_tasks_with_log
+from agent.runtime import (
+    purge_expired_tasks_with_log,
+    start_scheduler,
+    stop_scheduler,
+)
 from agent.telemetry import (
     active_provider,
     init_telemetry,
@@ -29,7 +33,15 @@ from agent.telemetry import (
     shutdown_telemetry,
 )
 from commons import state
-from routes import admin_api, agent_api, llm_api, task_api, tool_api, workspace_api
+from routes import (
+    admin_api,
+    agent_api,
+    llm_api,
+    schedule_api,
+    task_api,
+    tool_api,
+    workspace_api,
+)
 from routes.mcp_api import router as mcp_router
 from task_recovery import resume_interrupted_tasks
 
@@ -82,7 +94,14 @@ def _resume_interrupted_tasks() -> None:
 async def _lifespan(_app: FastAPI):
     _load_runtime_config()
     _resume_interrupted_tasks()
-    yield
+    # The clock lives with the process, not with a request: started once here and
+    # stopped on the way out, so a reload never leaves two threads firing the same
+    # schedule.
+    start_scheduler()
+    try:
+        yield
+    finally:
+        stop_scheduler()
 
 
 app = FastAPI(
@@ -104,6 +123,7 @@ app.include_router(llm_api.router)
 app.include_router(agent_api.router)
 app.include_router(tool_api.router)
 app.include_router(task_api.router)
+app.include_router(schedule_api.router)
 app.include_router(admin_api.router)
 
 

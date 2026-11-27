@@ -11,27 +11,22 @@ from __future__ import annotations
 
 import asyncio
 import json
-import threading
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
-from agent.history import build_session_history
 from agent.models import EventCategory, TaskStatus
-from agent.modes import DEFAULT_MODE, VALID_MODES
+from agent.modes import DEFAULT_MODE
 from agent.runtime import (
-    agent_runtime_config,
     board_view,
     build_event,
     checkpoint_store_for_task,
     extract_task_result,
     purge_expired_tasks_with_log,
-    resolve_session_base_dir,
-    run_task,
 )
-from agent.telemetry import end_task_span, start_task_span
+from agent.runtime.launcher import TaskLaunchError, launch_task
 from agent.tools.permissions import SCOPES
 from agent.tools.user_question import STATUS_ANSWERED, validate_answers
 from agent.usage import task_usage_summary
@@ -58,82 +53,27 @@ router = APIRouter()
 @router.post("/api/tasks", response_model=RunTaskResponse)
 async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
     purge_expired_tasks_with_log("Creating new API task")
-    agent_id = (payload.agent_id or "").strip() or (
-        payload.mode if payload.mode in VALID_MODES else DEFAULT_MODE
-    )
-    agent = state.monitor_store.get_agent(agent_id)
-    if agent is None:
-        agent_id = payload.mode if payload.mode in VALID_MODES else DEFAULT_MODE
-        agent = state.monitor_store.get_agent(agent_id)
-    # A model names what to ask for; the provider record it points at says where and
-    # how often (ADR 0014). Both are read before the task exists, so a broken endpoint
-    # reference fails the request instead of a task that has already started.
-    model = state.monitor_store.llm.get_model(payload.model_id) if payload.model_id else None
-    if payload.model_id and model is None:
-        raise HTTPException(status_code=404, detail="Model not found.")
-    provider_record = (
-        state.monitor_store.llm.get_provider(model["provider_id"])
-        if model and model.get("provider_id")
-        else None
-    )
-    session_id = payload.session_id
-    if session_id and state.monitor_store.get_session(session_id) is None:
-        raise HTTPException(status_code=404, detail="Session not found.")
-    if not session_id:
-        session_id = state.monitor_store.ensure_default_session()
-
-    provider = str(
-        (provider_record or {}).get("protocol")
-        or (model or {}).get("protocol")
-        or payload.provider
-        or "openai-compatible"
-    )
-    # Read the transcript before the task exists, so the task itself can never be
-    # part of its own context. A task in the same session continues that conversation.
-    history_messages = build_session_history(session_id)
-    task_id = state.monitor_store.create_task(
-        query=payload.query,
-        provider=provider,
-        session_id=session_id,
-        model_id=payload.model_id,
-        mode=agent_id,
-    )
-
-    request = payload.model_copy(update={"session_id": session_id, "mode": agent_id})
-    agent_config = agent_runtime_config(agent)
-    base_dir = resolve_session_base_dir(session_id)
-    stop_event = state.register_task_stop(task_id)
-    # Started on the request thread so the task's spans join the request's trace.
-    # The worker attaches it: ``contextvars`` do not cross ``threading.Thread``.
-    otel_handle = start_task_span(
-        task_id,
-        {
-            "task.mode": agent_id,
-            "task.provider": provider,
-            "task.model": (model or {}).get("name"),
-        },
-    )
-    worker = threading.Thread(
-        target=run_task,
-        args=(task_id, request, model, provider_record, base_dir, agent_config, stop_event),
-        kwargs={"otel_handle": otel_handle, "history_messages": history_messages},
-        daemon=True,
-    )
+    # The resolution and the thread live in ``agent.runtime.launcher``: the scheduler
+    # starts tasks the same way, and two copies of this would drift.
     try:
-        worker.start()
-    except Exception:
-        # A thread that never ran would leave its span open for the process lifetime.
-        end_task_span(otel_handle)
-        raise
-
-    trace = state.monitor_store.get_task(task_id)
-    if trace is None:
-        raise HTTPException(status_code=500, detail="Failed to read created task record.")
+        launched = launch_task(
+            query=payload.query,
+            session_id=payload.session_id,
+            model_id=payload.model_id,
+            provider=payload.provider,
+            agent_id=payload.agent_id,
+            mode=payload.mode,
+            stream=payload.stream,
+            permission_mode=payload.permission_mode,
+            max_steps=payload.max_steps,
+        )
+    except TaskLaunchError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return RunTaskResponse(
-        task_id=task_id,
-        status=str(trace["status"]),
-        mode=trace["mode"],
-        created_at=trace["created_at"],
+        task_id=launched.task_id,
+        status=launched.status,
+        mode=launched.mode,
+        created_at=launched.created_at,
     )
 
 
