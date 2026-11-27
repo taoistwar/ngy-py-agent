@@ -1,0 +1,282 @@
+/* Scheduled tasks: the schedule card, its form, the run history and "running now". */
+
+.schedule-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.schedule-titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------ schedule card */
+
+.schedule-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.schedule-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--row-bg);
+}
+
+/* The selected card owns the run history below, so it has to read as selected. */
+.schedule-card.active {
+  border-color: var(--accent-border);
+  background: var(--surface-2);
+  box-shadow: 0 0 0 1px var(--accent-soft) inset;
+}
+
+.schedule-card-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.schedule-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.schedule-card-head strong {
+  font-size: 14px;
+  color: var(--text-strong);
+}
+
+.schedule-cron {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  padding: 1px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface-code);
+  color: var(--accent-text);
+}
+
+.schedule-prompt {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 320px;
+}
+
+/* The three states a row can be in, in the badge language the other panels use. */
+.schedule-badge-on {
+  border-color: var(--success-border);
+  color: var(--success);
+}
+
+.schedule-badge-off {
+  border-color: var(--warning-border);
+  color: var(--warning);
+}
+
+.schedule-badge-running {
+  border-color: var(--info-border);
+  color: var(--info);
+}
+
+/* -------------------------------------------------------------------------- form */
+
+.schedule-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: var(--surface-inset);
+}
+
+.schedule-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.schedule-form-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.schedule-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.schedule-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.schedule-form input[type="text"],
+.schedule-form select,
+.schedule-form textarea {
+  width: 100%;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 7px 9px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.schedule-cron-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.schedule-cron-hint {
+  margin-top: -4px;
+}
+
+.schedule-prompt-input {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.schedule-form-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+/* A checkbox row, not the stacked field every other label in this form is. */
+.schedule-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.schedule-form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ------------------------------------------------------------------ run history */
+
+.schedule-runs-wrap {
+  overflow-x: auto;
+}
+
+.schedule-runs {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.schedule-runs th {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.schedule-runs td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+
+.schedule-run-time {
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.schedule-run-task {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-run-error {
+  color: var(--danger);
+}
+
+/* ----------------------------------------------------------------- running now */
+
+.schedule-running-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-running-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--row-bg);
+}
+
+.schedule-running-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.schedule-running-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.schedule-running-query {
+  font-size: 12px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

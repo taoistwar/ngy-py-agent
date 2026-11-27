@@ -593,4 +593,55 @@ export async function updateWebFetchConfig(payload) {
   })
 }
 
+// Scheduled tasks. A schedule names a cron expression and the prompt every run
+// sends; each run opens its own session before it creates the task.
+export async function fetchSchedules() {
+  const data = await requestJson(`${API_BASE}/api/schedules`)
+  return data.schedules ?? []
+}
 
+// Runs whose task is still running - or waiting for an answer - right now.
+export async function fetchRunningSchedules() {
+  const data = await requestJson(`${API_BASE}/api/schedules/running`)
+  return data.tasks ?? []
+}
+
+export async function createSchedule(payload) {
+  return requestJson(`${API_BASE}/api/schedules`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateSchedule(scheduleId, payload) {
+  return requestJson(`${API_BASE}/api/schedules/${scheduleId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteSchedule(scheduleId) {
+  return requestJson(`${API_BASE}/api/schedules/${scheduleId}`, {
+    method: "DELETE",
+  })
+}
+
+// Fire a schedule now, paused or not. It goes through the same path as a timed run,
+// so the attempt shows up in the history like any other.
+export async function runScheduleNow(scheduleId) {
+  return requestJson(`${API_BASE}/api/schedules/${scheduleId}/run`, {
+    method: "POST",
+  })
+}
+
+export async function fetchScheduleRuns(scheduleId, limit = 50) {
+  const query = new URLSearchParams({ limit: String(limit) }).toString()
+  const data = await requestJson(`${API_BASE}/api/schedules/${scheduleId}/runs?${query}`)
+  return data.runs ?? []
+}

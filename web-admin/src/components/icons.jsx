@@ -325,6 +325,25 @@ export function GlobeIcon() {
   )
 }
 
+// The scheduled-task entry: a clock, because the page is about *when* work starts.
+export function ClockIcon() {
+  return (
+    <Icon>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </Icon>
+  )
+}
+
+// "Run now": the same play glyph the event log uses for a task that started.
+export function PlayIcon() {
+  return (
+    <Icon>
+      <polygon points="7 4 20 12 7 20 7 4" />
+    </Icon>
+  )
+}
+
 export function SidebarIcon({ collapsed = false }) {
   return (
     <Icon>

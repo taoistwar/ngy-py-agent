@@ -99,6 +99,7 @@ import AppSidebar from "./components/shell/AppSidebar"
 import AppTopbar from "./components/shell/AppTopbar"
 import { DEFAULT_MENU } from "./components/shell/navigation"
 import OverviewPage from "./pages/OverviewPage"
+import ScheduledTasksPage from "./pages/ScheduledTasksPage"
 import WorkspaceManager from "./components/admin/WorkspaceManager"
 import AgentPicker from "./components/AgentPicker"
 import { AgentIcon, agentIconName } from "./components/agentIcons"
@@ -1391,6 +1392,29 @@ export default function App() {
     [refreshSessions, selectSession, sessions, translate]
   )
 
+  // Opening a scheduled run lands in the console on the conversation that run opened:
+  // every run has a session of its own, so this is a session switch plus a selection.
+  const openScheduleRun = useCallback(
+    async (sessionId, taskId) => {
+      handleNavigate("tasks")
+      setError("")
+      try {
+        // The session may have been created seconds ago by the scheduler, so the
+        // sidebar list is refreshed before it is searched for the workspace.
+        const list = await refreshSessions()
+        if (sessionId) {
+          const session = list.find((item) => item.session_id === sessionId)
+          setActiveWorkspaceId(session?.workspace_id || "")
+          await selectSession(sessionId)
+        }
+        if (taskId) selectTask(taskId)
+      } catch (openError) {
+        setError(openError?.message || translate("errorLoadFailed"))
+      }
+    },
+    [handleNavigate, refreshSessions, selectSession, selectTask, translate]
+  )
+
   const createNewSession = useCallback(
     async (workspaceId = null) => {
       const target = workspaceId === null ? activeWorkspaceId || "" : workspaceId || ""
@@ -2653,6 +2677,14 @@ export default function App() {
               />
             </section>
           </div>
+        ) : activeMenu === "schedules" ? (
+          <ScheduledTasksPage
+            agents={agents}
+            models={models}
+            workspaces={workspaces}
+            onOpenRun={openScheduleRun}
+            translate={translate}
+          />
         ) : activeMenu === "agents" ? (
           <AgentManager
             agents={agents}

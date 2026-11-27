@@ -2,6 +2,7 @@
 // renders this tree; the top bar derives its breadcrumb from the same data.
 import {
   BotIcon,
+  ClockIcon,
   CpuIcon,
   FolderIcon,
   OverviewIcon,
@@ -24,6 +25,7 @@ export const NAV_GROUPS = [
     items: [
       { key: "overview", labelKey: "menuOverview", icon: "overview" },
       { key: "tasks", labelKey: "menuTasks", icon: "tasks" },
+      { key: "schedules", labelKey: "menuSchedules", icon: "clock" },
       { key: "workspaces", labelKey: "menuWorkspaces", icon: "folder" },
     ],
   },
@@ -59,6 +61,7 @@ export const NAV_GROUPS = [
 export const NAV_ICONS = {
   overview: OverviewIcon,
   tasks: TasksIcon,
+  clock: ClockIcon,
   folder: FolderIcon,
   bot: BotIcon,
   wrench: WrenchIcon,
