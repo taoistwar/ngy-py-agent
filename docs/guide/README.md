@@ -20,6 +20,7 @@
 - [工具：`ask_user_question`](tool-ask-user-question.md)
 - [工具：`todo_write`](tool-todo-write.md)：按会话维护的任务清单，前端实时同步。
 - [任务板：`task_create` / `task_update` / `task_list` / `task_get` / `task_claim` / `task_complete`](tool-task-board.md)：项目级任务图，带依赖与认领。
+- [记忆（memory）](memory.md)：跨会话留下的笔记，索引进提示词、正文按需读取，管理页可改可删。
 - [工具：`computer_observe` / `computer_control`](tool-computer.md)
 - [工具黑名单（denylist）](tool-denylist.md)
 

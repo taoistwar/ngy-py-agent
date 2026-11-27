@@ -12,6 +12,9 @@
 | **未绑定会话** | 没有 `base_dir` 的会话。此时只剩下全局 `file_access` 策略生效，文件工具默认可以访问工作空间之外；**相对路径以"会话默认目录"为起点**。 | `agent/tools/file_access.py` |
 | **会话默认目录（`default_workspace`）** | 未绑定会话里相对路径的起点：`<程序启动路径>/data/default_workspace`（`DEFAULT_WORKSPACE_DIR` 可覆盖）。**是基目录不是边界**——`..` 仍可离开，全局策略照旧生效。写入按需创建它，读取不创建。 | [ADR 0007](decisions/0007-default-workspace.md) |
 | **`AGENTS.md`** | 工作区自带的项目规则文件（[agents.md](https://agents.md/) 格式：纯 Markdown、无 schema）。根目录那份全文进入系统提示词，子目录的只列成索引（最近者优先）；仅已绑定工作区读取。 | `agent/agents_md.py`、[ADR 0022](decisions/0022-agents-md.md) |
+| **记忆（memory）** | 跨会话知识：智能体在早先对话里主动留下的笔记。一行一条，`name`（slug）即身份，**同名保存 = 替换**；`type` 是 `user` / `feedback` / `project` / `reference`。**只有索引**（类型 + 名字 + 一行描述）进入系统提示词，正文靠 `memory_search` 按需读。与**任务板**（工作项）、**todo**（单次对话的计划）不同：它记的是"学到的事"。整机共享，不按工作区分。 | `dao/memories.py`、`agent/tools/memory_notes.py`、[ADR 0035](decisions/0035-memory.md) |
+| **记忆提取（memory extraction）** | 任务结束后在**独立线程**里读一次「用户请求 + 最终答复」，让模型给出至多 3 条候选；候选与 `memory_save` 走同一套校验（`parse_record` / `should_store`），`scope=current_task` 或带"本次会话"措辞的一律不落库。失败只丢这一次笔记，不影响任务。`auto_extract` 可单独关。 | `agent/runtime/memory_extract.py`、[ADR 0035](decisions/0035-memory.md) |
+| **`MemoryBook` / `MemoryStore`** | 记忆的运行期句柄与持久化协议。`MemoryBook` 带 `enabled`（部署开关）、`max_prompt_chars`（索引预算）、`task_id`（写进 `source_task_id`）；`enabled=False` 时两个工具如实回答"已禁用"而不是被摘掉。`agent/tools` 不许 import `dao`，所以数据库适配器在 `agent/runtime/memories.py`。 | `agent/tools/memory_store.py`、`agent/runtime/memories.py` |
 | **token 预算** | 单次工具输出允许占用的 token 上限，超限即报错而非截断。`read_file` 依赖它防止撑爆上下文。 | `agent/tools/token_budget.py` |
 | **行号前缀** | `read_file` 输出中每行开头的 `N<分隔符>`，分隔符是**制表符**。模型看不到真实行号，因此永远带前缀、不提供关闭开关。 | `agent/tools/read_file/lines.py` |
 | **provider** | 一个请求去处：协议（openai / anthropic / anthropic_compatible / gemini）+ `base_url` + `api_key` + `rpm_limit`。Web Admin「Provider 管理」页维护，`/api/providers` 读写。删除前必须先清空它下面的模型。 | [ADR 0014](decisions/0014-provider-model-split.md) |

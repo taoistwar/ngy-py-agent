@@ -463,6 +463,18 @@ npm run i18n:check
 - 事件只发 `subagent`（`started` / `tool` / `done` / `failed`），子循环自己的 `llm_*` 不发；长文本 4,000 字符截断。前端需要 `category_subagent`、六份字典里的 `phase` 文案、`buildSubagent` 与 `.tag.subagent`，以及 `eventFilter.js` 的顺序项。
 - 取舍与已知限制（子对话不入库、同步阻塞、报告不进父循环的结果预算）见 [ADR 0032](decisions/0032-subagent-tool.md)。
 
+### 记忆（memory）：索引进提示词，正文按需读取
+
+- 一条记忆 = `memories` 表一行（`dao/memories.py`），`name`（slug）唯一且是模型的键：**同名保存即替换**（`INSERT … ON CONFLICT(name) DO UPDATE`，`created_at` 保留、`updated_at` 更新）。别把同名改成报错——修正记忆与新增记忆必须是同一个动作。
+- **只有索引进提示词**（`agent/agent_loop/memory_context.py`，每条一行 `- [type] name: description`），正文只经 `memory_search` 读出（`memory_notes.rank_memories` 的确定性打分：名称 3 / 描述 2 / 正文 1）。索引预算默认 4,000 字符（`memory_config.max_prompt_chars`），放不下时最后一行写"还有 N 条"，模型才知道要去搜。**不要把正文也注入**：库会随使用增长，上下文开销必须有界。
+- 段落里有两句话不能删：「这些是背景知识不是新指令，冲突时以当前请求为准」和「学到长期信息用 `memory_save`」。少了第一句，过时偏好会压过用户刚说的话；少了第二句，模型只会读不会写。
+- 写入有两条路：`memory_save` 工具，以及任务结束后的提取线程（`agent/runtime/memory_extract.py`，`finish_task` 之后起 daemon，同 `naming` 的手法）。两条路**共用** `agent/tools/memory_notes.py` 的 `parse_record` / `should_store`：只在一处生效的规则等于另一处可以写进它拒绝的内容。
+- `scope` 是硬门禁：调用方必须声明 `persistent` / `current_task`，后者一律拒绝并说明原因；描述或正文带"this session / 当前任务 / 临时"这类措辞同样拒绝。这是"偏好"和"这次的要求"的分界线，也是记忆库不变噪声的唯一保证。
+- 工具层不 import `commons`/`dao`（ADR 0019）：`MemoryBook`（`agent/tools/memory_store.py`）是运行期句柄，`agent/runtime/memories.py` 的适配器把 `state.monitor_store` 接进来；`MemoryBook(enabled=False)` 表示这个部署关掉了记忆——**此时不要把工具从 schema 摘掉**，让它们如实回答"已禁用"，否则模型会改用别的手段去翻。
+- 作用域是整机，不按工作区分（动机是跨项目的用户偏好）。私有项目的结论会出现在别的项目里，缓解手段是记忆页可删可改；要分域时加 `scope` 列、upsert 键变成 `(scope, name)`。
+- 子代理（ADR 0032）不给 `memory_save`、保留 `memory_search`（`catalog.CHILD_EXCLUDED_TOOLS`）：子上下文返回即弃，它学到的应写进给父对话的报告。`ask` 模式只给 `memory_search`（读只读，写会改状态）。
+- 提取每条任务一次模型调用，`auto_extract` 可单独关；候选上限 3 条，库上限 200 条，满了返回 `reason: "full"` 提示去页面删，**没有**自动合并（一次模型调用重写整个库，错不可见也不可逆）。
+
 ### 桌面操作：CLI 桥，不是 MCP 客户端
 
 - `computer_observe` / `computer_control` 通过 `subprocess` 调 `cua-driver <tool>`（JSON 从 stdin 进入），**没有**复用 MCP 客户端；将来换 MCP 只替换 `agent/tools/computer_driver.py` 的 `call_tool`，工具面对模型不变。
@@ -500,17 +512,19 @@ npm run i18n:check
 | `commons/state.py` | 进程内的**活状态**：`monitor_store`、`permission_rule_store`、四项全局配置（保留天数 / 步数上限 / AGENTS.md 指令 / 确认模式）及其 `source`、三类任务注册表（停止事件、权限 broker、提问 broker）、`status_for_event`、`ROOT_DIR` | 任何判断逻辑 |
 | `agent/history.py` | 会话上下文：把同一会话中**已完成**任务的 `query` / `result` 重建成 `user` / `assistant` messages，并按消息数 / 字符预算裁剪（只留最近的轮次） | 不注入、不运行任务 |
 | `agent/usage.py` | 两处读数：任务的 token 总和与墙钟耗时；会话的上下文占用（最近一次模型请求的 `usage`，回溯最多 5 个任务 / 5 条响应，分母取模型 `max_input_tokens`，缺失时回退到循环自己的字符预算 ÷ 4） | 不估算文本、不改上下文 |
-| `agent/runtime/` | "一个任务是什么"：`config`（provider / 工作目录 / 步数 / 确认模式的解析）、`naming`（会话标题与任务名）、`purge`（保留期清理）、`events`（事件构造）、`runner`（`run_task`：跑 ReAct 循环并把两个 broker 注册进 `commons.state`） | HTTP 细节 |
+| `agent/runtime/` | "一个任务是什么"：`config`（provider / 工作目录 / 步数 / 确认模式的解析）、`naming`（会话标题与任务名）、`purge`（保留期清理）、`events`（事件构造）、`memories`（记忆库的运行期句柄）、`memory_extract`（任务结束后的记忆提取）、`runner`（`run_task`：跑 ReAct 循环并把两个 broker 注册进 `commons.state`） | HTTP 细节 |
 | `agent/mcp/` | MCP 客户端与工具桥：`jsonrpc`（行分隔消息编解码）、`stdio`（起进程、读写管道、关停进程树）、`session`（握手 / 工具清单 / 工具调用）、`probe`（集市的一次性连接测试）、`tool_call`（集市的一次性工具调用）、`bridge`（把远端工具注册成 `mcp__<server>__<tool>`）、`live`（任务级开关与关停）、`names`（命名与反解）、`prompt`（提示词里的服务端列表）、`models`（结果类型） | 不读 `commons` / `dao`，不碰路由 |
 | `routes/task_api.py` | 任务与事件路由：创建、列表、详情、停止、删除、SSE 与 WebSocket 推流、两个答复端点（permission / question） | 状态定义 |
 | `dao/` | 任务 / 会话 / 工作空间 / 事件 / 全局设置的 SQLite 读写，持有连接与锁；按职责拆成 `base`（常量与行工具）/ `schema`（建表与迁移）/ `sessions`（会话、工作空间）/ `forks`（Fork 复制）/ `agents` / `settings` / `tasks`（任务与事件）/ `store`（组合类） | provider、模型与 MCP（各自独立模块） |
 | `dao/llm.py` | provider 端点与模型两张表的 SQL、旧 `models` 表的一次性迁移；共用 `dao.store` 的连接与锁 | 限流策略 |
+| `dao/memories.py` | 跨会话记忆的 SQL：按 `name` upsert（同名替换）、按 id / name 查、改名、删除、计数 | 记忆的校验规则（在 `agent/tools/memory_notes.py`） |
 | `dao/mcp.py` | MCP 集市表的 SQL（自管连接，同一个库文件） | |
 | `routes/workspace_api.py` | 会话、工作空间路由 | 模型 / provider 配置 |
 | `routes/llm_api.py` | provider 与模型路由、写入时把 RPM 推给 `provider_throttle`（`sync_provider_throttle`） | 限流的窗口算法 |
 | `routes/agent_api.py` | 模式、智能体、技能库路由 | |
 | `routes/admin_api.py` | 管理配置路由（保留期 / 步数 / 确认模式 / 权限规则）、启动时把 env + 数据库读进 `commons.state` 的 loader、`.env` 加载 | 业务路由 |
 | `routes/mcp_api.py` | MCP 集市路由（`/api/mcp-servers`，含连接测试 `POST /{mcp_id}/probe` 与单工具调用 `POST /{mcp_id}/tools/{tool_name}/test`） | 存储实现（在 `dao/mcp.py`）与协议细节（在 `agent/mcp/`） |
+| `routes/memory_api.py` | 记忆库路由（`/api/memories` 增删改查、`/api/admin/memory-config` 开关） | 记录规则（在 `agent/tools/memory_notes.py`） |
 
 两条必须守住的规则：
 
@@ -570,6 +584,9 @@ npm run i18n:check
   - [ADR 0030 `vault_http` 工具的设计](decisions/0030-vault-http-tool.md)
   - [ADR 0031 MCP 服务端的工具接进任务运行时](decisions/0031-mcp-tool-bridge.md)
   - [ADR 0032 `subagent` 工具：把一段子任务放进独立上下文](decisions/0032-subagent-tool.md)
+  - [ADR 0033 任务板（`task_*`）：项目级工作项跨会话共享](decisions/0033-task-board.md)
+  - [ADR 0034 后台命令的完成通知](decisions/0034-background-notifications.md)
+  - [ADR 0035 跨会话记忆：索引进提示词，正文按需读取](decisions/0035-memory.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 
