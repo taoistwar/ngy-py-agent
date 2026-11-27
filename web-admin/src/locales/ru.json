@@ -561,6 +561,7 @@
   "toolCategoryComputer": "Управление рабочим столом",
   "toolCategoryCompute": "Вычисления и код",
   "toolCategoryInteraction": "Взаимодействие с пользователем",
+  "toolCategoryTask": "Управление задачами",
   "toolCategoryOther": "Прочее",
   "toolManagerHint": "Все инструменты, которые может вызвать агент, с подтверждением и схемой параметров.",
   "toolListRefresh": "Обновить инструменты",

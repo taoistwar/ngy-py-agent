@@ -2,7 +2,7 @@
 
 from agent.tools.bindings import ToolBindings
 from agent.tools.permissions import PERMISSION_NONE
-from agent.tools.spec import CATEGORY_OTHER, ToolSpec
+from agent.tools.spec import CATEGORY_TASK, ToolSpec
 from agent.tools.task_board_i18n import CLAIM_TEXTS
 from agent.tools.task_claim import (
     TASK_CLAIM_DESCRIPTION,
@@ -22,6 +22,6 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         description=TASK_CLAIM_DESCRIPTION,
         parameters=TASK_CLAIM_PARAMETERS,
         permission=PERMISSION_NONE,
-        category=CATEGORY_OTHER,
+        category=CATEGORY_TASK,
         description_i18n=CLAIM_TEXTS,
     )

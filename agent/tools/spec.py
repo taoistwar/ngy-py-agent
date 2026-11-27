@@ -22,6 +22,10 @@ CATEGORY_SHELL = "shell"
 CATEGORY_COMPUTER = "computer"
 CATEGORY_COMPUTE = "compute"
 CATEGORY_INTERACTION = "interaction"
+# Planning and coordination: the session's checklist (``todo_write``) and the
+# project's task board (``task_*``). Grouped apart from ``other`` because they are a
+# coherent set the reader looks for together, not the leftovers.
+CATEGORY_TASK = "task"
 CATEGORY_OTHER = "other"
 
 CATEGORY_KINDS = (
@@ -31,6 +35,7 @@ CATEGORY_KINDS = (
     CATEGORY_COMPUTER,
     CATEGORY_COMPUTE,
     CATEGORY_INTERACTION,
+    CATEGORY_TASK,
     CATEGORY_OTHER,
 )
 

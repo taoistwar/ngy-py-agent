@@ -114,6 +114,25 @@ class ToolApiTest(unittest.TestCase):
         for name, item in tools.items():
             self.assertIn(item["category"], CATEGORY_KINDS, name)
 
+    def test_the_planning_tools_share_the_task_group(self):
+        # The admin page renders one section per category, and these seven are one
+        # idea (this conversation's checklist, the project's board): listing them
+        # under "other" would hide the set among the leftovers.
+        tools = self.fetch_tools()
+        planning = (
+            "todo_write",
+            "task_create",
+            "task_update",
+            "task_list",
+            "task_get",
+            "task_claim",
+            "task_complete",
+        )
+
+        for name in planning:
+            self.assertEqual(tools[name]["category"], "task", name)
+        self.assertNotEqual(tools["read_file"]["category"], "task")
+
     # --------------------------------------------------------------- languages
 
     def test_ships_chinese_text_beside_the_english(self):

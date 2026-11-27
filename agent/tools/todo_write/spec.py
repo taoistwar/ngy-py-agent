@@ -7,7 +7,7 @@ steps" would be a question with no stakes.
 
 from agent.tools.bindings import ToolBindings
 from agent.tools.permissions import PERMISSION_NONE
-from agent.tools.spec import CATEGORY_OTHER, ToolSpec, localized_texts
+from agent.tools.spec import CATEGORY_TASK, ToolSpec, localized_texts
 from agent.tools.todo_write import (
     TODO_WRITE_DESCRIPTION,
     TODO_WRITE_PARAMETERS,
@@ -27,6 +27,6 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         description=TODO_WRITE_DESCRIPTION,
         parameters=TODO_WRITE_PARAMETERS,
         permission=PERMISSION_NONE,
-        category=CATEGORY_OTHER,
+        category=CATEGORY_TASK,
         description_i18n=localized_texts(zh_cn=ZH_CN, zh_tw=ZH_TW, fr=FR, de=DE, ru=RU),
     )

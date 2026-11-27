@@ -2,7 +2,7 @@
 
 from agent.tools.bindings import ToolBindings
 from agent.tools.permissions import PERMISSION_NONE
-from agent.tools.spec import CATEGORY_OTHER, ToolSpec
+from agent.tools.spec import CATEGORY_TASK, ToolSpec
 from agent.tools.task_board_i18n import CREATE_TEXTS
 from agent.tools.task_create import (
     TASK_CREATE_DESCRIPTION,
@@ -24,6 +24,6 @@ def build_spec(bindings: ToolBindings) -> ToolSpec:
         # A board row is a note in this app's own database: no file, no network, and
         # nothing a confirmation dialog could protect.
         permission=PERMISSION_NONE,
-        category=CATEGORY_OTHER,
+        category=CATEGORY_TASK,
         description_i18n=CREATE_TEXTS,
     )

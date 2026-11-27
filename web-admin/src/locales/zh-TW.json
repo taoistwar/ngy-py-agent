@@ -561,6 +561,7 @@
   "toolCategoryComputer": "桌面控制",
   "toolCategoryCompute": "運算與程式碼",
   "toolCategoryInteraction": "與使用者互動",
+  "toolCategoryTask": "任務管理",
   "toolCategoryOther": "其他",
   "toolManagerHint": "代理可以呼叫的每個工具，含權限管制與參數結構。",
   "toolListRefresh": "重新整理工具",

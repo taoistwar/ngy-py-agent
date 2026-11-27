@@ -561,6 +561,7 @@
   "toolCategoryComputer": "Desktop-Steuerung",
   "toolCategoryCompute": "Rechnen & Code",
   "toolCategoryInteraction": "Nutzerinteraktion",
+  "toolCategoryTask": "Aufgabenverwaltung",
   "toolCategoryOther": "Sonstiges",
   "toolManagerHint": "Alle Werkzeuge, die der Agent aufrufen kann, mit Bestätigungspflicht und Parameterschema.",
   "toolListRefresh": "Werkzeuge aktualisieren",

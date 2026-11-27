@@ -32,6 +32,10 @@
 - **拒绝按信息返回**，不是失败：被阻塞的认领返回「blocked by task_xxx」，认领别人的任务返回「owner_mismatch」，未知 id 返回「not_found」。工具结果的 `details.reason` 带同样的枚举。
 - 只拒绝渲染不出来的输入：空 subject、超长 subject（200）或 description（4000）、依赖超过 50 条、自依赖、环、未知 id。
 
+## 工具页分组
+
+`todo_write` 与六个 `task_*` 工具在「工具管理」页统一归到 **任务管理**（`category = task`）这一组：同一个会话的清单和项目级的任务板是同一件事的两个层级，放在一起才好比较。分组常量见 `agent/tools/spec.py` 的 `CATEGORY_TASK`，前端的顺序与文案见 `web-admin/src/components/admin/toolMeta.js`。
+
 ## 任务板属于谁
 
 `board_id` 有两段式取值：

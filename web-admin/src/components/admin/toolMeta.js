@@ -12,6 +12,7 @@ export const CATEGORY_ORDER = [
   "computer",
   "compute",
   "interaction",
+  "task",
   "other",
 ]
 
@@ -22,6 +23,7 @@ const CATEGORY_LABEL_KEYS = {
   computer: "toolCategoryComputer",
   compute: "toolCategoryCompute",
   interaction: "toolCategoryInteraction",
+  task: "toolCategoryTask",
   other: "toolCategoryOther",
 }
 

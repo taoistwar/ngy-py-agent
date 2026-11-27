@@ -561,6 +561,7 @@
   "toolCategoryComputer": "Desktop control",
   "toolCategoryCompute": "Compute & code",
   "toolCategoryInteraction": "User interaction",
+  "toolCategoryTask": "Task management",
   "toolCategoryOther": "Other",
   "toolManagerHint": "Every tool the agent can call, with its permission gate and parameter schema.",
   "toolListRefresh": "Refresh tools",
