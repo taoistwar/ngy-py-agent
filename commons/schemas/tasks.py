@@ -154,3 +154,30 @@ class TaskListResponse(BaseModel):
     """Task list response."""
 
     tasks: list[TaskListItemResponse]
+
+
+class ReasoningTranslationRequest(BaseModel):
+    """Translate this task's reasoning traces into one language."""
+
+    locale: str = Field(description="Console locale, e.g. zh-CN.")
+    force: bool = Field(
+        default=False,
+        description="Translate again the traces already stored for this locale.",
+    )
+
+
+class ReasoningTranslationResponse(BaseModel):
+    """Translated traces of one task, keyed by event id.
+
+    ``items`` is what the log renders; the counts say what this call actually did
+    (``skipped`` counts traces already stored, ``failed`` the ones the model could
+    not translate - those are retried on the next call).
+    """
+
+    locale: str
+    model_id: str = ""
+    items: dict[str, str] = Field(default_factory=dict)
+    translated: int = 0
+    skipped: int = 0
+    failed: int = 0
+    errors: list[str] = Field(default_factory=list)

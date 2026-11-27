@@ -54,6 +54,8 @@ from commons.schemas import (
     PermissionRuleRequest,
     RetentionConfigRequest,
     RetentionConfigResponse,
+    TranslationConfigRequest,
+    TranslationConfigResponse,
     WebFetchConfigRequest,
     WebFetchConfigResponse,
     WebSearchConfigRequest,
@@ -227,6 +229,19 @@ def _checked_http_endpoint(raw: Any, what: str) -> str:
     return url
 
 
+def _load_translation_config() -> tuple[str, str]:
+    """The reasoning translation model: the stored id, else nothing at all.
+
+    A stored id whose model has been deleted counts as "not configured": the page
+    would otherwise offer a model that cannot be used, and every translation attempt
+    would fail one request at a time.
+    """
+    model_id = state.monitor_store.get_translation_model_id()
+    if not model_id or state.monitor_store.llm.get_model(model_id) is None:
+        return "", "default"
+    return model_id, "database"
+
+
 def _load_task_retention_config() -> tuple[int, str]:
     """The stored row, else the code default; retention has no environment fallback."""
     db_days = state.monitor_store.get_task_retention_days()
@@ -276,6 +291,10 @@ def load_startup_config() -> None:
         state.memories_source,
     ) = _load_memory_config()
     state.permission_mode, state.permission_mode_source = _load_permission_mode_config()
+    (
+        state.translation_model_id,
+        state.translation_model_source,
+    ) = _load_translation_config()
     # The tool layer keeps no database handle, so the effective search backend is
     # pushed into it here and on every admin write (see ``web_search_limits``).
     web_search_backend, _ = _load_web_search_config()
@@ -399,6 +418,39 @@ async def set_permission_mode_config(
         mode=state.permission_mode.value,
         source=state.permission_mode_source,
     )
+
+
+# --------------------------------------------------------- reasoning translation
+
+
+def _translation_response() -> TranslationConfigResponse:
+    model_id = state.translation_model_id
+    model = state.monitor_store.llm.get_model(model_id) if model_id else None
+    return TranslationConfigResponse(
+        model_id=model_id,
+        model_name=str((model or {}).get("name") or ""),
+        source=state.translation_model_source,
+    )
+
+
+@router.get("/api/admin/translation", response_model=TranslationConfigResponse)
+async def get_translation_config() -> TranslationConfigResponse:
+    return _translation_response()
+
+
+@router.put("/api/admin/translation", response_model=TranslationConfigResponse)
+async def set_translation_config(
+    payload: TranslationConfigRequest,
+) -> TranslationConfigResponse:
+    model_id = str(payload.model_id or "").strip()
+    # An id that names nothing is rejected rather than stored: the setting would look
+    # configured on the page while every translation failed.
+    if model_id and state.monitor_store.llm.get_model(model_id) is None:
+        raise HTTPException(status_code=400, detail=f"Model '{model_id}' not found.")
+    state.monitor_store.set_translation_model_id(model_id)
+    state.translation_model_id = model_id
+    state.translation_model_source = "database" if model_id else "default"
+    return _translation_response()
 
 
 # ------------------------------------------------------------------ web search

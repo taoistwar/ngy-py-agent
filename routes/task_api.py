@@ -20,10 +20,13 @@ from fastapi.responses import StreamingResponse
 from agent.models import EventCategory, TaskStatus
 from agent.modes import DEFAULT_MODE
 from agent.runtime import (
+    TranslationNotConfigured,
     board_view,
     build_event,
     checkpoint_store_for_task,
     extract_task_result,
+    is_supported_locale,
+    translate_missing_reasoning,
 )
 from agent.runtime.launcher import TaskLaunchError, launch_task
 from agent.tools.permissions import SCOPES
@@ -37,6 +40,8 @@ from commons.schemas import (
     PermissionDecisionResponse,
     QuestionAnswerRequest,
     QuestionAnswerResponse,
+    ReasoningTranslationRequest,
+    ReasoningTranslationResponse,
     RevertTaskRequest,
     RunTaskRequest,
     RunTaskResponse,
@@ -422,6 +427,52 @@ async def get_task_events(
         total=total,
         has_more=next_offset < total,
     )
+
+
+@router.get(
+    "/api/tasks/{task_id}/reasoning-translations",
+    response_model=ReasoningTranslationResponse,
+)
+def get_reasoning_translations(
+    task_id: str,
+    locale: str = Query("en", description="Console locale, e.g. zh-CN."),
+) -> ReasoningTranslationResponse:
+    """The translations this task already has for one language; never calls the model."""
+    if state.monitor_store.get_task(task_id) is None:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    if not is_supported_locale(locale):
+        raise HTTPException(status_code=400, detail=f"Unsupported locale '{locale}'.")
+    return ReasoningTranslationResponse(
+        locale=locale,
+        model_id=state.translation_model_id,
+        items=state.monitor_store.list_reasoning_translations(task_id, locale),
+    )
+
+
+@router.post(
+    "/api/tasks/{task_id}/reasoning-translations",
+    response_model=ReasoningTranslationResponse,
+)
+def translate_reasoning(
+    task_id: str,
+    payload: ReasoningTranslationRequest,
+) -> ReasoningTranslationResponse:
+    """Translate the traces that have no copy for this language yet.
+
+    Synchronous on purpose: the provider call blocks, so a worker thread keeps the
+    event loop serving the task poll while a long trace is translated.
+    """
+    if state.monitor_store.get_task(task_id) is None:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    if not is_supported_locale(payload.locale):
+        raise HTTPException(status_code=400, detail=f"Unsupported locale '{payload.locale}'.")
+    try:
+        result = translate_missing_reasoning(task_id, payload.locale, force=payload.force)
+    except TranslationNotConfigured as exc:
+        # 400 with the reason, so the page can offer "go configure a model" instead of
+        # showing a broken action.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ReasoningTranslationResponse(**result)
 
 
 async def _iter_task_events(task_id: str):

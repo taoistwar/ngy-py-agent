@@ -410,6 +410,55 @@
   gap: 4px;
 }
 
+/* Right end of the tab row when a translated trace exists: the language switch sits
+   next to the open/fullscreen buttons, both at the end of the bar. */
+.event-view-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.event-translation-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--chip-bg);
+  color: var(--text-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.event-translation-toggle:hover {
+  border-color: var(--focus);
+  color: var(--text-strong);
+}
+
+.event-translation-toggle.active {
+  border-color: var(--focus);
+  color: var(--text-strong);
+  background: var(--surface-hover);
+}
+
+.event-translation-toggle svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* The log's translate action is the one toolbar control with no label: the glyph is
+   unambiguous next to the expand/collapse pair, and a tooltip names it. */
+.event-bulk-icon {
+  padding: 4px 6px;
+}
+
+.event-bulk-btn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 .event-view-actions .icon-btn {
   width: 22px;
   height: 22px;

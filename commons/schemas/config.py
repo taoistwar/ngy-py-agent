@@ -77,6 +77,22 @@ class RetentionConfigResponse(BaseModel):
     removed_tasks: int
 
 
+class TranslationConfigRequest(BaseModel):
+    """Which model translates reasoning traces; empty turns the feature off."""
+
+    model_id: str = Field(
+        default="", description="Configured model id, or empty to leave reasoning untranslated."
+    )
+
+
+class TranslationConfigResponse(BaseModel):
+    """The translation model in force, and where it came from."""
+
+    model_id: str
+    model_name: str = ""
+    source: str
+
+
 class WebSearchConfigRequest(BaseModel):
     """Backend and credentials for the ``web_search`` tool."""
 

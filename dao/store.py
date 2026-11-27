@@ -23,6 +23,7 @@ from dao.sessions import _SessionMixin
 from dao.settings import _SettingsMixin
 from dao.tasks import _TaskMixin
 from dao.todos import _TodoMixin
+from dao.translations import _TranslationMixin
 
 
 class _SqliteTaskStore(
@@ -35,6 +36,7 @@ class _SqliteTaskStore(
     _BoardTaskMixin,
     _TaskMixin,
     _TodoMixin,
+    _TranslationMixin,
     _MemoryMixin,
     _ScheduleMixin,
 ):

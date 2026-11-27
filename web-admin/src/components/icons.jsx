@@ -169,6 +169,18 @@ export function CloseIcon() {
   )
 }
 
+// Translation: an "A" next to a CJK-style glyph, the usual "switch language" read.
+export function LanguagesIcon() {
+  return (
+    <Icon>
+      <path d="M3 6h8M6 6v-2M10 6c0 3.6-2.4 6.4-5.6 7.4" />
+      <path d="M4.2 10.4c1.5 2.2 3.8 3.6 6.1 4.2" />
+      <path d="M13.4 20l3.4-9 3.4 9" />
+      <path d="M14.7 17h4.2" />
+    </Icon>
+  )
+}
+
 export function ChevronsUpIcon() {
   return (
     <Icon>

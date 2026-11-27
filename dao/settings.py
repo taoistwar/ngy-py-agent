@@ -92,6 +92,15 @@ class _SettingsMixin:
             },
         )
 
+    def get_translation_model_id(self) -> str:
+        """The model that translates reasoning traces; empty means translation is off."""
+        return str(self._get_setting("translation_model_id") or "").strip()
+
+    def set_translation_model_id(self, model_id: str) -> None:
+        # Written as an empty value rather than deleting the row: "turned off on the
+        # page" and "never configured" then have one representation each.
+        self._set_setting("translation_model_id", str(model_id or "").strip())
+
     def get_skills_root(self) -> str | None:
         value = self._get_setting("skills_root")
         return None if value is None else str(value)

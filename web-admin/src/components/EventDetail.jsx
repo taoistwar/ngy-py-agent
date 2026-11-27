@@ -9,7 +9,7 @@ import { getEventCategoryText } from "../i18n"
 import { useTheme } from "../theme"
 import { formatTime, safeStringify } from "../utils/format"
 import EventFriendlyView from "./EventFriendlyView"
-import { CloseIcon } from "./icons"
+import { CloseIcon, LanguagesIcon } from "./icons"
 
 // LLM payloads are long provider-shaped JSON; the rest fit in a small window.
 const LLM_EDITOR_HEIGHT = "450px"
@@ -91,15 +91,31 @@ function RawEventView({ event, height }) {
 /**
  * Tabs plus the two renderings of one event.
  *
- * @param {{event: object, locale: string, translate: Function, actions?: object, height?: string}} props
- * ``actions`` sits at the end of the tab row (new tab / fullscreen buttons).
+ * @param {{event: object, locale: string, translate: Function, actions?: object, height?: string,
+ *          translation?: string}} props
+ * ``actions`` sits at the end of the tab row (new tab / fullscreen buttons);
+ * ``translation`` is the same trace in the console's language, when the server has it.
  */
-export function EventDetailBody({ event, locale, translate, actions = null, height }) {
+export function EventDetailBody({
+  event,
+  locale,
+  translate,
+  actions = null,
+  height,
+  translation = "",
+}) {
   const reasoning = useMemo(() => buildReasoningView(event, locale), [event, locale])
   // A turn with a trace opens on it: the reasoning is what explains the step, and the
   // answer is one click away. Without a trace the panel belongs to the answer, and
   // the raw JSON stays one click away for whoever debugs the agent.
   const [viewMode, setViewMode] = useState(() => (reasoning ? "reasoning" : "friendly"))
+  // With a translation available the trace opens translated: the reader picked this
+  // language, so that is the reading they asked for; the original stays one click away.
+  const [showTranslation, setShowTranslation] = useState(true)
+  useEffect(() => {
+    setShowTranslation(true)
+  }, [translation])
+  const translatedTrace = Boolean(translation) && Boolean(reasoning)
 
   return (
     <div className="event-detail">
@@ -137,13 +153,35 @@ export function EventDetailBody({ event, locale, translate, actions = null, heig
             {translate("eventViewRaw")}
           </button>
         </div>
-        {actions && <div className="event-view-actions">{actions}</div>}
+        {/* Right end of the tab row: switch between the trace as the model produced
+            it and its translation. */}
+        <div className="event-view-right">
+          {translatedTrace ? (
+            <button
+              type="button"
+              className={`event-translation-toggle ${showTranslation ? "active" : ""}`}
+              title={translate(
+                showTranslation ? "eventReasoningShowOriginal" : "eventReasoningShowTranslation",
+              )}
+              aria-label={translate(
+                showTranslation ? "eventReasoningShowOriginal" : "eventReasoningShowTranslation",
+              )}
+              onClick={() => setShowTranslation((prev) => !prev)}
+            >
+              <LanguagesIcon />
+              {showTranslation ? translate("eventReasoningOriginal") : translate("languageName")}
+            </button>
+          ) : null}
+          {actions && <div className="event-view-actions">{actions}</div>}
+        </div>
       </div>
       {viewMode === "friendly" && (
         <EventFriendlyView event={event} locale={locale} translate={translate} />
       )}
       {viewMode === "reasoning" && reasoning && (
-        <pre className="event-friendly-text mono event-reasoning-text">{reasoning.text}</pre>
+        <pre className="event-friendly-text mono event-reasoning-text">
+          {showTranslation && translation ? translation : reasoning.text}
+        </pre>
       )}
       {viewMode === "raw" && <RawEventView event={event} height={height} />}
     </div>
@@ -151,7 +189,7 @@ export function EventDetailBody({ event, locale, translate, actions = null, heig
 }
 
 /** Fullscreen reading view: overlays the console, closes on Esc or the X button. */
-export function EventDetailOverlay({ event, locale, translate, onClose }) {
+export function EventDetailOverlay({ event, locale, translate, onClose, translation = "" }) {
   useEffect(() => {
     const onKeyDown = (keyboardEvent) => {
       if (keyboardEvent.key === "Escape") onClose()
@@ -190,6 +228,7 @@ export function EventDetailOverlay({ event, locale, translate, onClose }) {
           event={event}
           locale={locale}
           translate={translate}
+          translation={translation}
           height="calc(100vh - 210px)"
         />
       </div>

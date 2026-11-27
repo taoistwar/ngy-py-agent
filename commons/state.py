@@ -57,6 +57,11 @@ agents_md_source: str = "default"
 # Cross-session memory (ADR 0035): whether the library is used at all, whether a
 # finished task extracts from itself, and how many characters of the index may enter a
 # system prompt. One setting, one source, for the same reason as the AGENTS.md pair.
+# Reasoning translation: the one model that renders a turn's private trace in the
+# console's language. Empty means the feature is off, which is also its default - a
+# translation spends tokens on every finished task (``agent.runtime.reasoning_translate``).
+translation_model_id: str = ""
+translation_model_source: str = "default"
 memories_enabled: bool = True
 memories_auto_extract: bool = True
 memories_max_prompt_chars: int = MEMORY_PROMPT_DEFAULT_CHARS

@@ -153,6 +153,82 @@ export function AgentsMdManager({ agentsMdConfig, onSave, onRefresh, translate }
   )
 }
 
+/**
+ * The model that translates reasoning traces into the console's language.
+ *
+ * One choice for the whole app: unset means reasoning is never translated, which is
+ * also the shipped default - a translation is a model call per trace.
+ */
+export function TranslationModelManager({ translationConfig, models, onSave, onRefresh, translate }) {
+  const [modelId, setModelId] = useState("")
+  const [busy, setBusy] = useState(false)
+  const current = translationConfig ? String(translationConfig.model_id || "") : ""
+  const changed = Boolean(translationConfig) && modelId !== current
+  // A model deleted after being chosen is no longer in the list; keeping it as an
+  // option would show a selection the server cannot resolve.
+  const options = models || []
+  const known = options.some((model) => model.model_id === current)
+
+  useEffect(() => {
+    if (!translationConfig) return
+    setModelId(String(translationConfig.model_id || ""))
+  }, [translationConfig])
+
+  const submit = async (event) => {
+    event.preventDefault()
+    if (!changed) return
+    setBusy(true)
+    try {
+      await onSave(modelId)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="panel-titlebar">
+        <div>
+          <h2>{translate("translationTitle")}</h2>
+          <span className="hint">
+            {translate("translationCurrentSource")}:{" "}
+            {translationConfig?.source === "database"
+              ? translate("translationSourceDb")
+              : translate("translationSourceDefault")}
+          </span>
+        </div>
+        <button type="button" className="btn btn-compact" onClick={onRefresh}>
+          {translate("sidebarQuickRefreshTranslation")}
+        </button>
+      </div>
+      <div className="panel-body">
+        <form className="form-grid" onSubmit={submit}>
+          <label>
+            <span>{translate("translationModelLabel")}</span>
+            <select
+              value={known || !current ? modelId : current}
+              disabled={!translationConfig}
+              onChange={(event) => setModelId(event.target.value)}
+            >
+              <option value="">{translate("translationModelOff")}</option>
+              {!known && current ? <option value={current}>{current}</option> : null}
+              {options.map((model) => (
+                <option key={model.model_id} value={model.model_id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="btn btn-primary" disabled={busy || !changed}>
+            {busy ? translate("translationSaving") : translate("translationSave")}
+          </button>
+        </form>
+        <div className="hint">{translate("translationHint")}</div>
+      </div>
+    </section>
+  )
+}
+
 export function PermissionModeManager({ permissionModeConfig, onSave, onRefresh, translate }) {
   const [mode, setMode] = useState("")
   const [busy, setBusy] = useState(false)

@@ -4,7 +4,13 @@ import { getEventCategoryText, isTaskRunningStatus } from "../i18n"
 import { formatTime } from "../utils/format"
 import { EventDetailBody, EventDetailOverlay, eventDetailUrl, getTagClass } from "./EventDetail"
 import EventFilterBar from "./EventFilterBar"
-import { ChevronsDownIcon, ChevronsUpIcon, ExpandIcon, ExternalLinkIcon } from "./icons"
+import {
+  ChevronsDownIcon,
+  ChevronsUpIcon,
+  ExpandIcon,
+  ExternalLinkIcon,
+  LanguagesIcon,
+} from "./icons"
 
 // While a task is in flight the log is a progress feed: the model's answers are what
 // the reader is waiting for, so they open on arrival and the tool calls, debug traces
@@ -18,7 +24,7 @@ function defaultCollapsed(event, running) {
   return event.collapsed ?? true
 }
 
-function EventItem({ event, taskId, collapsed, onToggle, translate, locale }) {
+function EventItem({ event, taskId, collapsed, onToggle, translation, translate, locale }) {
   const [fullscreen, setFullscreen] = useState(false)
   const openLabel = translate("eventOpenInNewTab")
   const fullscreenLabel = translate("eventFullscreen")
@@ -77,6 +83,7 @@ function EventItem({ event, taskId, collapsed, onToggle, translate, locale }) {
             event={event}
             locale={locale}
             translate={translate}
+            translation={translation}
             actions={actions}
           />
         </div>
@@ -86,6 +93,7 @@ function EventItem({ event, taskId, collapsed, onToggle, translate, locale }) {
           event={event}
           locale={locale}
           translate={translate}
+          translation={translation}
           onClose={() => setFullscreen(false)}
         />
       )}
@@ -93,7 +101,18 @@ function EventItem({ event, taskId, collapsed, onToggle, translate, locale }) {
   )
 }
 
-export default function EventTimeline({ task, events, hasMore, loadingMore, onLoadMore, translate, locale }) {
+export default function EventTimeline({
+  task,
+  events,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+  translations = {},
+  onTranslateReasoning = null,
+  translatingReasoning = false,
+  translate,
+  locale,
+}) {
   const [collapsedMap, setCollapsedMap] = useState({})
   // Selected event types; an empty set means "every type", so the default view is
   // the whole log with no filter bookkeeping in the way.
@@ -198,6 +217,20 @@ export default function EventTimeline({ task, events, hasMore, loadingMore, onLo
               <ChevronsDownIcon />
               {translate("eventsExpandAll")}
             </button>
+            {/* Far right of the log's toolbar: translates this task's deep-think
+                traces into the console's language, skipping the ones already done. */}
+            {onTranslateReasoning ? (
+              <button
+                type="button"
+                className="event-bulk-btn event-bulk-icon"
+                onClick={() => onTranslateReasoning()}
+                disabled={translatingReasoning}
+                title={translate("eventsTranslateReasoning")}
+                aria-label={translate("eventsTranslateReasoning")}
+              >
+                <LanguagesIcon />
+              </button>
+            ) : null}
           </div>
         </div>
       )}
@@ -210,6 +243,7 @@ export default function EventTimeline({ task, events, hasMore, loadingMore, onLo
               key={event.event_id}
               event={event}
               taskId={taskId}
+              translation={translations[event.event_id] || ""}
               collapsed={collapsedMap[event.event_id] ?? defaultCollapsed(event, running)}
               onToggle={() =>
                 setCollapsedMap((prev) => ({

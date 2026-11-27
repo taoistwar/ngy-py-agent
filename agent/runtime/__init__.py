@@ -45,6 +45,11 @@ from agent.runtime.purge import (
     start_retention_sweeper,
     stop_retention_sweeper,
 )
+from agent.runtime.reasoning_translate import (
+    TranslationNotConfigured,
+    is_supported_locale,
+    translate_missing_reasoning,
+)
 from agent.runtime.runner import run_task
 from agent.runtime.scheduling import (
     cron_matches,
@@ -64,6 +69,7 @@ __all__ = [
     "MonitorTodoStore",
     "PURGE_INTERVAL_SECONDS",
     "TaskLaunchError",
+    "TranslationNotConfigured",
     "agent_runtime_config",
     "board_for_run",
     "board_view",
@@ -79,6 +85,7 @@ __all__ = [
     "fire_schedule",
     "global_max_steps",
     "is_first_task_in_session",
+    "is_supported_locale",
     "launch_task",
     "memory_book_for_run",
     "name_task_and_session",
@@ -97,6 +104,7 @@ __all__ = [
     "stop_retention_sweeper",
     "stop_scheduler",
     "tick",
+    "translate_missing_reasoning",
     "update_session_title",
     "update_task_name",
     "validate_cron",

@@ -38,6 +38,8 @@ import {
   fetchPermissionModeConfig,
   updatePermissionModeConfig,
   fetchPermissionRules,
+  fetchTranslationConfig,
+  updateTranslationConfig,
   deletePermissionRule,
   fetchSessions,
   fetchTask,
@@ -85,6 +87,8 @@ import TaskResultPanel from "./components/TaskResultPanel"
 import TaskRowActions from "./components/TaskRowActions"
 import TaskToolbarActions from "./components/TaskToolbarActions"
 import TodoPanel from "./components/TodoPanel"
+import TranslationModelDialog from "./components/TranslationModelDialog"
+import { useReasoningTranslation } from "./events/reasoningTranslation"
 import { SearchIcon, SkillIcon } from "./components/icons"
 import AgentManager from "./components/admin/AgentManager"
 import DenyListManager from "./components/admin/DenyListManager"
@@ -98,6 +102,7 @@ import {
   MaxStepsManager,
   PermissionModeManager,
   RetentionManager,
+  TranslationModelManager,
 } from "./components/admin/SettingsPanels"
 import SkillManager from "./components/admin/SkillManager"
 import ToolsPage from "./components/admin/ToolsPage"
@@ -914,6 +919,7 @@ function TaskDetailPage({
   onChangesReverted,
   todos,
   board,
+  reasoningTranslation,
   translate,
   locale,
 }) {
@@ -962,6 +968,9 @@ function TaskDetailPage({
             hasMore={hasMoreEvents}
             loadingMore={isLoadingEvents}
             onLoadMore={onLoadMore}
+            translations={reasoningTranslation.items}
+            onTranslateReasoning={reasoningTranslation.translateNow}
+            translatingReasoning={reasoningTranslation.busy}
             translate={translate}
             locale={locale}
           />
@@ -1022,6 +1031,8 @@ export default function App() {
   const [maxStepsConfig, setMaxStepsConfig] = useState(null)
   const [agentsMdConfig, setAgentsMdConfig] = useState(null)
   const [permissionModeConfig, setPermissionModeConfig] = useState(null)
+  // The model that translates reasoning traces; empty means "do not translate".
+  const [translationConfig, setTranslationConfig] = useState(null)
   const [webFetchConfig, setWebFetchConfig] = useState(null)
   const [webSearchConfig, setWebSearchConfig] = useState(null)
   const [permissionRules, setPermissionRules] = useState(null)
@@ -1083,6 +1094,16 @@ export default function App() {
   }, [])
 
   const taskResult = useMemo(() => getTaskResult(selectedTask, events), [selectedTask, events])
+
+  // The selected task's translated deep-think traces. The hook decides when to ask
+  // (stored copies on open, one automatic pass after the task finishes, the log's
+  // button on demand); this page only renders the result.
+  const reasoningTranslation = useReasoningTranslation({
+    task: selectedTask,
+    locale,
+    enabled: Boolean(translationConfig?.model_id),
+    onError: setError,
+  })
 
   useEffect(() => {
     try {
@@ -2227,6 +2248,24 @@ export default function App() {
     [translate]
   )
 
+  const refreshTranslation = useCallback(async () => {
+    const config = await fetchTranslationConfig()
+    setTranslationConfig(config)
+    return config
+  }, [])
+
+  const updateTranslation = useCallback(
+    async (modelId) => {
+      try {
+        const config = await updateTranslationConfig(modelId)
+        setTranslationConfig(config)
+      } catch (translationError) {
+        setError(translationError?.message || translate("errorUnknown"))
+      }
+    },
+    [translate]
+  )
+
   const refreshAgentsMd = useCallback(async () => {
     const config = await fetchAgentsMdConfig()
     setAgentsMdConfig(config)
@@ -2433,6 +2472,9 @@ export default function App() {
     refreshAgentsMd().catch((agentsMdError) =>
       setError(agentsMdError?.message || translate("errorLoadFailed"))
     )
+    refreshTranslation().catch((translationError) =>
+      setError(translationError?.message || translate("errorLoadFailed"))
+    )
     refreshPermissionMode().catch((permissionError) =>
       setError(permissionError?.message || translate("errorLoadFailed"))
     )
@@ -2504,6 +2546,10 @@ export default function App() {
         refreshMaxSteps().catch(() => {})
         refreshAgentsMd().catch(() => {})
         refreshPermissionMode().catch(() => {})
+        refreshTranslation().catch(() => {})
+        // The translation panel's dropdown lists models, which are edited on another
+        // page; refreshing them here keeps the options current.
+        refreshModels().catch(() => {})
       }
       if (activeMenu === "permissions") {
         refreshPermissionRules().catch(() => {})
@@ -2517,7 +2563,7 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [activeMenu, applySelection, refreshAgentMeta, refreshAgents, refreshDenyList, refreshHealth, refreshMaxSteps, refreshMemories, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWebFetch, refreshWebSearch, refreshWorkspaces, translate])
+  }, [activeMenu, applySelection, refreshAgentMeta, refreshAgents, refreshDenyList, refreshHealth, refreshMaxSteps, refreshMemories, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshTranslation, refreshWebFetch, refreshWebSearch, refreshWorkspaces, translate])
 
   useEffect(() => {
     if (!selectedId || activeMenu !== "tasks") return
@@ -2756,6 +2802,7 @@ export default function App() {
                   refreshTasks().catch(() => {})
                   if (selectedIdRef.current) refreshTask(selectedIdRef.current).catch(() => {})
                 }}
+                reasoningTranslation={reasoningTranslation}
                 translate={translate}
                 locale={locale}
               />
@@ -2873,6 +2920,17 @@ export default function App() {
               onRefresh={refreshMaxSteps}
               translate={translate}
             />
+            <TranslationModelManager
+              translationConfig={translationConfig}
+              models={models}
+              onSave={updateTranslation}
+              onRefresh={() =>
+                refreshTranslation().catch((refreshError) =>
+                  setError(refreshError?.message || translate("errorLoadFailed"))
+                )
+              }
+              translate={translate}
+            />
             <AgentsMdManager
               agentsMdConfig={agentsMdConfig}
               onSave={updateAgentsMd}
@@ -2951,6 +3009,18 @@ export default function App() {
           onAnswered={handleQuestionAnswered}
           translate={translate}
         />
+        {reasoningTranslation.needsModel ? (
+          <TranslationModelDialog
+            translate={translate}
+            onClose={reasoningTranslation.dismissNeedsModel}
+            onConfigure={() => {
+              // The setting lives on the global config page, so the dialog sends the
+              // reader there instead of letting them hunt for it.
+              reasoningTranslation.dismissNeedsModel()
+              handleNavigate("config")
+            }}
+          />
+        ) : null}
         {revertTaskId ? (
           <RevertChangesDialog
             taskId={revertTaskId}

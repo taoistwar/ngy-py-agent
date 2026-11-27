@@ -82,6 +82,22 @@ class _SchemaMixin:
                 )
                 """
             )
+            # The translated copy of a turn's reasoning trace, one row per (event,
+            # language). A trace is translated once per language and never rewritten,
+            # so the row is keyed by both rather than appended (``dao/translations.py``).
+            # The cascade follows the events: deleting a task takes its translations.
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_translations (
+                    event_id TEXT NOT NULL REFERENCES events(event_id) ON DELETE CASCADE,
+                    locale TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    model_id TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (event_id, locale)
+                )
+                """
+            )
             self._conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS settings (

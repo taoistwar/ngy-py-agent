@@ -603,6 +603,43 @@ export async function updateAgentsMdConfig(enabled, maxBytes) {
   })
 }
 
+// Reasoning translation (global settings -> translation model). Without a configured
+// model the task endpoints reject the action with a 400, which the page turns into
+// "go configure a model".
+export async function fetchTranslationConfig() {
+  return requestJson(`${API_BASE}/api/admin/translation`)
+}
+
+export async function updateTranslationConfig(modelId) {
+  return requestJson(`${API_BASE}/api/admin/translation`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ model_id: modelId }),
+  })
+}
+
+// What this task already has translated for one language; never calls the model.
+export async function fetchReasoningTranslations(taskId, locale) {
+  const query = new URLSearchParams({ locale })
+  return requestJson(
+    `${API_BASE}/api/tasks/${taskId}/reasoning-translations?${query.toString()}`
+  )
+}
+
+// Translate one task's deep-think traces into ``locale``; traces already stored for
+// that language are skipped, so repeating the call costs no tokens.
+export async function translateTaskReasoning(taskId, locale) {
+  return requestJson(`${API_BASE}/api/tasks/${taskId}/reasoning-translations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ locale }),
+  })
+}
+
 // The backend and credentials of the web_search tool. The page's value replaces
 // WEB_SEARCH_* from .env and is applied to the next search, not the next restart.
 export async function fetchWebSearchConfig() {
