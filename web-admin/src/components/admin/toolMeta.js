@@ -69,11 +69,11 @@ export function groupTools(tools) {
 }
 
 /**
- * The text to show under the English one, or null.
+ * The tool's translation for this locale, or null.
  *
- * English is the source of truth and is always displayed; a non-English locale
- * adds its own translation underneath. A locale without a translation, or English
- * itself, gets nothing extra - never a partial mix.
+ * English is the source of truth: a locale without an entry, or English itself,
+ * gets null - never a partial mix. Callers decide whether the translation
+ * replaces the English description or sits under it.
  */
 export function localizedText(tool, locale) {
   if (!locale || locale === "en") return null

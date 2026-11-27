@@ -3,6 +3,7 @@
 // 测试输入 sections below start on the same line and every parameter sits next
 // to the field that feeds it.
 
+import { LanguagesIcon } from "../icons"
 import { ParamSchema } from "./AgentDetail"
 import ParameterInput from "./ParameterInput"
 import { permissionLabel, resolveAgentNames, scopeSummary } from "./toolMeta"
@@ -79,11 +80,46 @@ function ToolMeta({ tool, agents, translate }) {
   )
 }
 
+/**
+ * Tool description under its own title bar. The language is the page's choice, not
+ * this dialog's: the toolbar toggle owns it, so the list and the dialog agree. The
+ * icon button repeats that toggle here for reach. A locale without a translation
+ * only has English, so the button is hidden there.
+ */
+function ToolDescription({ tool, translation, showEnglish, onToggleLanguage, translate }) {
+  const localized = translation?.description || ""
+  const english = tool.description || translate("agentToolNoDescription")
+  const text = localized && !showEnglish ? localized : english
+
+  return (
+    <div className="tool-detail-desc">
+      <div className="agent-section-head">
+        <span>{translate("toolDetailDescription")}</span>
+        {localized ? (
+          <button
+            type="button"
+            className={`icon-btn ${showEnglish ? "is-active" : ""}`}
+            title={translate("toolDetailLanguageToggle")}
+            aria-label={translate("toolDetailLanguageToggle")}
+            aria-pressed={showEnglish}
+            onClick={onToggleLanguage}
+          >
+            <LanguagesIcon />
+          </button>
+        ) : null}
+      </div>
+      <p className="agent-detail-desc">{text}</p>
+    </div>
+  )
+}
+
 export default function ToolDetailBody({
   tool,
   agents,
   translate,
   translation,
+  showEnglish,
+  onToggleLanguage,
   params,
   values,
   onChange,
@@ -100,12 +136,13 @@ export default function ToolDetailBody({
     <div className="tool-detail-grid">
       <div className="tool-detail-main">
         <ToolMeta tool={tool} agents={agents} translate={translate} />
-        <p className="agent-detail-desc">
-          {tool.description || translate("agentToolNoDescription")}
-        </p>
-        {translation?.description ? (
-          <p className="agent-detail-desc agent-desc-i18n">{translation.description}</p>
-        ) : null}
+        <ToolDescription
+          tool={tool}
+          translation={translation}
+          showEnglish={showEnglish}
+          onToggleLanguage={onToggleLanguage}
+          translate={translate}
+        />
       </div>
 
       {/* The heading stays outside the box; the box itself fills the height of

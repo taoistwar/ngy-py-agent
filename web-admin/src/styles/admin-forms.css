@@ -248,6 +248,14 @@
   min-width: 0;
 }
 
+/* Description block: a title bar carrying the language switch, then the text of
+   the language that switch is set to. */
+.tool-detail-desc {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 /* The heading stays outside the box, and the box fills the height of the
    metadata block beside it instead of adding to it - size containment keeps the
    content from deciding the row height, so 参数 and 测试输入 stay on one line
@@ -599,12 +607,6 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
-}
-
-.tool-desc-i18n {
-  color: var(--text-2);
-  font-size: 11px;
-  line-height: 1.4;
 }
 
 .model-table {

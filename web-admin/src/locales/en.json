@@ -604,6 +604,8 @@
   "toolDetailPreview": "Confirmation preview",
   "toolDetailAgents": "Agents using it",
   "toolDetailNoAgents": "No agent enables this tool",
+  "toolDetailDescription": "Tool description",
+  "toolDetailLanguageToggle": "Switch description language",
   "toolPermissionNone": "No confirmation",
   "toolPermissionRead": "Confirms sensitive reads",
   "toolPermissionWrite": "Confirms writes",

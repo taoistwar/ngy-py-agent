@@ -604,6 +604,8 @@
   "toolDetailPreview": "Aperçu de confirmation",
   "toolDetailAgents": "Agents qui l'utilisent",
   "toolDetailNoAgents": "Aucun agent n'active cet outil",
+  "toolDetailDescription": "Description de l'outil",
+  "toolDetailLanguageToggle": "Changer la langue de la description",
   "toolPermissionNone": "Aucune confirmation",
   "toolPermissionRead": "Confirme les lectures sensibles",
   "toolPermissionWrite": "Confirme les écritures",

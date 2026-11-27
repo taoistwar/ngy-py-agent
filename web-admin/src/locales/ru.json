@@ -604,6 +604,8 @@
   "toolDetailPreview": "Предпросмотр подтверждения",
   "toolDetailAgents": "Агенты с этим инструментом",
   "toolDetailNoAgents": "Ни один агент не включает этот инструмент",
+  "toolDetailDescription": "Описание инструмента",
+  "toolDetailLanguageToggle": "Переключить язык описания",
   "toolPermissionNone": "Без подтверждения",
   "toolPermissionRead": "Подтверждает чувствительное чтение",
   "toolPermissionWrite": "Подтверждает запись",

@@ -604,6 +604,8 @@
   "toolDetailPreview": "确认前预演",
   "toolDetailAgents": "使用该工具的智能体",
   "toolDetailNoAgents": "没有智能体启用该工具",
+  "toolDetailDescription": "工具描述",
+  "toolDetailLanguageToggle": "切换描述语言",
   "toolPermissionNone": "无需确认",
   "toolPermissionRead": "敏感读取需确认",
   "toolPermissionWrite": "写入需确认",

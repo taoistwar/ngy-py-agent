@@ -13,7 +13,15 @@ const ARGUMENT_ERROR_KEYS = {
   json: "toolTestInvalidJson",
 }
 
-export default function ToolDetailDialog({ tool, agents, locale, onClose, translate }) {
+export default function ToolDetailDialog({
+  tool,
+  agents,
+  locale,
+  showEnglish,
+  onToggleLanguage,
+  onClose,
+  translate,
+}) {
   const params = normalizeParameters(tool.parameters)
   const translation = localizedText(tool, locale)
   const [values, setValues] = useState(() => initialValues(params))
@@ -72,6 +80,8 @@ export default function ToolDetailDialog({ tool, agents, locale, onClose, transl
         agents={agents}
         translate={translate}
         translation={translation}
+        showEnglish={showEnglish}
+        onToggleLanguage={onToggleLanguage}
         params={params}
         values={values}
         onChange={setValue}

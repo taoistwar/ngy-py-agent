@@ -18,21 +18,22 @@ function truncate(text, maxLength) {
   return `${value.slice(0, maxLength - 1)}...`
 }
 
-function ToolRow({ tool, agents, translate, locale, onOpen }) {
+function ToolRow({ tool, agents, translate, locale, showEnglish, onOpen }) {
   const agentNames = resolveAgentNames(tool.agent_ids, agents, translate)
-  // English always, the current locale's text underneath when it has one.
+  // One language per row, never both: the locale's text, the English source when
+  // the page asks for it, and English as the fallback for a tool without a
+  // translation. Which one this is is the toolbar toggle's business, not the row's.
   const translation = localizedText(tool, locale)
+  const description =
+    (showEnglish ? "" : translation?.description) ||
+    tool.description ||
+    translate("agentToolNoDescription")
 
   return (
     <tr>
       <td>
         <code>{tool.name}</code>
-        <div className="hint">{truncate(tool.description, DESCRIPTION_PREVIEW_CHARS)}</div>
-        {translation ? (
-          <div className="tool-desc-i18n">
-            {truncate(translation.description, DESCRIPTION_PREVIEW_CHARS)}
-          </div>
-        ) : null}
+        <div className="hint">{truncate(description, DESCRIPTION_PREVIEW_CHARS)}</div>
       </td>
       <td>
         <span className={`badge badge-permission-${tool.permission || "none"}`}>
@@ -52,7 +53,7 @@ function ToolRow({ tool, agents, translate, locale, onOpen }) {
   )
 }
 
-function ToolGroup({ group, agents, translate, locale, onOpen }) {
+function ToolGroup({ group, agents, translate, locale, showEnglish, onOpen }) {
   return (
     <div className="tool-group">
       <div className="tool-group-head">
@@ -77,6 +78,7 @@ function ToolGroup({ group, agents, translate, locale, onOpen }) {
               agents={agents}
               translate={translate}
               locale={locale}
+              showEnglish={showEnglish}
               onOpen={() => onOpen(tool.name)}
             />
           ))}
@@ -86,10 +88,19 @@ function ToolGroup({ group, agents, translate, locale, onOpen }) {
   )
 }
 
-export default function ToolManager({ tools, agents, locale, translate }) {
+export default function ToolManager({
+  tools,
+  agents,
+  locale,
+  showEnglish = false,
+  onToggleLanguage,
+  translate,
+}) {
   const [search, setSearch] = useState("")
   const [detailName, setDetailName] = useState("")
 
+  // Both languages stay searchable: the toggle changes what is shown, not what a
+  // keyword can find.
   const filtered = useMemo(
     () =>
       tools.filter((tool) =>
@@ -141,6 +152,7 @@ export default function ToolManager({ tools, agents, locale, translate }) {
               agents={agents}
               translate={translate}
               locale={locale}
+              showEnglish={showEnglish}
               onOpen={setDetailName}
             />
           ))
@@ -155,6 +167,8 @@ export default function ToolManager({ tools, agents, locale, translate }) {
           tool={detailTool}
           agents={agents}
           locale={locale}
+          showEnglish={showEnglish}
+          onToggleLanguage={onToggleLanguage}
           onClose={() => setDetailName("")}
           translate={translate}
         />

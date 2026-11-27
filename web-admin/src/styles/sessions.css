@@ -639,6 +639,14 @@
   color: var(--danger-text-strong);
 }
 
+/* An icon button that is a toggle reports its on state the way the theme switch
+   does, so "English descriptions" reads as a setting rather than another action. */
+.icon-btn.is-active {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+  color: var(--accent);
+}
+
 /* The one primary action of a titlebar ("new …") keeps the accent fill its text
    button had, so making it an icon does not demote it to a secondary control. */
 .icon-btn-accent {

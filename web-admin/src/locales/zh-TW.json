@@ -604,6 +604,8 @@
   "toolDetailPreview": "確認前預覽",
   "toolDetailAgents": "使用此工具的代理",
   "toolDetailNoAgents": "沒有代理啟用此工具",
+  "toolDetailDescription": "工具描述",
+  "toolDetailLanguageToggle": "切換描述語言",
   "toolPermissionNone": "不需確認",
   "toolPermissionRead": "敏感讀取需確認",
   "toolPermissionWrite": "寫入需確認",
