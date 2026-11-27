@@ -9,11 +9,13 @@ WRITE_STDIN_TOOL_NAME = "write_stdin"
 WRITE_STDIN_DESCRIPTION = (
     "Type into a command that exec_command left running, and read what it prints back. "
     "Pass the 'session_id' that exec_command returned for a command still running. Set 'chars' to "
-    "write text to the command's stdin (include '\\n' to send a line); leave 'chars' empty to only "
-    "poll for new output. A 'chars' equal to Ctrl-C ('\\u0003') interrupts the command instead of "
-    "writing it. 'yield_time_ms' bounds how long to wait for output and 'max_output_tokens' bounds "
-    "how much is returned. The result says whether the command is still running (it prints a "
-    "session_id) or has finished (it prints an exit_code); a finished session cannot be reused."
+    "write text to the command's stdin (include '\\n' to send a line); leave 'chars' empty to read "
+    "new output from a command you already know is running - the end of a background command "
+    "arrives as a <task_notification>, so polling is not how you learn it is over. A 'chars' equal "
+    "to Ctrl-C ('\\u0003') interrupts the command instead of writing it. 'yield_time_ms' bounds how "
+    "long to wait for output and 'max_output_tokens' bounds how much is returned. The result says "
+    "whether the command is still running (it prints a session_id) or has finished (it prints an "
+    "exit_code); a finished session cannot be reused."
 )
 
 WRITE_STDIN_PARAMETERS: Dict[str, Any] = {

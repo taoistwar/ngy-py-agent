@@ -6,11 +6,13 @@ The principle is a telephone that was never hung up (see
 connected, and this tool finds that command, optionally types into its stdin, then
 listens for a while and returns whatever it printed.
 
-An empty ``chars`` is a poll: nothing is typed, only new output is collected. A
-``chars`` equal to Ctrl-C (``\\u0003``) interrupts the command instead of being
-written. Any other ``chars`` goes to the process's stdin. A result that carries a
-``session_id`` means the command is still running; one that carries an ``exit_code``
-means it finished and the session is gone.
+An empty ``chars`` is a poll: nothing is typed, only new output is collected. It is
+not how the run learns a command ended - the loop reports that as a
+``<task_notification>`` on its own (ADR 0034) - so a poll is for reading more from
+something already known to be running. A ``chars`` equal to Ctrl-C (``\\u0003``)
+interrupts the command instead of being written. Any other ``chars`` goes to the
+process's stdin. A result that carries a ``session_id`` means the command is still
+running; one that carries an ``exit_code`` means it finished and the session is gone.
 
 Two boundaries worth stating. A session belongs to the task and workspace that
 started it, so a foreign id is answered exactly like an unknown one. And output
