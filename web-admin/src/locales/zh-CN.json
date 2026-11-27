@@ -283,6 +283,7 @@
   "category_permission_decision": "权限决定",
   "category_user_question": "提问",
   "category_user_answer": "回答",
+  "category_subagent": "子代理",
   "category_unknown": "未知",
   "permissionTitle": "确认工具调用",
   "permissionHint": "Agent 已暂停，等待你的答复。",

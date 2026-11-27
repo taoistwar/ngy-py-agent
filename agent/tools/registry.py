@@ -118,6 +118,11 @@ class ToolRegistry:
         # ``ask_user`` below reads this per call, so a registry built before the task
         # existed still answers through the broker the task installed (ADR 0010 D1).
         self.user_question_broker = user_question_broker
+        # The nested-loop channel (``subagent``). ``agent_loop`` assigns it after the
+        # registry exists because the runner needs a provider and an event sink, and
+        # this object is built before either is available. ``None`` means this run
+        # cannot delegate; the tool then says so instead of failing (ADR 0032).
+        self.subagent_runner: Optional[Callable[[str], Optional[str]]] = None
         # Shared by read/edit/write, so write_file can tell whether this run has
         # already held the whole content it is about to replace.
         self.read_ledger = ReadLedger()
@@ -167,6 +172,9 @@ class ToolRegistry:
             # Bound as a method, not as the broker: the broker may not exist yet, and
             # whether anyone can be asked is a per-call question (ADR 0010 D1).
             ask_user=self.ask_user,
+            # Same pattern for the nested loop: the runner is installed by
+            # ``agent_loop`` after this registry is built (ADR 0032).
+            run_subagent=self.run_subagent,
             todo_board=self.todo_board,
         )
 
@@ -420,6 +428,18 @@ class ToolRegistry:
         if broker is None:
             return QuestionResult(answers={}, status=STATUS_NO_CLIENT)
         return broker.ask(questions)
+
+    def run_subagent(self, prompt: str) -> Optional[str]:
+        """Delegate one brief through this run's subagent runner, or say there is none.
+
+        The channel tools reach through ``ToolBindings.run_subagent``. ``None`` means
+        "this run cannot delegate", which the tool turns into text for the model: a
+        missing runner is a configuration, not a failure of the call (ADR 0032).
+        """
+        runner = self.subagent_runner
+        if runner is None:
+            return None
+        return runner(prompt)
 
     def _denylist_denial(
         self, name: str, arguments: Dict[str, Any]

@@ -283,6 +283,7 @@
   "category_permission_decision": "Решение по разрешению",
   "category_user_question": "Вопрос",
   "category_user_answer": "Ответ",
+  "category_subagent": "Субагент",
   "category_unknown": "Неизвестно",
   "permissionTitle": "Подтвердите вызов инструмента",
   "permissionHint": "Агент ждёт вашего ответа.",

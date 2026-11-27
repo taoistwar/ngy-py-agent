@@ -88,6 +88,9 @@ const FIELDS = {
   request: "Запрос",
   images: "Снимки экрана",
   screenshot: "Снимок экрана",
+  phase: "Этап",
+  steps_used: "Использовано шагов",
+  tool_calls: "Вызовы инструментов",
 }
 
 const VALUES = {
@@ -130,6 +133,12 @@ const VALUES = {
     success: "Успешно",
     failed: "Ошибка",
     running: "Выполняется",
+  },
+  phase: {
+    started: "Запущено",
+    tool: "Вызов инструмента",
+    done: "Завершено",
+    failed: "Не завершено",
   },
   action: {
     screenshot: "Снимок экрана",
@@ -212,6 +221,13 @@ const TEXT = {
   noDetails: "У этой записи нет подробностей.",
   emptyMessage: "(пустое сообщение)",
   toolArgsTitle: "Аргументы: {args}",
+  subagentStarted: "Делегирована подзадача: {prompt}",
+  subagentStartedNoBrief: "Делегирована подзадача",
+  subagentTool: "Субагент вызвал инструмент {name}",
+  subagentDone: "Субагент завершил работу",
+  subagentFailed: "Субагент не завершил работу",
+  sectionSubagentBrief: "Задание для субагента",
+  sectionSubagentReport: "Отчёт субагента",
 }
 
 export default { fields: FIELDS, values: VALUES, text: TEXT }

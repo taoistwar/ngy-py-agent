@@ -283,6 +283,7 @@
   "category_permission_decision": "Permission decision",
   "category_user_question": "Question",
   "category_user_answer": "Answer",
+  "category_subagent": "Subagent",
   "category_unknown": "Unknown",
   "permissionTitle": "Confirm tool call",
   "permissionHint": "The agent is blocked until you answer.",

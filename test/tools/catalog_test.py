@@ -26,6 +26,7 @@ EXPECTED_ORDER = (
     # Planning is listed first: it is what the model should reach for before a
     # multi-step task turns into unrelated tool calls.
     "todo_write",
+    "subagent",
     "code_interpreter",
     "glob",
     "grep",

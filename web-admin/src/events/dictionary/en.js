@@ -93,6 +93,9 @@ const FIELDS = {
   request: "Request",
   images: "Screenshots",
   screenshot: "Screenshot",
+  phase: "Phase",
+  steps_used: "Steps used",
+  tool_calls: "Tool calls",
 }
 
 // Values that read as jargon in the raw payload but as plain words here.
@@ -136,6 +139,12 @@ const VALUES = {
     success: "Succeeded",
     failed: "Failed",
     running: "Running",
+  },
+  phase: {
+    started: "Started",
+    tool: "Tool call",
+    done: "Finished",
+    failed: "Not finished",
   },
   action: {
     screenshot: "Screenshot",
@@ -218,6 +227,13 @@ const TEXT = {
   noDetails: "This record has no details to show.",
   emptyMessage: "(empty message)",
   toolArgsTitle: "Arguments: {args}",
+  subagentStarted: "Delegated a sub-task: {prompt}",
+  subagentStartedNoBrief: "Delegated a sub-task",
+  subagentTool: "The subagent called the {name} tool",
+  subagentDone: "The subagent finished",
+  subagentFailed: "The subagent did not finish",
+  sectionSubagentBrief: "Brief given to the subagent",
+  sectionSubagentReport: "Subagent report",
 }
 
 export default { fields: FIELDS, values: VALUES, text: TEXT }

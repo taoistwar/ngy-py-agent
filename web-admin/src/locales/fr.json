@@ -283,6 +283,7 @@
   "category_permission_decision": "Décision d'autorisation",
   "category_user_question": "Question",
   "category_user_answer": "Réponse",
+  "category_subagent": "Sous-agent",
   "category_unknown": "Inconnu",
   "permissionTitle": "Confirmer l'appel d'outil",
   "permissionHint": "L'agent est bloqué jusqu'à votre réponse.",

@@ -9,7 +9,7 @@ The package is split so that reading one tool means reading one directory:
   (``exec_command/``, ``write_stdin/``, ``glob/``, ``grep/``, ``web_search/``,
   ``web_fetch/``, ``web_browser/``, ``read_file/``, ``edit_file/``, ``write_file/``,
   ``delete_file/``, ``code_interpreter/``, ``computer_observe/``,
-  ``computer_control/``, ``ask_user_question/``, ``todo_write/``).
+  ``computer_control/``, ``ask_user_question/``, ``todo_write/``, ``subagent/``).
   ``__init__.py`` holds the package docstring and the public surface, ``spec.py``
   declares the tool to the registry, and the implementation is split by
   responsibility (``description.py``, ``errors.py``, topic modules, ``tool.py``).

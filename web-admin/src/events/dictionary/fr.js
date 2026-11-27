@@ -88,6 +88,9 @@ const FIELDS = {
   request: "Requête",
   images: "Captures d'écran",
   screenshot: "Capture d'écran",
+  phase: "Phase",
+  steps_used: "Étapes utilisées",
+  tool_calls: "Appels d'outils",
 }
 
 const VALUES = {
@@ -130,6 +133,12 @@ const VALUES = {
     success: "Réussi",
     failed: "Échec",
     running: "En cours",
+  },
+  phase: {
+    started: "Démarré",
+    tool: "Appel d'outil",
+    done: "Terminé",
+    failed: "Non terminé",
   },
   action: {
     screenshot: "Capture d'écran",
@@ -212,6 +221,13 @@ const TEXT = {
   noDetails: "Cet enregistrement n'a aucun détail à afficher.",
   emptyMessage: "(message vide)",
   toolArgsTitle: "Arguments : {args}",
+  subagentStarted: "Sous-tâche déléguée : {prompt}",
+  subagentStartedNoBrief: "Sous-tâche déléguée",
+  subagentTool: "Le sous-agent a appelé l'outil {name}",
+  subagentDone: "Le sous-agent a terminé",
+  subagentFailed: "Le sous-agent n'a pas terminé",
+  sectionSubagentBrief: "Briefing donné au sous-agent",
+  sectionSubagentReport: "Rapport du sous-agent",
 }
 
 export default { fields: FIELDS, values: VALUES, text: TEXT }

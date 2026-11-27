@@ -331,7 +331,8 @@
 }
 
 .tag.tool_call,
-.tag.tool_result {
+.tag.tool_result,
+.tag.subagent {
   background: var(--tag-tool);
 }
 

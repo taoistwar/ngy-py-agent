@@ -22,6 +22,7 @@ from agent.tools.glob import spec as glob
 from agent.tools.grep import spec as grep
 from agent.tools.read_file import spec as read_file
 from agent.tools.spec import ToolSpec
+from agent.tools.subagent import spec as subagent
 from agent.tools.todo_write import spec as todo_write
 from agent.tools.vault_http import spec as vault_http
 from agent.tools.web_browser import spec as web_browser
@@ -36,6 +37,10 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     # reads the list top down, and ``todo_write`` is what it should reach for before
     # a multi-step task turns into a series of unrelated tool calls.
     todo_write.build_spec,
+    # Delegation sits next to planning: a multi-step task should first be planned, and
+    # then the parts that would flood this context are handed off (ADR 0032). The child
+    # tool list is this list minus ``subagent``, so the order informs the subagent too.
+    subagent.build_spec,
     code_interpreter.build_spec,
     # Find before read: ``glob`` locates a file by name, ``grep`` locates the code
     # inside it, ``web_search`` finds the page that documents it, ``web_fetch``

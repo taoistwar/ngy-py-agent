@@ -14,6 +14,7 @@ const CATEGORY_ORDER = [
   "llm_response",
   "tool_call",
   "tool_result",
+  "subagent",
   "file_edit",
   "file_write",
   "file_delete",

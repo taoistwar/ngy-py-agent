@@ -444,6 +444,15 @@ npm run i18n:check
 - 新增事件类别照例要补前端各语言的 i18n（`src/locales/*.json` 与 `src/events/dictionary/*.js`）与 `.tag.<category>` 样式（`npm run build` 里的 i18n 校验会拦），以及 `test/tools/catalog_test.py` 的 `EXPECTED_ORDER`。
 - 已知限制：CLI 与库调用只能拿到 `no_client`（在 REPL 里真去问用户是后续子项目）；单选，不支持一题多选。取舍与实测见 [ADR 0010](decisions/0010-ask-user-question.md)。
 
+### subagent：委派一段独立上下文
+
+- 工具包 `agent/tools/subagent/` 只管契约（brief → 最终报告）；**嵌套循环在 `agent/agent_loop/subagent.py`**，因为它需要 provider 与 event sink，而工具两者都拿不到（与 `ask_user` 同一条理由）。runner 以 `ToolBindings.run_subagent` 注入，`run_react_loop` 在 registry 建好后按需装入（`registry.subagent_runner`），晚绑定手法与 broker 一致。
+- **隔离的只有消息**：同一进程、`base_dir`、权限门、黑名单、检查点（父 `task_id`）、`should_stop`。子工具的改动属于父任务的撤销记录，子 agent 的 `exec_command` 会问同一个用户。
+- **子工具集 = 父工具集 − `subagent`**（`_build_child_registry`），所以只有一层委派；MCP 动态工具由 `_adopt_dynamic_tools` 复制过去。子 agent 的 `todo_write` 用独立内存计划板，**不要**传父会话的 board。
+- **不要改用 `run_react_loop` 跑子循环**：它的 `_reaps_task_sessions` 会用 `task_id` 停父任务的 MCP 与后台进程，重建 registry 也会绕开"父的 provider + 父的工具集"。子循环只复用 `run_model_turn` 与子 registry 的 `execute_tool`，压缩管线不进入子循环。
+- 事件只发 `subagent`（`started` / `tool` / `done` / `failed`），子循环自己的 `llm_*` 不发；长文本 4,000 字符截断。前端需要 `category_subagent`、六份字典里的 `phase` 文案、`buildSubagent` 与 `.tag.subagent`，以及 `eventFilter.js` 的顺序项。
+- 取舍与已知限制（子对话不入库、同步阻塞、报告不进父循环的结果预算）见 [ADR 0032](decisions/0032-subagent-tool.md)。
+
 ### 桌面操作：CLI 桥，不是 MCP 客户端
 
 - `computer_observe` / `computer_control` 通过 `subprocess` 调 `cua-driver <tool>`（JSON 从 stdin 进入），**没有**复用 MCP 客户端；将来换 MCP 只替换 `agent/tools/computer_driver.py` 的 `call_tool`，工具面对模型不变。
@@ -545,6 +554,12 @@ npm run i18n:check
   - [ADR 0024 工具黑名单：命中即拒绝](decisions/0024-tool-denylist.md)
   - [ADR 0025 根目录只留 `main.py`，应用层拆进 `commons` / `dao` / `agent.runtime`](decisions/0025-root-only-main-py.md)
   - [ADR 0026 `delete_file` 工具的设计](decisions/0026-delete-file-tool.md)
+  - [ADR 0027 `web_fetch` 工具的设计](decisions/0027-web-fetch-tool.md)
+  - [ADR 0028 `web_search` 工具的设计](decisions/0028-web-search-tool.md)
+  - [ADR 0029 `web_browser` 工具的设计](decisions/0029-web-browser-tool.md)
+  - [ADR 0030 `vault_http` 工具的设计](decisions/0030-vault-http-tool.md)
+  - [ADR 0031 MCP 服务端的工具接进任务运行时](decisions/0031-mcp-tool-bridge.md)
+  - [ADR 0032 `subagent` 工具：把一段子任务放进独立上下文](decisions/0032-subagent-tool.md)
 
 ## 15. 可观测（OpenTelemetry Tracing）
 

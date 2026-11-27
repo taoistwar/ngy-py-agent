@@ -18,6 +18,11 @@ class EventCategory(str, Enum):
     LLM_RESPONSE = "llm_response"
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
+    # A delegated sub-task: the brief it was given, each tool the subagent called and
+    # its final report. Separate from ``tool_call`` on purpose - those calls never enter
+    # the parent conversation, so merging them into it would misstate the transcript
+    # (ADR 0032).
+    SUBAGENT = "subagent"
     FILE_EDIT = "file_edit"
     FILE_WRITE = "file_write"
     # Removing a file is neither an edit nor a write: a history that cannot tell

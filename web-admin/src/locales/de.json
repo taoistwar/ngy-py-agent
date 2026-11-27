@@ -283,6 +283,7 @@
   "category_permission_decision": "Berechtigungsentscheidung",
   "category_user_question": "Frage",
   "category_user_answer": "Antwort",
+  "category_subagent": "Subagent",
   "category_unknown": "Unbekannt",
   "permissionTitle": "Werkzeugaufruf bestätigen",
   "permissionHint": "Der Agent wartet, bis Sie antworten.",

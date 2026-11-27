@@ -16,6 +16,7 @@ from agent.agent_loop.runtime import (
 )
 from agent.agent_loop.snip_compact import apply_snip_compact
 from agent.agent_loop.steps import run_tool
+from agent.agent_loop.subagent import SUBAGENT_TOOL_NAME, make_subagent_runner
 from agent.agent_loop.todo_context import append_todo_context
 from agent.agent_loop.todo_reminder import (
     TODO_WRITE_TOOL_NAME,
@@ -113,6 +114,19 @@ def run_react_loop(
     # is a valid configuration, not an error: ``ask_user_question`` then answers
     # "no_client" instead of blocking (ADR 0010 D4).
     registry.user_question_broker = user_question_broker
+
+    # The nested-loop channel (``subagent``). Wired here because it needs both of the
+    # things a tool is deliberately denied - the provider and the event sink - and a
+    # mode without the tool (``ask``, ``plan``) is not given a runner it cannot reach.
+    if SUBAGENT_TOOL_NAME in getattr(registry, "tools", {}):
+        registry.subagent_runner = make_subagent_runner(
+            registry=registry,
+            provider=provider,
+            event_sink=event_sink,
+            task_id=task_id,
+            should_stop=should_stop,
+            stream=stream,
+        )
 
     if verbose:
         print(f"Provider: {provider.config.provider}")

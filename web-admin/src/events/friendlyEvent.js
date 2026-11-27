@@ -559,6 +559,73 @@ function buildToolResult({ data, dict }) {
   return { tone: failed ? "danger" : "success", headline, fields, sections }
 }
 
+function firstLineText(value, limit = 60) {
+  const line = String(value || "").trim().split(/\r?\n/)[0].trim()
+  if (!line) return ""
+  return line.length > limit ? `${line.slice(0, limit)}…` : line
+}
+
+function buildSubagent({ data, dict }) {
+  const phase = String(data.phase || "started")
+  const failed = phase === "failed" || data.is_error === true
+  // The brief and the report are the two things a reader opens the card for, so they
+  // become blocks; identifiers stay out of the table for the same reason trace ids do.
+  const { fields, sections } = describeData(dict, data, {
+    skip: ["prompt", "result", "arguments", "subagent_id"],
+    order: ["phase", "steps_used", "tool_calls", "duration_ms", "step", "name"],
+  })
+
+  if (data.prompt) {
+    sections.push({
+      kind: "text",
+      title: dict.text.sectionSubagentBrief,
+      text: String(data.prompt),
+      transforms: true,
+    })
+  }
+
+  if (isPlainObject(data.arguments) && Object.keys(data.arguments).length > 0) {
+    const described = describeData(dict, data.arguments)
+    fields.push(...described.fields)
+    sections.push(
+      ...described.sections.map((section) =>
+        section.kind === "text" ? { ...section, transforms: true } : section,
+      ),
+    )
+  }
+
+  if (data.result !== undefined && data.result !== null && data.result !== "") {
+    sections.push({
+      kind: "text",
+      title: phase === "tool" ? dict.text.sectionResult : dict.text.sectionSubagentReport,
+      text: String(data.result),
+      mono: phase === "tool",
+      transforms: phase === "tool",
+    })
+  }
+
+  const brief = firstLineText(data.prompt)
+  let headline
+  if (phase === "tool") {
+    headline = fillTemplate(dict.text.subagentTool, { name: data.name || dict.text.empty })
+  } else if (phase === "done") {
+    headline = dict.text.subagentDone
+  } else if (phase === "failed") {
+    headline = dict.text.subagentFailed
+  } else {
+    headline = brief
+      ? fillTemplate(dict.text.subagentStarted, { prompt: brief })
+      : dict.text.subagentStartedNoBrief
+  }
+
+  return {
+    tone: failed ? "danger" : phase === "done" ? "success" : "info",
+    headline,
+    fields,
+    sections,
+  }
+}
+
 function buildError({ data, dict }) {
   const { fields, sections } = describeData(dict, data, {
     order: ["step", "name", "type", "endpoint", "error"],
@@ -654,6 +721,7 @@ const BUILDERS = {
   llm_response: buildLlmResponse,
   tool_call: buildToolCall,
   tool_result: buildToolResult,
+  subagent: buildSubagent,
   error: buildError,
   file_write: (ctx) => buildFileEvent(ctx, "write"),
   file_edit: (ctx) => buildFileEvent(ctx, "edit"),

@@ -88,6 +88,9 @@ const FIELDS = {
   request: "請求內容",
   images: "截圖",
   screenshot: "截圖",
+  phase: "階段",
+  steps_used: "使用步數",
+  tool_calls: "工具呼叫數",
 }
 
 const VALUES = {
@@ -130,6 +133,12 @@ const VALUES = {
     success: "成功",
     failed: "失敗",
     running: "進行中",
+  },
+  phase: {
+    started: "已開始",
+    tool: "工具呼叫",
+    done: "已完成",
+    failed: "未完成",
   },
   action: {
     screenshot: "截圖",
@@ -212,6 +221,13 @@ const TEXT = {
   noDetails: "這則記錄沒有可顯示的細節。",
   emptyMessage: "（空訊息）",
   toolArgsTitle: "參數：{args}",
+  subagentStarted: "委派了子任務：{prompt}",
+  subagentStartedNoBrief: "委派了一個子任務",
+  subagentTool: "子代理呼叫了「{name}」工具",
+  subagentDone: "子代理已完成",
+  subagentFailed: "子代理未完成",
+  sectionSubagentBrief: "交給子代理的簡報",
+  sectionSubagentReport: "子代理報告",
 }
 
 export default { fields: FIELDS, values: VALUES, text: TEXT }

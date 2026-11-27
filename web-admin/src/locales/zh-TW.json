@@ -283,6 +283,7 @@
   "category_permission_decision": "權限決定",
   "category_user_question": "提問",
   "category_user_answer": "回答",
+  "category_subagent": "子代理",
   "category_unknown": "未知",
   "permissionTitle": "確認工具呼叫",
   "permissionHint": "在你回覆之前，代理會保持暫停。",

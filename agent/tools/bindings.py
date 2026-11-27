@@ -57,3 +57,8 @@ class ToolBindings:
     # asked). Bound as a callable because tools have no task identity and no event
     # sink of their own, and the registry fills it per call (ADR 0010 D1).
     ask_user: Optional[Callable[[Any], Any]] = None
+    # The channel a tool uses to hand one self-contained task to a subagent
+    # (``subagent``): a complete brief in, the final report out (``None`` = this run
+    # cannot delegate). A callable for the same reason ``ask_user`` is - the nested
+    # loop needs a provider and an event sink, and a tool is given neither (ADR 0032).
+    run_subagent: Optional[Callable[[str], Optional[str]]] = None

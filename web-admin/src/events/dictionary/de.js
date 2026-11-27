@@ -88,6 +88,9 @@ const FIELDS = {
   request: "Anfrage",
   images: "Screenshots",
   screenshot: "Screenshot",
+  phase: "Phase",
+  steps_used: "Verwendete Schritte",
+  tool_calls: "Werkzeugaufrufe",
 }
 
 const VALUES = {
@@ -130,6 +133,12 @@ const VALUES = {
     success: "Erfolgreich",
     failed: "Fehlgeschlagen",
     running: "Läuft",
+  },
+  phase: {
+    started: "Gestartet",
+    tool: "Werkzeugaufruf",
+    done: "Abgeschlossen",
+    failed: "Nicht abgeschlossen",
   },
   action: {
     screenshot: "Screenshot",
@@ -212,6 +221,13 @@ const TEXT = {
   noDetails: "Dieser Datensatz hat keine Details.",
   emptyMessage: "(leere Nachricht)",
   toolArgsTitle: "Argumente: {args}",
+  subagentStarted: "Teilaufgabe delegiert: {prompt}",
+  subagentStartedNoBrief: "Teilaufgabe delegiert",
+  subagentTool: "Der Subagent rief das Werkzeug {name} auf",
+  subagentDone: "Der Subagent ist fertig",
+  subagentFailed: "Der Subagent ist nicht fertig geworden",
+  sectionSubagentBrief: "Briefing für den Subagenten",
+  sectionSubagentReport: "Bericht des Subagenten",
 }
 
 export default { fields: FIELDS, values: VALUES, text: TEXT }
