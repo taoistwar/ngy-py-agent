@@ -260,14 +260,6 @@ export default function SessionTabs({
                 {translate("workspaceGroupTitle")}
               </button>
               <span className="session-group-count">{visibleWorkspaces.length}</span>
-              <button
-                type="button"
-                className="session-group-action"
-                onClick={onManageWorkspaces}
-                title={translate("workspaceManage")}
-              >
-                +
-              </button>
             </div>
             {visibleWorkspaces.length === 0 ? (
               <div className="session-group-empty">{translate("workspaceEmpty")}</div>
