@@ -26,7 +26,8 @@ from agent.runtime import (
     checkpoint_store_for_task,
     extract_task_result,
     is_supported_locale,
-    translate_missing_reasoning,
+    start_reasoning_translation,
+    translation_status,
 )
 from agent.runtime.launcher import TaskLaunchError, launch_task
 from agent.tools.permissions import SCOPES
@@ -446,6 +447,7 @@ def get_reasoning_translations(
         locale=locale,
         model_id=state.translation_model_id,
         items=state.monitor_store.list_reasoning_translations(task_id, locale),
+        **translation_status(task_id, locale),
     )
 
 
@@ -457,22 +459,26 @@ def translate_reasoning(
     task_id: str,
     payload: ReasoningTranslationRequest,
 ) -> ReasoningTranslationResponse:
-    """Translate the traces that have no copy for this language yet.
+    """Start translating the traces that have no copy for this language yet.
 
-    Synchronous on purpose: the provider call blocks, so a worker thread keeps the
-    event loop serving the task poll while a long trace is translated.
+    Answers as soon as the pass is running: a task can carry dozens of traces and each
+    is at least one model call, so the click must not hang on the whole batch. The
+    translations arrive through the reader endpoint above, which the page polls while
+    ``running`` is true.
     """
     if state.monitor_store.get_task(task_id) is None:
         raise HTTPException(status_code=404, detail="Task not found.")
     if not is_supported_locale(payload.locale):
         raise HTTPException(status_code=400, detail=f"Unsupported locale '{payload.locale}'.")
     try:
-        result = translate_missing_reasoning(task_id, payload.locale, force=payload.force)
+        result = start_reasoning_translation(task_id, payload.locale, force=payload.force)
     except TranslationNotConfigured as exc:
         # 400 with the reason, so the page can offer "go configure a model" instead of
         # showing a broken action.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return ReasoningTranslationResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ReasoningTranslationResponse(locale=payload.locale, **result)
 
 
 async def _iter_task_events(task_id: str):

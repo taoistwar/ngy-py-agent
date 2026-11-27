@@ -454,6 +454,18 @@
   padding: 4px 6px;
 }
 
+/* Status of the translation pass started from the toolbar: the work runs on the
+   server, so the click has to answer with words, not just a disabled button. */
+.event-translate-note {
+  max-width: 320px;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .event-bulk-btn:disabled {
   opacity: 0.55;
   cursor: progress;

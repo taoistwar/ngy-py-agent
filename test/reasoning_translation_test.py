@@ -5,7 +5,10 @@ translation at all, and a saved model is what the task endpoints use. The per-ta
 work: a trace is translated once per language and skipped afterwards, so a second
 click (or the automatic pass after a finished task) costs no tokens.
 
-The endpoint's RPM budget is the third: translation is a batch of model calls, so it
+The pass runs on a server thread, so the tests ask the reader endpoint until it says
+``running`` is false - the same thing the console does.
+
+The endpoint's RPM budget is the fourth: translation is a batch of model calls, so it
 spends the same bucket the task loop does and stops asking when the minute is gone
 instead of queueing a long row of waits (ADR 0013).
 
@@ -16,6 +19,8 @@ Run from the repository root::
 
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,14 +48,24 @@ REASONING_TWO = "The directory looks empty, so the answer is a short note."
 class _FakeProvider:
     """Answers every translation request with a recognisable form of the source."""
 
-    def __init__(self, fail: bool = False, rpm_after: int | None = None) -> None:
+    def __init__(
+        self,
+        fail: bool = False,
+        rpm_after: int | None = None,
+        gate: threading.Event | None = None,
+    ) -> None:
         self.calls = []
         self.fail = fail
         # Raises ``RpmLimitError`` from the N-th call on, i.e. the endpoint's minute
         # ran out mid-batch the way a real adapter reports it.
         self.rpm_after = rpm_after
+        # Blocks the call until released, so a test can look at the API while the
+        # background pass is still working.
+        self.gate = gate
 
     def chat_completion(self, messages, tools=None, **kwargs):
+        if self.gate is not None:
+            self.gate.wait(5)
         if self.rpm_after is not None and len(self.calls) >= self.rpm_after:
             raise RpmLimitError("openai-compatible", "https://gateway.example/v1", 1, 120.0, 60.0)
         self.calls.append(list(messages))
@@ -100,18 +115,6 @@ class _TranslatorTestCase(unittest.TestCase):
         self.store.close()
         self._tmp.cleanup()
 
-    def set_endpoint_limit(self, rpm_limit):
-        """Give the translation endpoint an RPM budget, as the provider record would."""
-        key = bucket_key(self.provider_record["protocol"], self.provider_record["base_url"])
-        provider_throttle.configure({key: rpm_limit})
-        return key
-
-    def spend_minute(self):
-        """Record one request against the endpoint, i.e. the bucket is no longer free."""
-        provider_throttle.acquire(
-            self.provider_record["protocol"], self.provider_record["base_url"]
-        )
-
     def seed_task(self, reasonings):
         task_id = self.store.create_task(query="list files", provider="openai-compatible")
         for index, reasoning in enumerate(reasonings):
@@ -126,8 +129,48 @@ class _TranslatorTestCase(unittest.TestCase):
             )
         return task_id
 
-    def patch_provider(self):
-        return patch.object(reasoning_translate, "build_provider", return_value=self.provider)
+    def translate(self, task_id, locale="zh-CN"):
+        return self.client.post(
+            f"/api/tasks/{task_id}/reasoning-translations", json={"locale": locale}
+        )
+
+    def read(self, task_id, locale="zh-CN"):
+        return self.client.get(
+            f"/api/tasks/{task_id}/reasoning-translations", params={"locale": locale}
+        )
+
+    def wait(self, task_id, locale="zh-CN", timeout=10.0):
+        """The console's poll: read until the background pass reports it is done."""
+        deadline = time.monotonic() + timeout
+        payload = {}
+        while time.monotonic() < deadline:
+            payload = self.read(task_id, locale=locale).json()
+            if not payload.get("running"):
+                return payload
+            time.sleep(0.02)
+        self.fail(f"translation pass did not finish: {payload}")
+
+    def run_pass(self, task_id, locale="zh-CN", provider=None):
+        """Start a pass with the fake provider patched in, then wait for it."""
+        with patch.object(
+            reasoning_translate, "build_provider", return_value=provider or self.provider
+        ):
+            response = self.translate(task_id, locale=locale)
+            if response.status_code != 200:
+                return response, None
+            return response, self.wait(task_id, locale=locale)
+
+    def set_endpoint_limit(self, rpm_limit):
+        """Give the translation endpoint an RPM budget, as the provider record would."""
+        key = bucket_key(self.provider_record["protocol"], self.provider_record["base_url"])
+        provider_throttle.configure({key: rpm_limit})
+        return key
+
+    def spend_minute(self):
+        """Record one request against the endpoint, i.e. the bucket is no longer free."""
+        provider_throttle.acquire(
+            self.provider_record["protocol"], self.provider_record["base_url"]
+        )
 
 
 class TranslationConfigTest(_TranslatorTestCase):
@@ -183,11 +226,6 @@ class ReasoningTranslationTest(_TranslatorTestCase):
         super().setUp()
         self.client.put("/api/admin/translation", json={"model_id": self.model["model_id"]})
 
-    def translate(self, task_id, locale="zh-CN"):
-        return self.client.post(
-            f"/api/tasks/{task_id}/reasoning-translations", json={"locale": locale}
-        )
-
     def test_without_a_configured_model_the_action_is_rejected(self):
         self.client.put("/api/admin/translation", json={"model_id": ""})
         task_id = self.seed_task([REASONING_ONE])
@@ -207,14 +245,34 @@ class ReasoningTranslationTest(_TranslatorTestCase):
         self.assertEqual(400, self.translate(task_id, locale="klingon").status_code)
         self.assertEqual([], self.provider.calls)
 
+    def test_the_click_answers_before_the_traces_are_done(self):
+        gate = threading.Event()
+        provider = _FakeProvider(gate=gate)
+        task_id = self.seed_task([REASONING_ONE])
+
+        with patch.object(reasoning_translate, "build_provider", return_value=provider):
+            started = self.translate(task_id)
+            # A second click joins the pass that is already running.
+            joined = self.translate(task_id)
+            gate.set()
+            payload = self.wait(task_id)
+
+        self.assertEqual(200, started.status_code)
+        body = started.json()
+        self.assertTrue(body["started"])
+        self.assertTrue(body["running"])
+        self.assertEqual({}, body["items"])
+        self.assertFalse(joined.json()["started"])
+        self.assertTrue(joined.json()["running"])
+        self.assertEqual(1, payload["translated"])
+        self.assertFalse(payload["running"])
+        self.assertEqual(1, len(provider.calls))
+
     def test_every_trace_is_translated_into_the_requested_language(self):
         task_id = self.seed_task([REASONING_ONE, REASONING_TWO])
 
-        with self.patch_provider():
-            response = self.translate(task_id)
+        _, payload = self.run_pass(task_id)
 
-        self.assertEqual(200, response.status_code)
-        payload = response.json()
         self.assertEqual("zh-CN", payload["locale"])
         self.assertEqual(2, payload["translated"])
         self.assertEqual(0, payload["skipped"])
@@ -225,32 +283,27 @@ class ReasoningTranslationTest(_TranslatorTestCase):
     def test_the_request_names_the_chosen_language(self):
         task_id = self.seed_task([REASONING_ONE])
 
-        with self.patch_provider():
-            self.translate(task_id, locale="zh-TW")
+        self.run_pass(task_id, locale="zh-TW")
 
         self.assertIn("Traditional Chinese", self.provider.calls[0][0]["content"])
 
     def test_a_second_pass_skips_what_is_already_translated(self):
         task_id = self.seed_task([REASONING_ONE])
 
-        with self.patch_provider():
-            self.translate(task_id)
-        with self.patch_provider():
-            second = self.translate(task_id)
+        self.run_pass(task_id)
+        _, second = self.run_pass(task_id)
 
-        self.assertEqual(0, second.json()["translated"])
-        self.assertEqual(1, second.json()["skipped"])
+        self.assertEqual(0, second["translated"])
+        self.assertEqual(1, second["skipped"])
         self.assertEqual(1, len(self.provider.calls))
 
     def test_another_language_is_translated_again(self):
         task_id = self.seed_task([REASONING_ONE])
 
-        with self.patch_provider():
-            self.translate(task_id, locale="zh-CN")
-        with self.patch_provider():
-            other = self.translate(task_id, locale="fr")
+        self.run_pass(task_id, locale="zh-CN")
+        _, other = self.run_pass(task_id, locale="fr")
 
-        self.assertEqual(1, other.json()["translated"])
+        self.assertEqual(1, other["translated"])
         self.assertEqual(2, len(self.provider.calls))
 
     def test_events_without_a_trace_are_ignored(self):
@@ -265,20 +318,17 @@ class ReasoningTranslationTest(_TranslatorTestCase):
             ),
         )
 
-        with self.patch_provider():
-            response = self.translate(task_id)
+        _, payload = self.run_pass(task_id)
 
-        self.assertEqual(0, response.json()["translated"])
+        self.assertEqual(0, payload["translated"])
         self.assertEqual([], self.provider.calls)
 
     def test_a_long_trace_is_split_into_chunks_and_joined_back(self):
         long_reasoning = "\n\n".join(["word " * 400] * 4)
         task_id = self.seed_task([long_reasoning])
 
-        with self.patch_provider():
-            response = self.translate(task_id)
+        _, payload = self.run_pass(task_id)
 
-        payload = response.json()
         self.assertEqual(1, payload["translated"])
         self.assertGreater(len(self.provider.calls), 1)
         text = next(iter(payload["items"].values()))
@@ -288,28 +338,22 @@ class ReasoningTranslationTest(_TranslatorTestCase):
         task_id = self.seed_task([REASONING_ONE])
         self.provider.fail = True
 
-        with self.patch_provider():
-            response = self.translate(task_id)
+        _, payload = self.run_pass(task_id)
 
-        self.assertEqual(200, response.status_code)
-        self.assertEqual(1, response.json()["failed"])
-        self.assertEqual({}, response.json()["items"])
+        self.assertEqual(1, payload["failed"])
+        self.assertEqual({}, payload["items"])
         self.assertEqual({}, self.store.list_reasoning_translations(task_id, "zh-CN"))
 
         self.provider.fail = False
-        with self.patch_provider():
-            retry = self.translate(task_id)
+        _, retry = self.run_pass(task_id)
 
-        self.assertEqual(1, retry.json()["translated"])
+        self.assertEqual(1, retry["translated"])
 
     def test_stored_translations_can_be_read_without_calling_the_model(self):
         task_id = self.seed_task([REASONING_ONE])
-        with self.patch_provider():
-            saved = self.translate(task_id).json()
+        _, saved = self.run_pass(task_id)
 
-        read_back = self.client.get(
-            f"/api/tasks/{task_id}/reasoning-translations", params={"locale": "zh-CN"}
-        )
+        read_back = self.read(task_id)
 
         self.assertEqual(200, read_back.status_code)
         self.assertEqual(saved["items"], read_back.json()["items"])
@@ -320,8 +364,7 @@ class ReasoningTranslationTest(_TranslatorTestCase):
         self.spend_minute()
         task_id = self.seed_task([REASONING_ONE])
 
-        with self.patch_provider():
-            payload = self.translate(task_id).json()
+        _, payload = self.run_pass(task_id)
 
         self.assertEqual(0, payload["translated"])
         self.assertEqual(1, payload["deferred"])
@@ -333,8 +376,7 @@ class ReasoningTranslationTest(_TranslatorTestCase):
         self.set_endpoint_limit(1)
         task_id = self.seed_task([REASONING_ONE, REASONING_TWO])
 
-        with self.patch_provider():
-            payload = self.translate(task_id).json()
+        _, payload = self.run_pass(task_id)
 
         self.assertEqual(1, payload["translated"])
         self.assertEqual(1, payload["deferred"])
@@ -343,18 +385,15 @@ class ReasoningTranslationTest(_TranslatorTestCase):
     def test_an_endpoint_without_a_budget_translates_everything(self):
         task_id = self.seed_task([REASONING_ONE, REASONING_TWO])
 
-        with self.patch_provider():
-            payload = self.translate(task_id).json()
+        _, payload = self.run_pass(task_id)
 
         self.assertEqual(2, payload["translated"])
         self.assertEqual(0, payload["deferred"])
 
     def test_a_limit_raised_mid_run_defers_the_rest_instead_of_failing(self):
         task_id = self.seed_task([REASONING_ONE, REASONING_TWO])
-        throttled = _FakeProvider(rpm_after=1)
 
-        with patch.object(reasoning_translate, "build_provider", return_value=throttled):
-            payload = self.translate(task_id).json()
+        _, payload = self.run_pass(task_id, provider=_FakeProvider(rpm_after=1))
 
         self.assertEqual(1, payload["translated"])
         self.assertEqual(1, payload["deferred"])
@@ -365,12 +404,10 @@ class ReasoningTranslationTest(_TranslatorTestCase):
         self.set_endpoint_limit(1)
         task_id = self.seed_task([REASONING_ONE, REASONING_TWO])
 
-        with self.patch_provider():
-            self.translate(task_id)
+        self.run_pass(task_id)
         # The bucket's minute has passed: the console asks again and picks up the rest.
         provider_throttle.configure({})
-        with self.patch_provider():
-            payload = self.translate(task_id).json()
+        _, payload = self.run_pass(task_id)
 
         self.assertEqual(1, payload["translated"])
         self.assertEqual(1, payload["skipped"])
@@ -378,8 +415,7 @@ class ReasoningTranslationTest(_TranslatorTestCase):
 
     def test_a_deleted_task_takes_its_translations_with_it(self):
         task_id = self.seed_task([REASONING_ONE])
-        with self.patch_provider():
-            self.translate(task_id)
+        self.run_pass(task_id)
 
         self.store.delete_task(task_id)
 

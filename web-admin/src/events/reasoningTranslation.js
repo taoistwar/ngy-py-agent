@@ -9,6 +9,17 @@ const NO_ITEMS = {}
 // model removed between the page load and the click still opens the "configure" dialog.
 const NO_MODEL_MARKER = "translation model"
 
+// The pass runs on a server thread (a task can carry dozens of traces, each at least
+// one model call). Until it reports done, the log reads back what it has so far.
+const POLL_INTERVAL_MS = 1500
+
+// Notices the toolbar shows for a moment; translation states are not log entries.
+const TRANSLATE_STARTED = "eventsTranslateStarted"
+const TRANSLATE_WORKING = "eventsTranslateWorking"
+const TRANSLATE_DONE = "eventsTranslateDone"
+const TRANSLATE_EMPTY = "eventsTranslateEmpty"
+const TRANSLATE_DEFERRED = "eventsTranslateDeferred"
+
 /**
  * The translated deep-think traces of the selected task, for the console's language.
  *
@@ -17,43 +28,52 @@ const NO_MODEL_MARKER = "translation model"
  *
  * - opening a task reads what is already stored (no model call);
  * - a task that has just finished is translated once, when a model is configured;
- * - the log's manual action asks for whatever is still missing.
+ * - the log's manual action asks for whatever is still missing, answers at once
+ *   ("a pass started") and then polls until the pass is done.
  *
  * @param {{task: object|null, locale: string, enabled: boolean,
- *          onError?: (message: string) => void, onDeferred?: (count: number) => void}} options
+ *          onError?: (message: string) => void}} options
  */
-export function useReasoningTranslation({ task, locale, enabled, onError, onDeferred }) {
+export function useReasoningTranslation({ task, locale, enabled, onError }) {
   const taskId = task?.task_id || ""
   const running = isTaskRunningStatus(task?.status)
-  const [state, setState] = useState({ taskId: "", locale: "", items: NO_ITEMS })
-  const [busy, setBusy] = useState(false)
+  const [state, setState] = useState({ taskId: "", locale: "", items: NO_ITEMS, running: false })
+  const [noticeKey, setNoticeKey] = useState("")
   const [needsModel, setNeedsModel] = useState(false)
-  // Which task+language the automatic pass already ran for: a poll re-renders this
-  // hook every second and must not become a second translation request.
+  // Which task+language the automatic pass already asked for: a poll re-renders this
+  // hook every second and must not become a second request.
   const autoKeyRef = useRef("")
+  // Whether the pass in flight was asked for by a click. An automatic pass fills the
+  // log silently; only a click has to report that it started and how it ended.
+  const manualRef = useRef(false)
 
-  const items =
-    state.taskId === taskId && state.locale === locale ? state.items : NO_ITEMS
+  const inScope = state.taskId === taskId && state.locale === locale
+  const items = inScope ? state.items : NO_ITEMS
+  const translating = inScope && state.running
 
-  const merge = useCallback((targetTaskId, targetLocale, incoming) => {
+  const merge = useCallback((targetTaskId, targetLocale, incoming, flags = {}) => {
     setState((prev) => {
       const sameScope = prev.taskId === targetTaskId && prev.locale === targetLocale
       return {
         taskId: targetTaskId,
         locale: targetLocale,
         items: { ...(sameScope ? prev.items : NO_ITEMS), ...incoming },
+        running: flags.running ?? (sameScope ? prev.running : false),
       }
     })
   }, [])
 
-  const reportNoModel = useCallback((error) => {
-    const message = String(error?.message || "")
-    if (message.toLowerCase().includes(NO_MODEL_MARKER)) {
-      setNeedsModel(true)
-      return
-    }
-    onError?.(message)
-  }, [onError])
+  const reportNoModel = useCallback(
+    (error) => {
+      const message = String(error?.message || "")
+      if (message.toLowerCase().includes(NO_MODEL_MARKER)) {
+        setNeedsModel(true)
+        return
+      }
+      onError?.(message)
+    },
+    [onError],
+  )
 
   // Stored translations only: opening a 100-step task must not start 100 model calls.
   useEffect(() => {
@@ -61,7 +81,10 @@ export function useReasoningTranslation({ task, locale, enabled, onError, onDefe
     let alive = true
     fetchReasoningTranslations(taskId, locale)
       .then((payload) => {
-        if (alive) merge(taskId, locale, payload?.items || {})
+        if (!alive) return
+        // A pass another tab already started: follow it, but report it as what it is
+        // (a running pass), not as something this click caused.
+        merge(taskId, locale, payload?.items || {}, { running: Boolean(payload?.running) })
       })
       // A failed read is not worth a page-level error: the log simply shows originals.
       .catch(() => {})
@@ -75,19 +98,45 @@ export function useReasoningTranslation({ task, locale, enabled, onError, onDefe
     const key = `${taskId}|${locale}`
     if (autoKeyRef.current === key) return undefined
     autoKeyRef.current = key
+    manualRef.current = false
     translateTaskReasoning(taskId, locale)
-      .then((payload) => {
-        merge(taskId, locale, payload?.items || {})
-        // A deferred trace is not reported here on purpose: the automatic pass runs
-        // right when the task itself just spent the endpoint's minute, and a notice on
-        // every finished task would train the reader to ignore it. The log's button says
-        // so when the reader asks.
-      })
+      .then((payload) =>
+        merge(taskId, locale, payload?.items || {}, { running: Boolean(payload?.running) }),
+      )
       // The finished task stays readable; only the translation is missing. A model
       // deleted since the page loaded is reported where the user can act on it.
       .catch(reportNoModel)
     return undefined
   }, [enabled, taskId, running, locale, merge, reportNoModel])
+
+  // The pass is done when the reader endpoint stops running: say how it went, but only
+  // when the reader asked for it. A silent automatic pass finishing is not news.
+  const finish = useCallback((payload) => {
+    if (!manualRef.current) return
+    manualRef.current = false
+    if (Number(payload?.deferred || 0) > 0) setNoticeKey(TRANSLATE_DEFERRED)
+    else if (Number(payload?.translated || 0) > 0) setNoticeKey(TRANSLATE_DONE)
+    else setNoticeKey(TRANSLATE_EMPTY)
+  }, [])
+
+  useEffect(() => {
+    if (!translating || !taskId) return undefined
+    let alive = true
+    const timer = setInterval(() => {
+      fetchReasoningTranslations(taskId, locale)
+        .then((payload) => {
+          if (!alive) return
+          merge(taskId, locale, payload?.items || {}, { running: Boolean(payload?.running) })
+          if (!payload?.running) finish(payload)
+        })
+        // One failed read says nothing about the pass; the next tick asks again.
+        .catch(() => {})
+    }, POLL_INTERVAL_MS)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [translating, taskId, locale, merge, finish])
 
   const translateNow = useCallback(async () => {
     if (!enabled) {
@@ -95,29 +144,43 @@ export function useReasoningTranslation({ task, locale, enabled, onError, onDefe
       return null
     }
     if (!taskId) return null
-    setBusy(true)
+    manualRef.current = true
     try {
       const payload = await translateTaskReasoning(taskId, locale)
-      merge(taskId, locale, payload?.items || {})
-      // The endpoint's minute is shared with the task loop: a batch can stop before
-      // the rate limit turns into minutes of waiting, so say what is left.
-      if (Number(payload?.deferred || 0) > 0) onDeferred?.(Number(payload.deferred))
+      merge(taskId, locale, payload?.items || {}, { running: Boolean(payload?.running) })
+      // The answer comes before the work: say so, the poll fills the log in.
+      setNoticeKey(payload?.started === false ? TRANSLATE_WORKING : TRANSLATE_STARTED)
+      if (!payload?.running) finish(payload)
       return payload
     } catch (error) {
+      manualRef.current = false
       reportNoModel(error)
       return null
-    } finally {
-      setBusy(false)
     }
-  }, [enabled, taskId, locale, merge, reportNoModel, onDeferred])
+  }, [enabled, taskId, locale, merge, finish, reportNoModel])
 
   const dismissNeedsModel = useCallback(() => setNeedsModel(false), [])
+
+  // Switching task or language drops the note: it described the previous panel.
+  useEffect(() => {
+    setNoticeKey("")
+  }, [taskId, locale])
+
+  // A finished note is a status line, not a log entry; it goes away on its own.
+  useEffect(() => {
+    if (!noticeKey || noticeKey === TRANSLATE_STARTED || noticeKey === TRANSLATE_WORKING) {
+      return undefined
+    }
+    const timer = setTimeout(() => setNoticeKey(""), 8000)
+    return () => clearTimeout(timer)
+  }, [noticeKey])
 
   return {
     items,
     hasTranslation: Object.keys(items).length > 0,
-    busy,
+    translating,
     translateNow,
+    noticeKey,
     needsModel,
     dismissNeedsModel,
   }

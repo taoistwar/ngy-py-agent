@@ -13,12 +13,16 @@ spend it on every call, and this batch only *reads* what is left so it can stop 
 queueing minutes of waits. What it could not translate is reported as deferred and picked
 up by the next call - translation must not become the reason a console request hangs.
 
-The route is synchronous on purpose: the provider call blocks, so FastAPI runs it on its
-worker thread instead of stalling the event loop (``routes/task_api.py``).
+A pass runs on its own thread, not inside the request: a task can carry dozens of traces
+and each is at least one model call, so the click has to answer at once ("a pass is
+running") and let the console read the result back while it fills in
+(``routes/task_api.py`` exposes the status the page polls).
 """
 
 from __future__ import annotations
 
+import threading
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from agent.models import EventCategory
@@ -245,6 +249,115 @@ def translate_missing_reasoning(
     }
 
 
+# ---------------------------------------------------------------- background pass
+
+_JOB_LOCK = threading.Lock()
+# (task id, locale) -> what the last pass did, and whether one is still running. The
+# console polls the reader endpoint while ``running``; a finished record is what lets
+# the poll say "3 translated" or "4 left by the RPM limit" instead of guessing from the
+# number of rows that appeared. Old records are dropped; a task's traces are not
+# replayed forever.
+_JOBS: Dict[Tuple[str, str], Dict[str, Any]] = {}
+_JOB_TTL_SECONDS = 3600.0
+_JOB_COUNTERS = ("translated", "skipped", "failed", "deferred")
+
+
+def translation_status(task_id: str, locale: str) -> Dict[str, Any]:
+    """Whether a pass for this task and language is in flight, and how the last one went."""
+    with _JOB_LOCK:
+        job = _JOBS.get((str(task_id), str(locale)))
+        if job is None:
+            return {"running": False, **dict.fromkeys(_JOB_COUNTERS, 0)}
+        return {
+            "running": bool(job["running"]),
+            **{name: int(job.get(name) or 0) for name in _JOB_COUNTERS},
+        }
+
+
+def _prune_jobs(now: float) -> None:
+    """Drop finished records nobody will read again; called with the lock held."""
+    stale = [
+        key
+        for key, job in _JOBS.items()
+        if not job["running"] and now - float(job.get("finished_at") or 0.0) > _JOB_TTL_SECONDS
+    ]
+    for key in stale:
+        _JOBS.pop(key, None)
+
+
+def _run_translation_job(key: Tuple[str, str], task_id: str, locale: str, force: bool) -> None:
+    """The worker: one pass, then the outcome is left for the poll to read."""
+    try:
+        result = translate_missing_reasoning(task_id, locale, force=force)
+        counts = {name: int(result.get(name) or 0) for name in _JOB_COUNTERS}
+    # Broad on purpose: a background thread has no caller to raise to, and the poll has
+    # to learn that the pass ended even when it ended badly.
+    except Exception as exc:  # noqa: BLE001
+        counts = dict.fromkeys(_JOB_COUNTERS, 0)
+        print(
+            f"[Reasoning translation] {task_id}/{locale} failed: "
+            f"{exc.__class__.__name__}: {exc}"
+        )
+    with _JOB_LOCK:
+        job = _JOBS.get(key)
+        if job is None:
+            return
+        job.update(counts)
+        job["running"] = False
+        job["finished_at"] = time.monotonic()
+
+
+def start_reasoning_translation(
+    task_id: str,
+    locale: str,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Start a pass on a worker thread; returns the status the caller answers with.
+
+    A second request while one is running joins it instead of starting another
+    (``started`` is false): two threads on one task would translate the same traces
+    twice and double the endpoint's load for nothing.
+    """
+    entry = translation_model()
+    if entry is None:
+        raise TranslationNotConfigured(
+            "No translation model is configured; choose one in the global settings."
+        )
+    if not is_supported_locale(locale):
+        raise ValueError(f"Unsupported locale '{locale}'.")
+
+    key = (str(task_id), str(locale))
+    with _JOB_LOCK:
+        _prune_jobs(time.monotonic())
+        job = _JOBS.get(key)
+        if job is not None and job["running"]:
+            return {
+                "model_id": str(entry["model_id"]),
+                "started": False,
+                "running": True,
+                **{name: int(job.get(name) or 0) for name in _JOB_COUNTERS},
+            }
+        _JOBS[key] = {
+            "running": True,
+            "finished_at": 0.0,
+            **dict.fromkeys(_JOB_COUNTERS, 0),
+        }
+
+    worker = threading.Thread(
+        target=_run_translation_job,
+        args=(key, str(task_id), str(locale), bool(force)),
+        name=f"reasoning-translate-{task_id}",
+        daemon=True,
+    )
+    worker.start()
+    return {
+        "model_id": str(entry["model_id"]),
+        "started": True,
+        "running": True,
+        **dict.fromkeys(_JOB_COUNTERS, 0),
+    }
+
+
 __all__ = [
     "LOCALE_LANGUAGES",
     "MAX_CHUNK_CHARS",
@@ -253,8 +366,10 @@ __all__ = [
     "is_supported_locale",
     "reasoning_traces",
     "split_reasoning",
+    "start_reasoning_translation",
     "translate_chunks",
     "translate_missing_reasoning",
     "translate_reasoning_text",
     "translation_model",
+    "translation_status",
 ]

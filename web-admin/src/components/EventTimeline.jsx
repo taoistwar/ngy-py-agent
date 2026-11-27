@@ -110,6 +110,7 @@ export default function EventTimeline({
   translations = {},
   onTranslateReasoning = null,
   translatingReasoning = false,
+  translateNotice = "",
   translate,
   locale,
 }) {
@@ -230,6 +231,13 @@ export default function EventTimeline({
               >
                 <LanguagesIcon />
               </button>
+            ) : null}
+            {/* What the click did: the pass runs on the server, so without a word here
+                the button would look inert for as long as the model takes. */}
+            {translateNotice ? (
+              <span className="event-translate-note" role="status" aria-live="polite">
+                {translate(translateNotice)}
+              </span>
             ) : null}
           </div>
         </div>

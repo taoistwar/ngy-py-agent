@@ -48,7 +48,9 @@ from agent.runtime.purge import (
 from agent.runtime.reasoning_translate import (
     TranslationNotConfigured,
     is_supported_locale,
+    start_reasoning_translation,
     translate_missing_reasoning,
+    translation_status,
 )
 from agent.runtime.runner import run_task
 from agent.runtime.scheduling import (
@@ -87,6 +89,7 @@ __all__ = [
     "is_first_task_in_session",
     "is_supported_locale",
     "launch_task",
+    "start_reasoning_translation",
     "memory_book_for_run",
     "name_task_and_session",
     "next_fire_after",
@@ -105,6 +108,7 @@ __all__ = [
     "stop_scheduler",
     "tick",
     "translate_missing_reasoning",
+    "translation_status",
     "update_session_title",
     "update_task_name",
     "validate_cron",

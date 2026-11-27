@@ -368,6 +368,7 @@ npm run i18n:check
 - 等待时长经 `provider_throttle.take_last_wait()` 回读（线程局部，取一次即清零），落成 `debug` 事件（含 `base_url`）+ span 属性 `llm.rpm.wait_ms`：模型慢和自己在配额里打转是两件事，排障时要分得开。
 - 配置只有数据库一层：`rpm_limit` 是 provider 字段，启动时与每次 provider 写入后由 `llm_api.sync_provider_throttle()` 重建限流表。**没有** `LLM_RPM` 环境变量，也没有 `settings.llm_rpm_limits`（0013 的旧方案，见 0014 D6）。
 - 批量调用方（深度思考翻译，`agent/runtime/reasoning_translate.py`）**不**自己等待：它先 `provider_throttle.available_requests()` 读一次剩余配额，配额为 0 就停下并把剩下的记为 `deferred`，交给下一次点击继续；真正开跑后如果适配器抛 `RpmLimitError`（窗口在本批中途用完），同样停止而不是逐条重试。新增批量调用路径请照这个形状写，别在循环里 `acquire()` 后再让 wire 层等第二次。
+- 翻译这一批调用跑在后台线程上（`start_reasoning_translation` + `_JOBS`）：`POST /api/tasks/{id}/reasoning-translations` 只负责启动并立刻回答，前端轮询 `GET` 同一路径的 `running`/计数直到结束。同一 `(task, locale)` 正在跑时再点只并入，不会起第二个线程；调用方要“启动了/跑了多少”这类可见状态，就照这个形状加一个轮询状态，而不是把长批次塞回请求里。
 
 ### 工具结果预算（一步的结果太多）
 

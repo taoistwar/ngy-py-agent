@@ -169,11 +169,15 @@ class ReasoningTranslationRequest(BaseModel):
 class ReasoningTranslationResponse(BaseModel):
     """Translated traces of one task, keyed by event id.
 
-    ``items`` is what the log renders; the counts say what this call actually did
+    ``items`` is what the log renders; the counts describe the last pass
     (``skipped`` counts traces already stored, ``failed`` the ones the model could
     not translate - those are retried on the next call). ``deferred`` counts the
     traces left for later because the endpoint's RPM budget for the minute is spent:
-    nothing is wrong with them, the call simply stopped before waiting out the limit.
+    nothing is wrong with them, the pass simply stopped before waiting out the limit.
+
+    The pass itself runs on a server thread, so a request answers before the work is
+    done: ``started`` says this request began a pass, ``running`` that one is still in
+    flight (the page polls until it is false).
     """
 
     locale: str
@@ -184,3 +188,5 @@ class ReasoningTranslationResponse(BaseModel):
     failed: int = 0
     deferred: int = 0
     errors: list[str] = Field(default_factory=list)
+    started: bool = False
+    running: bool = False
