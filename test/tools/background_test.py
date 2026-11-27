@@ -26,6 +26,7 @@ if str(_REPO_ROOT) not in sys.path:
 from agent.tools import process_store  # noqa: E402
 from agent.tools.background import BackgroundCommand, BackgroundResult, BackgroundTasks  # noqa: E402
 from agent.tools.exec_command.tool import make_exec_tool  # noqa: E402
+from agent.tools.registry import ToolRegistry  # noqa: E402
 
 
 class _Running:
@@ -170,6 +171,50 @@ class RealCommandTest(unittest.TestCase):
         self.assertEqual(results[0].exit_code, 0)
         self.assertIn("bg-marker-42", results[0].tail)
         self.assertEqual(self.ledger.collect(), [])
+
+
+class RegistryWiringTest(unittest.TestCase):
+    """The ledger reaches ``exec_command`` through the registry, not by hand.
+
+    ``make_exec_tool(background=...)`` proves the tool records a start; this proves the
+    run's ledger is what the tool actually gets, which is the half a caller cannot
+    see from either side alone.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.task_id = f"bg-registry-{time.monotonic_ns()}"
+        self.ledger = BackgroundTasks(task_id=self.task_id)
+
+    def tearDown(self):
+        process_store.stop_task(self.task_id)
+        self._tmp.cleanup()
+
+    def test_a_background_start_through_the_registry_lands_in_the_run_ledger(self):
+        registry = ToolRegistry(
+            base_dir=self._tmp.name,
+            task_id=self.task_id,
+            background=self.ledger,
+        )
+
+        outcome = registry.execute_tool(
+            "exec_command",
+            {"command": "echo registry-marker", "run_in_background": True},
+        )
+
+        self.assertTrue(outcome.details["background"], outcome.model_text)
+        self.assertEqual(self.ledger.pending(), 1)
+
+    def test_a_registry_built_without_a_ledger_still_runs_the_command(self):
+        registry = ToolRegistry(base_dir=self._tmp.name, task_id=self.task_id)
+
+        outcome = registry.execute_tool(
+            "exec_command",
+            {"command": "echo unobserved-marker", "run_in_background": True},
+        )
+
+        self.assertTrue(outcome.details["background"], outcome.model_text)
+        self.assertIsNone(registry.background)
 
 
 if __name__ == "__main__":
