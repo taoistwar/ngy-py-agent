@@ -4,6 +4,7 @@ import {
   createAgent,
   createDenyRule,
   createMcpServer,
+  createMemory,
   createModel,
   createProvider,
   createSession,
@@ -12,6 +13,7 @@ import {
   deleteAgent,
   deleteDenyRule,
   deleteMcpServer,
+  deleteMemory,
   deleteModel,
   deleteProvider,
   deleteSession,
@@ -25,6 +27,7 @@ import {
   fetchSkills,
   fetchHealth,
   fetchMcpServers,
+  fetchMemories,
   fetchModels,
   fetchProviders,
   fetchRetentionConfig,
@@ -50,6 +53,8 @@ import {
   stopTask,
   updateAgent,
   updateMcpServer,
+  updateMemory,
+  updateMemoryConfig,
   updateModel,
   updateProvider,
   updateRetentionConfig,
@@ -84,6 +89,7 @@ import { SearchIcon, SkillIcon } from "./components/icons"
 import AgentManager from "./components/admin/AgentManager"
 import DenyListManager from "./components/admin/DenyListManager"
 import McpServerManager from "./components/admin/McpServerManager"
+import MemoryManager from "./components/admin/MemoryManager"
 import ModelManager from "./components/admin/ModelManager"
 import PermissionRulesManager from "./components/admin/PermissionRulesManager"
 import ProviderManager from "./components/admin/ProviderManager"
@@ -975,6 +981,10 @@ export default function App() {
   const [agentCreateSignal, setAgentCreateSignal] = useState(0)
   const [skills, setSkills] = useState([])
   const [skillsRoot, setSkillsRoot] = useState("")
+  // The cross-session memory library and its switches (ADR 0035). ``memoryConfig`` is
+  // the last response's settings block, so the page renders them without a second call.
+  const [memories, setMemories] = useState([])
+  const [memoryConfig, setMemoryConfig] = useState(null)
   const [composerTaskId, setComposerTaskId] = useState("")
   // Non-null while the composer is filled from a task row: sending it then replaces
   // that task instead of appending a new turn.
@@ -1231,6 +1241,19 @@ export default function App() {
     const data = await fetchSkills()
     setSkills(data.skills ?? [])
     setSkillsRoot(data.skills_root ?? "")
+    return data
+  }, [])
+
+  const refreshMemories = useCallback(async () => {
+    const data = await fetchMemories()
+    setMemories(data.memories ?? [])
+    setMemoryConfig({
+      enabled: data.enabled ?? true,
+      auto_extract: data.auto_extract ?? true,
+      max_prompt_chars: data.max_prompt_chars ?? 4000,
+      source: data.source ?? "default",
+      total: data.total ?? 0,
+    })
     return data
   }, [])
 
@@ -1577,6 +1600,60 @@ export default function App() {
       }
     },
     [refreshSkills, translate]
+  )
+
+  const createMemoryHandler = useCallback(
+    async (memory) => {
+      try {
+        await createMemory(memory)
+        await refreshMemories()
+      } catch (memoryError) {
+        setError(memoryError?.message || translate("errorLoadFailed"))
+        throw memoryError
+      }
+    },
+    [refreshMemories, translate]
+  )
+
+  const updateMemoryHandler = useCallback(
+    async (memoryId, patch) => {
+      try {
+        await updateMemory(memoryId, patch)
+        await refreshMemories()
+      } catch (memoryError) {
+        setError(memoryError?.message || translate("errorLoadFailed"))
+        throw memoryError
+      }
+    },
+    [refreshMemories, translate]
+  )
+
+  const deleteMemoryHandler = useCallback(
+    async (memoryId) => {
+      try {
+        await deleteMemory(memoryId)
+        await refreshMemories()
+      } catch (memoryError) {
+        setError(memoryError?.message || translate("errorLoadFailed"))
+        throw memoryError
+      }
+    },
+    [refreshMemories, translate]
+  )
+
+  const saveMemoryConfigHandler = useCallback(
+    async (config) => {
+      try {
+        await updateMemoryConfig(config)
+        // Re-read rather than trusting the response: the page shows the library and
+        // the switches from the same payload, so they can never disagree.
+        await refreshMemories()
+      } catch (memoryError) {
+        setError(memoryError?.message || translate("errorLoadFailed"))
+        throw memoryError
+      }
+    },
+    [refreshMemories, translate]
   )
 
   useEffect(() => {
@@ -2403,6 +2480,9 @@ export default function App() {
       if (activeMenu === "skills") {
         refreshSkills().catch(() => {})
       }
+      if (activeMenu === "memories") {
+        refreshMemories().catch(() => {})
+      }
       if (activeMenu === "mcp") {
         refreshMcpServers().catch(() => {})
       }
@@ -2433,7 +2513,7 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [activeMenu, applySelection, refreshAgentMeta, refreshAgents, refreshDenyList, refreshHealth, refreshMaxSteps, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWebFetch, refreshWebSearch, refreshWorkspaces, translate])
+  }, [activeMenu, applySelection, refreshAgentMeta, refreshAgents, refreshDenyList, refreshHealth, refreshMaxSteps, refreshMemories, refreshPermissionMode, refreshPermissionRules, refreshMcpServers, refreshModels, refreshProviders, refreshRetention, refreshSessions, refreshSkills, refreshTasks, refreshTools, refreshWebFetch, refreshWebSearch, refreshWorkspaces, translate])
 
   useEffect(() => {
     if (!selectedId || activeMenu !== "tasks") return
@@ -2728,6 +2808,17 @@ export default function App() {
             onImport={importSkillHandler}
             onDelete={deleteSkillHandler}
             onRefresh={refreshSkills}
+            translate={translate}
+          />
+        ) : activeMenu === "memories" ? (
+          <MemoryManager
+            memories={memories}
+            config={memoryConfig}
+            onCreate={createMemoryHandler}
+            onUpdate={updateMemoryHandler}
+            onDelete={deleteMemoryHandler}
+            onSaveConfig={saveMemoryConfigHandler}
+            onRefresh={refreshMemories}
             translate={translate}
           />
         ) : activeMenu === "mcp" ? (

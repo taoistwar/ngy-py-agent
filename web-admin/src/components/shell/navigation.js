@@ -5,6 +5,7 @@ import {
   ClockIcon,
   CpuIcon,
   FolderIcon,
+  MemoryIcon,
   OverviewIcon,
   PlugIcon,
   ServerIcon,
@@ -36,6 +37,9 @@ export const NAV_GROUPS = [
       { key: "agents", labelKey: "menuAgents", icon: "bot" },
       { key: "tools", labelKey: "menuTools", icon: "wrench" },
       { key: "skills", labelKey: "menuSkills", icon: "skill" },
+      // What the agent kept from earlier conversations: configured next to the other
+      // things an agent is made of, not next to the models (ADR 0035).
+      { key: "memories", labelKey: "menuMemories", icon: "memory" },
       { key: "mcp", labelKey: "menuMcp", icon: "plug" },
     ],
   },
@@ -66,6 +70,7 @@ export const NAV_ICONS = {
   bot: BotIcon,
   wrench: WrenchIcon,
   skill: SkillIcon,
+  memory: MemoryIcon,
   plug: PlugIcon,
   cpu: CpuIcon,
   server: ServerIcon,

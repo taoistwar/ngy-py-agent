@@ -126,6 +126,48 @@ export async function deleteSkill(name) {
   })
 }
 
+// The cross-session memory library (ADR 0035). ``fetchMemories`` returns the list and
+// the switches together, because the page renders them side by side.
+export async function fetchMemories() {
+  return requestJson(`${API_BASE}/api/memories`)
+}
+
+export async function createMemory(memory) {
+  return requestJson(`${API_BASE}/api/memories`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(memory),
+  })
+}
+
+export async function updateMemory(memoryId, patch) {
+  return requestJson(`${API_BASE}/api/memories/${encodeURIComponent(memoryId)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(patch),
+  })
+}
+
+export async function deleteMemory(memoryId) {
+  return requestJson(`${API_BASE}/api/memories/${encodeURIComponent(memoryId)}`, {
+    method: "DELETE",
+  })
+}
+
+export async function updateMemoryConfig(config) {
+  return requestJson(`${API_BASE}/api/admin/memory-config`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(config),
+  })
+}
+
 export async function fetchAgentMeta() {
   return requestJson(`${API_BASE}/api/agents/meta`)
 }
