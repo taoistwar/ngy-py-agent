@@ -97,6 +97,7 @@ ws.onmessage = (event) => {
 - 任务与明细落库文件：`monitor_tasks.db`（SQLite）
 - 重启服务后历史仍保留（取决于管理中心配置的保留天数）
 - 可通过后端 API 实时调整保留天数：`PUT /api/admin/retention`
+- 过期清理由后台线程执行（`agent/runtime/purge.py`）：启动时一次，之后每小时一次；API 请求路径不再触发清理
 
 ## 8. 前端国际化（i18n）文案维护
 

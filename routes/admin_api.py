@@ -23,7 +23,6 @@ from agent.agents_md import DEFAULT_MAX_BYTES as AGENTS_MD_DEFAULT_MAX_BYTES
 from agent.agents_md import MAX_BYTES_LIMIT as AGENTS_MD_MAX_BYTES_LIMIT
 from agent.agents_md import MIN_MAX_BYTES as AGENTS_MD_MIN_BYTES
 from agent.agents_md import AgentsMdSettings
-from agent.runtime import purge_expired_tasks_with_log
 from agent.tools.denylist import (
     MATCH_FIXED,
     MATCH_KINDS,
@@ -307,11 +306,12 @@ async def set_retention_config(
     state.monitor_store.set_task_retention_days(payload.retention_days)
     state.task_retention_days = max(0, payload.retention_days)
     state.task_retention_source = "database"
-    removed = purge_expired_tasks_with_log("Retention config updated")
+    # The hourly sweep picks the new window up on its next tick; nothing is purged
+    # inline, so this response always reports zero removed rows.
     return RetentionConfigResponse(
         retention_days=state.task_retention_days,
         retention_source=state.task_retention_source,
-        removed_tasks=removed,
+        removed_tasks=0,
     )
 
 

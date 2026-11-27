@@ -38,7 +38,13 @@ from agent.runtime.naming import (
     update_session_title,
     update_task_name,
 )
-from agent.runtime.purge import purge_expired_tasks, purge_expired_tasks_with_log
+from agent.runtime.purge import (
+    PURGE_INTERVAL_SECONDS,
+    purge_expired_tasks,
+    purge_expired_tasks_with_log,
+    start_retention_sweeper,
+    stop_retention_sweeper,
+)
 from agent.runtime.runner import run_task
 from agent.runtime.scheduling import (
     cron_matches,
@@ -56,6 +62,7 @@ __all__ = [
     "MonitorBoardStore",
     "MonitorMemoryStore",
     "MonitorTodoStore",
+    "PURGE_INTERVAL_SECONDS",
     "TaskLaunchError",
     "agent_runtime_config",
     "board_for_run",
@@ -85,7 +92,9 @@ __all__ = [
     "resolve_session_base_dir",
     "resolve_skills_root",
     "run_task",
+    "start_retention_sweeper",
     "start_scheduler",
+    "stop_retention_sweeper",
     "stop_scheduler",
     "tick",
     "update_session_title",

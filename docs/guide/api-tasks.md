@@ -69,9 +69,11 @@ TASK_RESUME_MAX_ATTEMPTS=0 uv run python main.py
   - 返回字段：
     - `retention_days`：当前保留天数
     - `retention_source`：`default` 或 `database`
-    - `removed_tasks`：最近一次清理移除数量（`GET` 返回 0）
+    - `removed_tasks`：保留字段，接口固定返回 0（清理不在请求路径上执行）
 - `PUT /api/admin/retention`：设置保留天数。
   - 请求体：`{"retention_days": 30}`
   - `0` 表示关闭清理（保留全部任务明细）
 
 保留天数只存于数据库，不再读取 `TASK_RETENTION_DAYS` 环境变量；未设置时使用代码默认值 36600 天（约 100 年）。
+
+过期数据由后台线程清理：服务启动时先巡检一次，之后每小时一次（`agent/runtime/purge.py`）。创建任务、保存保留配置等请求都不再触发清理，因此修改保留天数后，过期数据最多延迟一小时被删除。

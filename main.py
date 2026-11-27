@@ -22,8 +22,9 @@ from fastapi.responses import FileResponse
 from uvicorn import run as uvicorn_run
 
 from agent.runtime import (
-    purge_expired_tasks_with_log,
+    start_retention_sweeper,
     start_scheduler,
+    stop_retention_sweeper,
     stop_scheduler,
 )
 from agent.telemetry import (
@@ -97,11 +98,14 @@ async def _lifespan(_app: FastAPI):
     _resume_interrupted_tasks()
     # The clock lives with the process, not with a request: started once here and
     # stopped on the way out, so a reload never leaves two threads firing the same
-    # schedule.
+    # schedule. The retention sweep follows the same rule: one hourly thread, no
+    # purge on the request path.
     start_scheduler()
+    start_retention_sweeper()
     try:
         yield
     finally:
+        stop_retention_sweeper()
         stop_scheduler()
 
 
@@ -220,7 +224,6 @@ def _run_web_server(host: str, port: int, reload: bool) -> None:
             "Frontend entry missing: expected web-admin/index.html or web-admin/dist/index.html."
         ) from exc
 
-    purge_expired_tasks_with_log("Web admin startup")
     try:
         uvicorn_run("main:app", host=host, port=port, reload=reload, app_dir=str(ROOT_DIR))
     finally:

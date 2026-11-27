@@ -24,7 +24,6 @@ from agent.runtime import (
     build_event,
     checkpoint_store_for_task,
     extract_task_result,
-    purge_expired_tasks_with_log,
 )
 from agent.runtime.launcher import TaskLaunchError, launch_task
 from agent.tools.permissions import SCOPES
@@ -52,7 +51,6 @@ router = APIRouter()
 
 @router.post("/api/tasks", response_model=RunTaskResponse)
 async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
-    purge_expired_tasks_with_log("Creating new API task")
     # The resolution and the thread live in ``agent.runtime.launcher``: the scheduler
     # starts tasks the same way, and two copies of this would drift.
     try:
