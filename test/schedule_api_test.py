@@ -88,6 +88,23 @@ class ScheduleApiTest(unittest.TestCase):
         self.assertEqual(400, self.create(model_id="nope").status_code)
         self.assertEqual(400, self.create(workspace_id="nope").status_code)
 
+    def test_a_permission_mode_can_be_pinned_and_cleared(self):
+        """Empty means "follow the global mode"; a value makes the run unattended."""
+        body = self.created(permission_mode="auto_approve")
+        self.assertEqual("auto_approve", body["permission_mode"])
+
+        cleared = self.client.put(
+            f"/api/schedules/{body['schedule_id']}", json={"permission_mode": None}
+        ).json()
+
+        self.assertEqual("", cleared["permission_mode"])
+
+    def test_an_unknown_permission_mode_is_refused(self):
+        response = self.create(permission_mode="yolo")
+
+        self.assertEqual(400, response.status_code)
+        self.assertIn("permission mode", response.json()["detail"].lower())
+
     def test_an_empty_name_falls_back_to_the_prompt(self):
         body = self.created(name="")
 

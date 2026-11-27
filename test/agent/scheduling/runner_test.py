@@ -45,10 +45,12 @@ class FireScheduleTest(unittest.TestCase):
         # Record the order the two records are created in: session before task is the
         # whole point of the feature.
         self.order = []
+        self.launch_calls = []
         real_launch = launcher.launch_task
 
         def recording_launch(**kwargs):
             self.order.append("task")
+            self.launch_calls.append(dict(kwargs))
             return real_launch(**kwargs)
 
         real_create_session = self.store.create_session
@@ -145,6 +147,21 @@ class FireScheduleTest(unittest.TestCase):
         run = runner.fire_schedule(schedule)
 
         self.assertEqual(workspace_id, self.store.get_session(run["session_id"])["workspace_id"])
+
+    def test_the_pinned_permission_mode_reaches_the_task(self):
+        """Unattended runs must be able to skip confirmations nobody can answer."""
+        schedule = self.make_schedule(permission_mode="auto_approve")
+
+        runner.fire_schedule(schedule)
+
+        self.assertEqual("auto_approve", self.launch_calls[-1]["permission_mode"])
+
+    def test_an_unpinned_schedule_leaves_the_mode_to_the_global_setting(self):
+        schedule = self.make_schedule()
+
+        runner.fire_schedule(schedule)
+
+        self.assertIsNone(self.launch_calls[-1]["permission_mode"])
 
     def test_a_deleted_workspace_does_not_leave_a_dangling_session_reference(self):
         workspace_id = self.store.create_workspace("Project", str(_REPO_ROOT))

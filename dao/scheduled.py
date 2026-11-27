@@ -31,6 +31,7 @@ _UPDATABLE_FIELDS = (
     "agent_id",
     "model_id",
     "workspace_id",
+    "permission_mode",
     "enabled",
     "recurring",
 )
@@ -53,6 +54,8 @@ class _ScheduleMixin:
             "agent_id": row["agent_id"],
             "model_id": row["model_id"],
             "workspace_id": row["workspace_id"],
+            # Empty means "follow the global confirmation mode".
+            "permission_mode": row["permission_mode"] or "",
             "enabled": bool(row["enabled"]),
             "recurring": bool(row["recurring"]),
             "last_fired": row["last_fired"] or "",
@@ -90,6 +93,7 @@ class _ScheduleMixin:
         agent_id: str = "build",
         model_id: str | None = None,
         workspace_id: str | None = None,
+        permission_mode: str = "",
         enabled: bool = True,
         recurring: bool = True,
     ) -> str:
@@ -100,8 +104,9 @@ class _ScheduleMixin:
                 """
                 INSERT INTO schedules (
                     schedule_id, name, cron, prompt, agent_id, model_id, workspace_id,
-                    enabled, recurring, last_fired, last_run_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+                    permission_mode, enabled, recurring, last_fired, last_run_at,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
                 """,
                 (
                     schedule_id,
@@ -111,6 +116,7 @@ class _ScheduleMixin:
                     agent_id,
                     model_id,
                     workspace_id,
+                    permission_mode,
                     int(bool(enabled)),
                     int(bool(recurring)),
                     now,

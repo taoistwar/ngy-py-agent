@@ -50,6 +50,9 @@ def _fire_locked(schedule: dict[str, Any], trigger: str) -> dict[str, Any]:
             session_id=session_id,
             model_id=schedule.get("model_id"),
             agent_id=schedule.get("agent_id"),
+            # Empty (the default) follows the global mode. A pinned mode is what lets
+            # an unattended schedule finish instead of parking on a confirmation.
+            permission_mode=schedule.get("permission_mode") or None,
         )
     except TaskLaunchError as exc:
         return store.create_schedule_run(

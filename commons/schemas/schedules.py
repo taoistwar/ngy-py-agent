@@ -23,6 +23,13 @@ class ScheduleCreateRequest(BaseModel):
     workspace_id: str | None = Field(
         default=None, description="Workspace the run's session belongs to."
     )
+    permission_mode: str | None = Field(
+        default=None,
+        description=(
+            "Confirmation mode pinned to this schedule's runs (ask / auto_approve / "
+            "deny_all); omit to follow the global setting."
+        ),
+    )
     enabled: bool = Field(default=True, description="False starts the schedule paused.")
     recurring: bool = Field(
         default=True,
@@ -44,6 +51,8 @@ class ScheduleUpdateRequest(BaseModel):
     agent_id: str | None = None
     model_id: str | None = None
     workspace_id: str | None = None
+    # An explicit ``null`` (or empty string) restores "follow the global mode".
+    permission_mode: str | None = None
     enabled: bool | None = None
     recurring: bool | None = None
 
@@ -58,6 +67,8 @@ class ScheduleItemResponse(BaseModel):
     agent_id: str = DEFAULT_MODE
     model_id: str | None = None
     workspace_id: str | None = None
+    # Empty follows the global mode; otherwise this schedule's runs are pinned to it.
+    permission_mode: str = ""
     enabled: bool = True
     recurring: bool = True
     created_at: datetime

@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query
 from agent.modes import DEFAULT_MODE
 from agent.runtime import fire_schedule, next_fire_after, validate_cron
 from agent.runtime.scheduling.cron import CronError
+from agent.tools.permissions import PermissionMode
 from commons import state
 from commons.schemas import (
     RunningScheduleTaskListResponse,
@@ -81,6 +82,21 @@ def _checked_model(raw: str | None) -> str | None:
     return model_id
 
 
+def _checked_permission_mode(raw: str | None) -> str:
+    """Normalize a pinned confirmation mode; empty means "follow the global one"."""
+    text = str(raw or "").strip().lower().replace("-", "_")
+    if not text:
+        return ""
+    for mode in PermissionMode:
+        if text == mode.value:
+            return text
+    allowed = " / ".join(mode.value for mode in PermissionMode)
+    raise HTTPException(
+        status_code=400,
+        detail=f"Unknown permission mode '{raw}'. Expected {allowed}, or empty for the global mode.",
+    )
+
+
 def _checked_workspace(raw: str | None) -> str | None:
     workspace_id = str(raw or "").strip()
     if not workspace_id:
@@ -113,6 +129,7 @@ def _schedule_response(schedule: dict[str, Any]) -> ScheduleItemResponse:
         agent_id=schedule["agent_id"],
         model_id=schedule["model_id"],
         workspace_id=schedule["workspace_id"],
+        permission_mode=schedule["permission_mode"],
         enabled=schedule["enabled"],
         recurring=schedule["recurring"],
         created_at=schedule["created_at"],
@@ -168,6 +185,7 @@ async def create_schedule(payload: ScheduleCreateRequest) -> ScheduleItemRespons
         agent_id=_checked_agent(payload.agent_id),
         model_id=_checked_model(payload.model_id),
         workspace_id=_checked_workspace(payload.workspace_id),
+        permission_mode=_checked_permission_mode(payload.permission_mode),
         enabled=payload.enabled,
         recurring=payload.recurring,
     )
@@ -199,6 +217,8 @@ async def update_schedule(
         changes["model_id"] = _checked_model(changes["model_id"])
     if "workspace_id" in changes:
         changes["workspace_id"] = _checked_workspace(changes["workspace_id"])
+    if "permission_mode" in changes:
+        changes["permission_mode"] = _checked_permission_mode(changes["permission_mode"])
     if "enabled" in changes and changes["enabled"] is None:
         raise HTTPException(status_code=400, detail="'enabled' must be true or false.")
 

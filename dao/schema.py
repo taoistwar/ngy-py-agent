@@ -138,6 +138,9 @@ class _SchemaMixin:
                     agent_id TEXT NOT NULL DEFAULT 'build',
                     model_id TEXT,
                     workspace_id TEXT,
+                    -- Empty follows the global confirmation mode. A value pins this
+                    -- schedule's runs: nobody is present to answer a prompt.
+                    permission_mode TEXT NOT NULL DEFAULT '',
                     enabled INTEGER NOT NULL DEFAULT 1,
                     recurring INTEGER NOT NULL DEFAULT 1,
                     last_fired TEXT,
@@ -161,6 +164,7 @@ class _SchemaMixin:
                 )
                 """
             )
+            self._ensure_schedule_columns()
             self._conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_events_task_id_id ON events(task_id, id)"
             )
@@ -219,6 +223,16 @@ class _SchemaMixin:
         existing = {row["name"] for row in rows}
         if "icon" not in existing:
             self._conn.execute("ALTER TABLE agents ADD COLUMN icon TEXT NOT NULL DEFAULT ''")
+
+    def _ensure_schedule_columns(self) -> None:
+        rows = self._conn.execute("PRAGMA table_info(schedules)").fetchall()
+        existing = {row["name"] for row in rows}
+        if "permission_mode" not in existing:
+            # Added after schedules shipped: an unattended run inheriting "ask" parks
+            # on a confirmation until it times out, so it has to be pinnable per row.
+            self._conn.execute(
+                "ALTER TABLE schedules ADD COLUMN permission_mode TEXT NOT NULL DEFAULT ''"
+            )
 
     def _seed_default_agents(self) -> None:
         """Insert the built-in build/ask/plan agents derived from the mode configs.
