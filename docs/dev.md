@@ -333,7 +333,7 @@ npm run i18n:check
 - `collect()` 一次做三件事：判定已结束（`session is None` 或 `not running()`）→ 取 `exit_code`、`retire` 会话、从台账删除 → 带上日志末尾 `TAIL_CHARS = 600`。取不到退出码（会话已被 `write_stdin` 收走）写 `exit code unknown`，不猜。
 - 注入点是**步首**，顺序固定为 `apply_snip_compact` → `inject_background_results` → `prepare_context`：先压缩，通知才不会被当成"可挪走的旧工具结果"；`user` 消息也不在 `result_budget` 的处理范围内（那层只看 `batch_start` 之后的 `tool` 消息）。
 - 通知**绝不复用** `tool_call_id`：那次调用已经有占位结果了，重复 id 会让 transcript 非法（`task_recovery` 按 `tool_call_id` 重建对话）。同一步的多条完成合并进一条 `user` 消息，避免一次多出一条。
-- 子 agent 的 registry 是新建的（工具集减去 `subagent` 自身，见 [ADR 0032](decisions/0032-subagent-tool.md)），台账靠 `_build_child_registry` 显式传过去；`todo_board` 则故意不传。子 agent 启动的后台命令因此记在**父**台账、由父循环通知：不丢，也不重复。
+- 子 agent 的 registry 是新建的（工具集减去 `subagent` 与六个 `task_*`，见 [ADR 0032](decisions/0032-subagent-tool.md)），台账靠 `_build_child_registry` 显式传过去；`todo_board` 则故意不传。子 agent 启动的后台命令因此记在**父**台账、由父循环通知：不丢，也不重复。
 - 已知限制：循环不再继续（模型启动后台命令后直接结束任务）就没有通知，命令也会在任务边界被停掉；台账只在内存里，进程重启后通知随会话一起消失。
 
 ### 大输出与只读附加根
@@ -458,7 +458,7 @@ npm run i18n:check
 
 - 工具包 `agent/tools/subagent/` 只管契约（brief → 最终报告）；**嵌套循环在 `agent/agent_loop/subagent.py`**，因为它需要 provider 与 event sink，而工具两者都拿不到（与 `ask_user` 同一条理由）。runner 以 `ToolBindings.run_subagent` 注入，`run_react_loop` 在 registry 建好后按需装入（`registry.subagent_runner`），晚绑定手法与 broker 一致。
 - **隔离的只有消息**：同一进程、`base_dir`、权限门、黑名单、检查点（父 `task_id`）、`should_stop`。子工具的改动属于父任务的撤销记录，子 agent 的 `exec_command` 会问同一个用户。
-- **子工具集 = 父工具集 − `subagent`**（`_build_child_registry`），所以只有一层委派；MCP 动态工具由 `_adopt_dynamic_tools` 复制过去。子 agent 的 `todo_write` 用独立内存计划板，**不要**传父会话的 board。
+- **子工具集 = 父工具集 − `CHILD_EXCLUDED_TOOLS`**（`subagent` 与六个 `task_*`，清单在 `agent/tools/catalog.py`，见 [ADR 0032](decisions/0032-subagent-tool.md)）：委派只有一层；任务板是**守着计划的那个会话**的职责，子 agent 的上下文返回即弃，给它只会越权又多花 token。MCP 动态工具由 `_adopt_dynamic_tools` 复制过去。子 agent 的 `todo_write` 用独立内存计划板，**不要**传父会话的 board。
 - **不要改用 `run_react_loop` 跑子循环**：它的 `_reaps_task_sessions` 会用 `task_id` 停父任务的 MCP 与后台进程，重建 registry 也会绕开"父的 provider + 父的工具集"。子循环只复用 `run_model_turn` 与子 registry 的 `execute_tool`，压缩管线不进入子循环。
 - 事件只发 `subagent`（`started` / `tool` / `done` / `failed`），子循环自己的 `llm_*` 不发；长文本 4,000 字符截断。前端需要 `category_subagent`、六份字典里的 `phase` 文案、`buildSubagent` 与 `.tag.subagent`，以及 `eventFilter.js` 的顺序项。
 - 取舍与已知限制（子对话不入库、同步阻塞、报告不进父循环的结果预算）见 [ADR 0032](decisions/0032-subagent-tool.md)。

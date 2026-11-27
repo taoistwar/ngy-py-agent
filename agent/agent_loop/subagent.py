@@ -29,6 +29,7 @@ from agent.models import EventCategory, EventSink, TaskEvent, ToolOutcome
 from agent.provider import resolve_tool_provider_for_schemas
 from agent.telemetry import current_trace_ids
 from agent.tool_registry import ToolRegistry
+from agent.tools.catalog import CHILD_EXCLUDED_TOOLS
 
 SUBAGENT_TOOL_NAME = "subagent"
 # One delegated task should not be able to spend the parent's whole budget: this is a
@@ -219,13 +220,19 @@ def _run_subagent(
 
 
 def _build_child_registry(parent: Any) -> ToolRegistry:
-    """The subagent's registry: the parent's tools minus delegation itself.
+    """The subagent's registry: the parent's tools minus delegation and the board.
 
     The brokers and the checkpoint store are shared on purpose. The child runs in the
     same task, so its ``exec_command`` must ask the same user, its writes must land in
     the same undo record, and the deny-list must cover it identically.
+
+    The board tools are left out on purpose (``CHILD_EXCLUDED_TOOLS``): a delegated
+    context is thrown away when it returns, so creating, sequencing and claiming tasks
+    stays with the parent conversation, which is the one that keeps the plan.
     """
-    names = [name for name in getattr(parent, "tools", {}) if name != SUBAGENT_TOOL_NAME]
+    names = [
+        name for name in getattr(parent, "tools", {}) if name not in CHILD_EXCLUDED_TOOLS
+    ]
     child = ToolRegistry(
         enabled_tools=names,
         base_dir=getattr(parent, "base_dir", None),

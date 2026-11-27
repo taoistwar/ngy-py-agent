@@ -59,6 +59,7 @@
 
 - 模型多六个工具（`build` 模式全量；`ask` / `plan` 白名单不含它们）。
 - 会话详情响应多一个 `board` 字段；`test/tool_api_test.py` 的六语言契约同样覆盖这七个工具（`agent/tools/task_board_i18n.py`）。
+- 子 agent 拿不到这六个工具（`agent/tools/catalog.py::CHILD_EXCLUDED_TOOLS`，理由见 [ADR 0032](0032-subagent-tool.md) D2）：规划由守着计划的那个会话做，被派出去的任务只回一份摘要。
 - 已知限制：
   - 没有释放认领、没有删除依赖；依赖图在任务被认领后冻结；
   - 板不与 `todo_write` 同步：清单是即刻步骤，板是项目计划，由模型各自维护；

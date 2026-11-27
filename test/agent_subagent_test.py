@@ -23,7 +23,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from agent.agent_loop import run_react_loop  # noqa: E402
 from agent.agent_loop.model_turn import ModelTurn  # noqa: E402
-from agent.agent_loop.subagent import make_subagent_runner  # noqa: E402
+from agent.agent_loop.subagent import _build_child_registry, make_subagent_runner  # noqa: E402
 from agent.models import EventCategory  # noqa: E402
 from agent.tool_registry import ToolRegistry  # noqa: E402
 
@@ -320,6 +320,36 @@ class LoopWiringTest(unittest.TestCase):
             if event.category == EventCategory.TOOL_CALL
         ]
         self.assertEqual(tool_names, ["subagent"])
+
+
+class ChildToolListTest(unittest.TestCase):
+    """What the child may call: the parent's tools minus delegation and the board.
+
+    A subagent's context is thrown away when it returns, so the project's plan stays
+    with the conversation that keeps it: creating, sequencing and claiming tasks there
+    would be overreach, and the six schemas are tokens spent on a job nobody can finish.
+    """
+
+    def setUp(self):
+        self.registry = ToolRegistry()
+
+    def test_the_child_cannot_delegate_further(self):
+        self.assertNotIn("subagent", _build_child_registry(self.registry).tools)
+
+    def test_the_child_gets_no_board_tools(self):
+        child = _build_child_registry(self.registry)
+
+        self.assertEqual([name for name in child.tools if name.startswith("task_")], [])
+
+    def test_the_child_keeps_the_tools_its_brief_needs(self):
+        child = _build_child_registry(self.registry)
+
+        for name in ("todo_write", "exec_command", "read_file", "write_file"):
+            self.assertIn(name, child.tools)
+
+    def test_the_board_tools_stay_on_the_parent(self):
+        for name in ("task_create", "task_list", "task_claim", "task_complete"):
+            self.assertIn(name, self.registry.tools)
 
 
 if __name__ == "__main__":

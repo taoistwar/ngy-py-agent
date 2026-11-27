@@ -55,7 +55,8 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     task_complete.build_spec,
     # Delegation sits next to planning: a multi-step task should first be planned, and
     # then the parts that would flood this context are handed off (ADR 0032). The child
-    # tool list is this list minus ``subagent``, so the order informs the subagent too.
+    # tool list is this list minus ``CHILD_EXCLUDED_TOOLS``, so the order informs the
+    # subagent too.
     subagent.build_spec,
     code_interpreter.build_spec,
     # Find before read: ``glob`` locates a file by name, ``grep`` locates the code
@@ -84,6 +85,19 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     computer_control.build_spec,
     # Asks rather than acts, so it sits last: it belongs to no family of tools above.
     ask_user_question.build_spec,
+)
+
+
+# Tools a subagent never gets. Delegation is one level deep, and planning belongs to
+# the conversation that keeps the plan: the child answers one brief with a context it
+# throws away when it returns, so creating, sequencing or claiming project tasks there
+# would be both overreach and extra tokens (ADR 0032 D2, ADR 0033).
+CHILD_EXCLUDED_TOOLS = frozenset(
+    [subagent.NAME]
+    + [
+        module.NAME
+        for module in (task_create, task_update, task_list, task_get, task_claim, task_complete)
+    ]
 )
 
 

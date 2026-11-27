@@ -19,10 +19,11 @@
 - 同一进程、同一 `base_dir`、同一份文件系统。子 agent 的写入与命令和父 agent 一样留在工作空间里。
 - 只把**最终文本**交回父对话；子 agent 的工具调用与结果不进入父 `messages`。
 
-### D2. 子 agent 的工具 = 父的工具 − `subagent`
+### D2. 子 agent 的工具 = 父的工具 − `subagent` − 任务板
 
 - 从父 registry 的工具名列表里排除 `subagent`，其余全部给子 registry（包括 MCP 动态注册的工具：`ToolRegistry` 只构建内置工具，所以 `_adopt_dynamic_tools` 把父用的动态工具复制过去）。
 - 因此**只有一层委派**：子 agent 看不到 `subagent`，调用它会得到 `Tool 'subagent' not found`。
+- 任务板六个工具（`task_*`）也排除（`agent/tools/catalog.py::CHILD_EXCLUDED_TOOLS`）：派出去的是「做完一件事、回一份摘要」，子上下文返回即弃；建任务、连依赖、认领都是**父会话**的规划职责，给子 agent 只会越权（它看不到父会话正在推进哪一步）又多花 token。
 - 子 agent 的 `todo_write` 用**独立的内存计划板**：共享父会话的 board 会让一次委派覆盖父对话正在推进的计划。
 
 ### D3. 门禁、黑名单、检查点、提问通道共享
