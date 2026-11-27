@@ -106,6 +106,7 @@
   "eventViewReasoning": "Глубокое размышление",
   "eventViewRaw": "Исходный текст",
   "eventsTranslateReasoning": "Перевести размышления на текущий язык",
+  "eventsTranslateDeferred": "Часть размышлений пока не переведена: исчерпан лимит запросов модели (RPM). Повторите перевод чуть позже.",
   "eventReasoningOriginal": "Оригинал",
   "eventReasoningShowOriginal": "Показать оригинал",
   "eventReasoningShowTranslation": "Показать перевод",

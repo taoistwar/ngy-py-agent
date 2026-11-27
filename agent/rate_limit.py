@@ -142,6 +142,23 @@ class ProviderThrottle:
         with self._lock:
             return self._limits.get(key, 0)
 
+    def available_requests(self, provider: Any, base_url: Any = "") -> Optional[int]:
+        """How many requests still fit this endpoint's window right now.
+
+        ``None`` means "no limit configured", which is not the same as ``0``: a caller
+        that plans a batch of calls (:mod:`agent.runtime.reasoning_translate`) uses this
+        to stop before the first wait rather than queueing minutes of them. Reading the
+        budget does not spend it - it is a snapshot, and the wire layer still enforces
+        the real thing when the request goes out.
+        """
+        name, url = endpoint_identity(provider, base_url)
+        key = f"{name}|{url}"
+        with self._lock:
+            limit = self._limits.get(key, 0)
+            if limit <= 0:
+                return None
+            return max(0, limit - len(self._prune(key, self._clock())))
+
     def acquire(self, provider: Any, base_url: Any = "") -> float:
         """Block until this endpoint has room; returns the seconds waited.
 

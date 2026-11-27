@@ -5,6 +5,10 @@ translation at all, and a saved model is what the task endpoints use. The per-ta
 work: a trace is translated once per language and skipped afterwards, so a second
 click (or the automatic pass after a finished task) costs no tokens.
 
+The endpoint's RPM budget is the third: translation is a batch of model calls, so it
+spends the same bucket the task loop does and stops asking when the minute is gone
+instead of queueing a long row of waits (ADR 0013).
+
 Run from the repository root::
 
     uv run python test/reasoning_translation_test.py -v
@@ -16,6 +20,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from uuid import uuid4
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
@@ -25,6 +30,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 import main  # noqa: E402
 from agent.models import EventCategory, TaskEvent  # noqa: E402
+from agent.rate_limit import RpmLimitError, bucket_key, provider_throttle  # noqa: E402
 from agent.runtime import reasoning_translate  # noqa: E402
 from commons import state  # noqa: E402
 from dao import _SqliteTaskStore  # noqa: E402
@@ -37,11 +43,16 @@ REASONING_TWO = "The directory looks empty, so the answer is a short note."
 class _FakeProvider:
     """Answers every translation request with a recognisable form of the source."""
 
-    def __init__(self, fail: bool = False) -> None:
+    def __init__(self, fail: bool = False, rpm_after: int | None = None) -> None:
         self.calls = []
         self.fail = fail
+        # Raises ``RpmLimitError`` from the N-th call on, i.e. the endpoint's minute
+        # ran out mid-batch the way a real adapter reports it.
+        self.rpm_after = rpm_after
 
     def chat_completion(self, messages, tools=None, **kwargs):
+        if self.rpm_after is not None and len(self.calls) >= self.rpm_after:
+            raise RpmLimitError("openai-compatible", "https://gateway.example/v1", 1, 120.0, 60.0)
         self.calls.append(list(messages))
         if self.fail:
             raise RuntimeError("provider is down")
@@ -65,8 +76,16 @@ class _TranslatorTestCase(unittest.TestCase):
         state.translation_model_source = "default"
         self.client = TestClient(main.app)
         self.provider = _FakeProvider()
+        # A per-test base URL keeps this test's RPM bucket apart from the limiter's
+        # process-wide memory of earlier tests' requests.
+        self.base_url = f"https://gateway-{uuid4().hex}.example/v1"
         self.provider_record = self.store.llm.create_provider(
-            {"name": "gateway", "protocol": "openai-compatible", "api_key": "k"}
+            {
+                "name": "gateway",
+                "protocol": "openai-compatible",
+                "base_url": self.base_url,
+                "api_key": "k",
+            }
         )
         self.model = self.store.llm.create_model(
             {"name": "fast", "provider_id": self.provider_record["provider_id"]}
@@ -75,8 +94,23 @@ class _TranslatorTestCase(unittest.TestCase):
     def tearDown(self):
         state.monitor_store = self._previous_store
         state.translation_model_id, state.translation_model_source = self._previous_translation
+        # The limiter is a process-wide singleton; a test that configured a budget must
+        # not leave it in force for the next one.
+        provider_throttle.configure({})
         self.store.close()
         self._tmp.cleanup()
+
+    def set_endpoint_limit(self, rpm_limit):
+        """Give the translation endpoint an RPM budget, as the provider record would."""
+        key = bucket_key(self.provider_record["protocol"], self.provider_record["base_url"])
+        provider_throttle.configure({key: rpm_limit})
+        return key
+
+    def spend_minute(self):
+        """Record one request against the endpoint, i.e. the bucket is no longer free."""
+        provider_throttle.acquire(
+            self.provider_record["protocol"], self.provider_record["base_url"]
+        )
 
     def seed_task(self, reasonings):
         task_id = self.store.create_task(query="list files", provider="openai-compatible")
@@ -280,6 +314,67 @@ class ReasoningTranslationTest(_TranslatorTestCase):
         self.assertEqual(200, read_back.status_code)
         self.assertEqual(saved["items"], read_back.json()["items"])
         self.assertEqual(1, len(self.provider.calls))
+
+    def test_a_trace_is_not_started_when_the_endpoint_has_no_slot(self):
+        self.set_endpoint_limit(1)
+        self.spend_minute()
+        task_id = self.seed_task([REASONING_ONE])
+
+        with self.patch_provider():
+            payload = self.translate(task_id).json()
+
+        self.assertEqual(0, payload["translated"])
+        self.assertEqual(1, payload["deferred"])
+        self.assertEqual(0, payload["failed"])
+        self.assertEqual([], self.provider.calls)
+        self.assertEqual({}, self.store.list_reasoning_translations(task_id, "zh-CN"))
+
+    def test_the_rest_is_deferred_once_the_minute_is_spent(self):
+        self.set_endpoint_limit(1)
+        task_id = self.seed_task([REASONING_ONE, REASONING_TWO])
+
+        with self.patch_provider():
+            payload = self.translate(task_id).json()
+
+        self.assertEqual(1, payload["translated"])
+        self.assertEqual(1, payload["deferred"])
+        self.assertEqual(1, len(self.provider.calls))
+
+    def test_an_endpoint_without_a_budget_translates_everything(self):
+        task_id = self.seed_task([REASONING_ONE, REASONING_TWO])
+
+        with self.patch_provider():
+            payload = self.translate(task_id).json()
+
+        self.assertEqual(2, payload["translated"])
+        self.assertEqual(0, payload["deferred"])
+
+    def test_a_limit_raised_mid_run_defers_the_rest_instead_of_failing(self):
+        task_id = self.seed_task([REASONING_ONE, REASONING_TWO])
+        throttled = _FakeProvider(rpm_after=1)
+
+        with patch.object(reasoning_translate, "build_provider", return_value=throttled):
+            payload = self.translate(task_id).json()
+
+        self.assertEqual(1, payload["translated"])
+        self.assertEqual(1, payload["deferred"])
+        self.assertEqual(0, payload["failed"])
+        self.assertEqual(1, len(self.store.list_reasoning_translations(task_id, "zh-CN")))
+
+    def test_a_deferred_trace_is_translated_on_the_next_call(self):
+        self.set_endpoint_limit(1)
+        task_id = self.seed_task([REASONING_ONE, REASONING_TWO])
+
+        with self.patch_provider():
+            self.translate(task_id)
+        # The bucket's minute has passed: the console asks again and picks up the rest.
+        provider_throttle.configure({})
+        with self.patch_provider():
+            payload = self.translate(task_id).json()
+
+        self.assertEqual(1, payload["translated"])
+        self.assertEqual(1, payload["skipped"])
+        self.assertEqual(0, payload["deferred"])
 
     def test_a_deleted_task_takes_its_translations_with_it(self):
         task_id = self.seed_task([REASONING_ONE])

@@ -106,6 +106,7 @@
   "eventViewReasoning": "Réflexion approfondie",
   "eventViewRaw": "Texte brut",
   "eventsTranslateReasoning": "Traduire la réflexion dans la langue courante",
+  "eventsTranslateDeferred": "Certaines réflexions restent à traduire : la limite RPM du modèle est atteinte. Relancez la traduction dans un instant.",
   "eventReasoningOriginal": "Original",
   "eventReasoningShowOriginal": "Afficher le texte original",
   "eventReasoningShowTranslation": "Afficher la traduction",

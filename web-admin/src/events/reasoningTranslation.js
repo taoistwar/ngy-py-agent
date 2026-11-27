@@ -20,9 +20,9 @@ const NO_MODEL_MARKER = "translation model"
  * - the log's manual action asks for whatever is still missing.
  *
  * @param {{task: object|null, locale: string, enabled: boolean,
- *          onError?: (message: string) => void}} options
+ *          onError?: (message: string) => void, onDeferred?: (count: number) => void}} options
  */
-export function useReasoningTranslation({ task, locale, enabled, onError }) {
+export function useReasoningTranslation({ task, locale, enabled, onError, onDeferred }) {
   const taskId = task?.task_id || ""
   const running = isTaskRunningStatus(task?.status)
   const [state, setState] = useState({ taskId: "", locale: "", items: NO_ITEMS })
@@ -76,7 +76,13 @@ export function useReasoningTranslation({ task, locale, enabled, onError }) {
     if (autoKeyRef.current === key) return undefined
     autoKeyRef.current = key
     translateTaskReasoning(taskId, locale)
-      .then((payload) => merge(taskId, locale, payload?.items || {}))
+      .then((payload) => {
+        merge(taskId, locale, payload?.items || {})
+        // A deferred trace is not reported here on purpose: the automatic pass runs
+        // right when the task itself just spent the endpoint's minute, and a notice on
+        // every finished task would train the reader to ignore it. The log's button says
+        // so when the reader asks.
+      })
       // The finished task stays readable; only the translation is missing. A model
       // deleted since the page loaded is reported where the user can act on it.
       .catch(reportNoModel)
@@ -93,6 +99,9 @@ export function useReasoningTranslation({ task, locale, enabled, onError }) {
     try {
       const payload = await translateTaskReasoning(taskId, locale)
       merge(taskId, locale, payload?.items || {})
+      // The endpoint's minute is shared with the task loop: a batch can stop before
+      // the rate limit turns into minutes of waiting, so say what is left.
+      if (Number(payload?.deferred || 0) > 0) onDeferred?.(Number(payload.deferred))
       return payload
     } catch (error) {
       reportNoModel(error)
@@ -100,7 +109,7 @@ export function useReasoningTranslation({ task, locale, enabled, onError }) {
     } finally {
       setBusy(false)
     }
-  }, [enabled, taskId, locale, merge, reportNoModel])
+  }, [enabled, taskId, locale, merge, reportNoModel, onDeferred])
 
   const dismissNeedsModel = useCallback(() => setNeedsModel(false), [])
 

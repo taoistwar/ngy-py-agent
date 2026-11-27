@@ -106,6 +106,7 @@
   "eventViewReasoning": "Tiefes Denken",
   "eventViewRaw": "Rohtext",
   "eventsTranslateReasoning": "Gedankengang in die aktuelle Sprache übersetzen",
+  "eventsTranslateDeferred": "Einige Gedankengänge bleiben vorerst unübersetzt: Das RPM-Limit des Modells ist ausgeschöpft. Übersetze gleich noch einmal.",
   "eventReasoningOriginal": "Original",
   "eventReasoningShowOriginal": "Originaltext anzeigen",
   "eventReasoningShowTranslation": "Übersetzung anzeigen",

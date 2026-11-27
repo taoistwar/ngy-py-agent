@@ -1095,6 +1095,13 @@ export default function App() {
 
   const taskResult = useMemo(() => getTaskResult(selectedTask, events), [selectedTask, events])
 
+  // The endpoint's RPM budget can end a translation batch early; the log then holds
+  // some originals until the next click, and saying so beats a half-translated panel.
+  const reportTranslationDeferred = useCallback(
+    (count) => setError(`${translate("eventsTranslateDeferred")} (${count})`),
+    [translate]
+  )
+
   // The selected task's translated deep-think traces. The hook decides when to ask
   // (stored copies on open, one automatic pass after the task finishes, the log's
   // button on demand); this page only renders the result.
@@ -1103,6 +1110,7 @@ export default function App() {
     locale,
     enabled: Boolean(translationConfig?.model_id),
     onError: setError,
+    onDeferred: reportTranslationDeferred,
   })
 
   useEffect(() => {

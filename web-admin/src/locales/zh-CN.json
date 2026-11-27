@@ -106,6 +106,7 @@
   "eventViewReasoning": "深度思考",
   "eventViewRaw": "原始文本",
   "eventsTranslateReasoning": "将深度思考翻译成当前语言",
+  "eventsTranslateDeferred": "部分深度思考因模型 RPM 限制暂未翻译，稍后再点一次翻译即可继续",
   "eventReasoningOriginal": "原文",
   "eventReasoningShowOriginal": "显示原文",
   "eventReasoningShowTranslation": "显示翻译",

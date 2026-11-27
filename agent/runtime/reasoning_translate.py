@@ -8,6 +8,11 @@ A trace is translated once per language and then stored, so the automatic pass a
 task finishes and the log's manual action cost one call per trace in total, not one per
 view. A failure is not stored, which is what makes the next click a retry.
 
+The provider endpoint's RPM budget is shared with the task loop (ADR 0013): the adapters
+spend it on every call, and this batch only *reads* what is left so it can stop before
+queueing minutes of waits. What it could not translate is reported as deferred and picked
+up by the next call - translation must not become the reason a console request hangs.
+
 The route is synchronous on purpose: the provider call blocks, so FastAPI runs it on its
 worker thread instead of stalling the event loop (``routes/task_api.py``).
 """
@@ -18,6 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from agent.models import EventCategory
 from agent.provider import ProviderConfig, build_provider
+from agent.rate_limit import RpmLimitError, provider_throttle
 from agent.runtime.config import build_provider_config
 from commons import state
 
@@ -111,11 +117,11 @@ def split_reasoning(text: str, max_chars: int = MAX_CHUNK_CHARS) -> List[str]:
     return chunks
 
 
-def translate_reasoning_text(text: str, language: str, provider: Any) -> str:
-    """Translate one trace through ``provider``, one request per chunk."""
+def translate_chunks(chunks: List[str], language: str, provider: Any) -> str:
+    """Translate prepared chunks through ``provider``, one request per chunk."""
     messages_system = _TRANSLATE_PROMPT.format(language=language)
     parts: List[str] = []
-    for chunk in split_reasoning(text):
+    for chunk in chunks:
         response = provider.chat_completion(
             messages=[
                 {"role": "system", "content": messages_system},
@@ -130,6 +136,18 @@ def translate_reasoning_text(text: str, language: str, provider: Any) -> str:
         if translated:
             parts.append(translated)
     return "\n\n".join(parts)
+
+
+def translate_reasoning_text(text: str, language: str, provider: Any) -> str:
+    """Translate one trace through ``provider``, one request per chunk."""
+    return translate_chunks(split_reasoning(text), language, provider)
+
+
+def _spend(budget: Optional[int], requests: int) -> Optional[int]:
+    """Take ``requests`` off the endpoint's remaining budget; ``None`` stays unlimited."""
+    if budget is None:
+        return None
+    return max(0, budget - max(1, int(requests)))
 
 
 def _wire(entry: Dict[str, Any]) -> Tuple[str, Optional[ProviderConfig]]:
@@ -162,28 +180,49 @@ def translate_missing_reasoning(
 
     stored = state.monitor_store.list_reasoning_translations(task_id, locale)
     provider_name, provider_config = _wire(entry)
+    # Translation is a batch of calls against the same endpoint the task used, so it
+    # spends the same per-minute bucket (ADR 0013). It stops asking when the window is
+    # full: the remaining traces are reported as deferred instead of queueing minutes
+    # of waits. Waiting itself stays the wire layer's job, not this loop's.
+    base_url = getattr(provider_config, "base_url", "") if provider_config else ""
+    budget = provider_throttle.available_requests(provider_name, base_url)
     provider = None
     items: Dict[str, str] = {}
     errors: List[str] = []
     translated = 0
     skipped = 0
     failed = 0
+    deferred = 0
 
-    for event_id, text in reasoning_traces(task_id):
+    traces = reasoning_traces(task_id)
+    for index, (event_id, text) in enumerate(traces):
         if not force and event_id in stored:
             items[event_id] = stored[event_id]
             skipped += 1
             continue
+        if budget is not None and budget <= 0:
+            deferred = len(traces) - index
+            break
+        chunks = split_reasoning(text)
         try:
             if provider is None:
                 provider = build_provider(provider_name, provider_config)
-            translation = translate_reasoning_text(text, language, provider)
+            translation = translate_chunks(chunks, language, provider)
+        # The window closed while the batch was running. The adapter already waited as
+        # long as it is allowed to, so the rest is left for the next call rather than
+        # turning into a row of identical failures.
+        except RpmLimitError as exc:
+            deferred = len(traces) - index
+            errors.append(str(exc))
+            break
         # Broad on purpose: one bad trace must not drop the translations that did
         # work, and an unreadable answer is a retry rather than an error page.
         except Exception as exc:  # noqa: BLE001
+            budget = _spend(budget, len(chunks))
             failed += 1
             errors.append(f"{event_id}: {exc.__class__.__name__}: {exc}")
             continue
+        budget = _spend(budget, len(chunks))
         if not translation:
             failed += 1
             errors.append(f"{event_id}: empty translation")
@@ -201,6 +240,7 @@ def translate_missing_reasoning(
         "translated": translated,
         "skipped": skipped,
         "failed": failed,
+        "deferred": deferred,
         "errors": errors,
     }
 
@@ -213,6 +253,7 @@ __all__ = [
     "is_supported_locale",
     "reasoning_traces",
     "split_reasoning",
+    "translate_chunks",
     "translate_missing_reasoning",
     "translate_reasoning_text",
     "translation_model",

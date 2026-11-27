@@ -171,7 +171,9 @@ class ReasoningTranslationResponse(BaseModel):
 
     ``items`` is what the log renders; the counts say what this call actually did
     (``skipped`` counts traces already stored, ``failed`` the ones the model could
-    not translate - those are retried on the next call).
+    not translate - those are retried on the next call). ``deferred`` counts the
+    traces left for later because the endpoint's RPM budget for the minute is spent:
+    nothing is wrong with them, the call simply stopped before waiting out the limit.
     """
 
     locale: str
@@ -180,4 +182,5 @@ class ReasoningTranslationResponse(BaseModel):
     translated: int = 0
     skipped: int = 0
     failed: int = 0
+    deferred: int = 0
     errors: list[str] = Field(default_factory=list)

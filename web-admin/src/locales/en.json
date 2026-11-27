@@ -106,6 +106,7 @@
   "eventViewReasoning": "Deep thinking",
   "eventViewRaw": "Raw text",
   "eventsTranslateReasoning": "Translate deep thinking into the current language",
+  "eventsTranslateDeferred": "Some reasoning traces were left for later: the model's RPM limit for this minute is spent. Translate again in a moment.",
   "eventReasoningOriginal": "Original",
   "eventReasoningShowOriginal": "Show the original text",
   "eventReasoningShowTranslation": "Show the translation",

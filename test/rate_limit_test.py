@@ -105,6 +105,33 @@ class ProviderThrottleTest(unittest.TestCase):
         self.assertIn(LOCAL_URL, message)
         self.assertEqual(clock.sleeps, [])
 
+    def test_available_requests_is_none_when_nothing_is_limited(self):
+        limiter, _ = _throttle()
+
+        self.assertIsNone(limiter.available_requests("openai", LOCAL_URL))
+
+    def test_available_requests_counts_down_and_reads_without_spending(self):
+        # A batch caller plans with this figure instead of waiting out the window, so
+        # reading it must not take a slot of its own.
+        limiter, _ = _throttle({("openai", LOCAL_URL): 2})
+
+        self.assertEqual(2, limiter.available_requests("openai", LOCAL_URL))
+        limiter.acquire("openai", LOCAL_URL)
+        self.assertEqual(1, limiter.available_requests("openai", LOCAL_URL))
+        self.assertEqual(1, limiter.available_requests("openai", LOCAL_URL))
+        limiter.acquire("openai", LOCAL_URL)
+        self.assertEqual(0, limiter.available_requests("openai", LOCAL_URL))
+
+    def test_available_requests_comes_back_after_the_window(self):
+        limiter, clock = _throttle({("openai", LOCAL_URL): 1})
+
+        limiter.acquire("openai", LOCAL_URL)
+        self.assertEqual(0, limiter.available_requests("openai", LOCAL_URL))
+
+        clock.advance(60.0)
+
+        self.assertEqual(1, limiter.available_requests("openai", LOCAL_URL))
+
     def test_two_base_urls_of_one_provider_are_two_buckets(self):
         limiter, _ = _throttle({("openai", LOCAL_URL): 1, ("openai", GATEWAY_URL): 1})
 
