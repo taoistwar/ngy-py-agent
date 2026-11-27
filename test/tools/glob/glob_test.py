@@ -74,6 +74,20 @@ class GlobToolTest(unittest.TestCase):
 
         self.assertEqual(self.found(pattern="**/*"), {"pkg/a.py"})
 
+    def test_bare_star_is_already_recursive(self):
+        # The description tells the model one call is enough: '*' and '**/*' are
+        # the same query, so asking for both would only waste a round trip.
+        for name in ("a.py", "pkg/b.py", "pkg/deep/c.py", "pkg/deep/d.txt"):
+            self.write(name)
+
+        self.assertEqual(self.found(pattern="*"), self.found(pattern="**/*"))
+
+    def test_naming_a_level_keeps_the_search_shallow(self):
+        self.write("pkg/a.py")
+        self.write("pkg/deep/b.py")
+
+        self.assertEqual(self.found(pattern="pkg/*.py"), {"pkg/a.py"})
+
     # --------------------------------------------------------------- the search
     def test_path_narrows_the_root_but_results_stay_workspace_relative(self):
         self.write("pkg/a.py")
