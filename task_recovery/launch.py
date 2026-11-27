@@ -143,16 +143,16 @@ def _start(
         )
         return False
 
+    agent_id = str(trace.get("mode") or "build")
     request = RunTaskRequest(
         query=str(trace.get("query") or ""),
         provider=str(trace.get("provider") or "") or None,
         model_id=trace.get("model_id"),
         session_id=trace.get("session_id"),
         max_steps=plan.max_steps,
-        mode=str(trace.get("mode") or "build"),
+        agent_id=agent_id,
         stream=True,
     )
-    agent_id = str(trace.get("mode") or "build")
     agent_config = runtime.agent_runtime_config(store.get_agent(agent_id))
     base_dir = runtime.resolve_session_base_dir(trace.get("session_id"))
 

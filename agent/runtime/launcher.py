@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any
 
 from agent.history import build_session_history
-from agent.modes import DEFAULT_MODE, VALID_MODES
+from agent.modes import DEFAULT_MODE
 from agent.runtime.config import agent_runtime_config, resolve_session_base_dir
 from agent.runtime.runner import run_task
 from agent.telemetry import end_task_span, start_task_span
@@ -48,7 +48,6 @@ def launch_task(
     model_id: str | None = None,
     provider: str | None = None,
     agent_id: str | None = None,
-    mode: str = DEFAULT_MODE,
     stream: bool = True,
     permission_mode: str | None = None,
     max_steps: int | None = None,
@@ -59,10 +58,10 @@ def launch_task(
     model or session does not exist - the same order the route always used, so a
     broken reference fails the request instead of a task that has already started.
     """
-    agent_key = (agent_id or "").strip() or (mode if mode in VALID_MODES else DEFAULT_MODE)
+    agent_key = (agent_id or "").strip() or DEFAULT_MODE
     agent = state.monitor_store.get_agent(agent_key)
     if agent is None:
-        agent_key = mode if mode in VALID_MODES else DEFAULT_MODE
+        agent_key = DEFAULT_MODE
         agent = state.monitor_store.get_agent(agent_key)
 
     # A model names what to ask for; the provider record it points at says where and
@@ -104,8 +103,7 @@ def launch_task(
         model_id=model_id,
         session_id=session_id,
         max_steps=max_steps,
-        agent_id=agent_id,
-        mode=agent_key,
+        agent_id=agent_key,
         permission_mode=permission_mode,
         stream=stream,
     )

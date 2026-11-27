@@ -28,10 +28,6 @@ class RunTaskRequest(BaseModel):
         default=None,
         description="Configured agent id; falls back to mode / the default agent when omitted.",
     )
-    mode: str = Field(
-        default=DEFAULT_MODE,
-        description="Legacy agent mode (build / ask / plan); used when agent_id is omitted.",
-    )
     permission_mode: str | None = Field(
         default=None,
         description=(

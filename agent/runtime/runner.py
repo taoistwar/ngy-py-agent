@@ -7,6 +7,7 @@ from typing import Any
 
 from agent.agent_loop import run_react_loop
 from agent.models import EventCategory, EventSink, TaskEvent, TaskStatus
+from agent.modes import DEFAULT_MODE
 from agent.runtime.board import board_for_run
 from agent.runtime.config import (
     build_provider_config,
@@ -176,7 +177,6 @@ def _execute_task(
             "agent_id": (agent_config or {}).get("agent_id"),
             "max_steps": max_steps,
             "query": request.query,
-            "mode": request.mode,
             "stream": request.stream,
             "supports_tool_calls": (model or {}).get("supports_tool_calls", True),
             "thinking_mode": (model or {}).get("thinking_mode", False),
@@ -241,7 +241,7 @@ def _execute_task(
             verbose=False,
             task_id=task_id,
             event_sink=_sink,
-            mode=request.mode,
+            mode=request.agent_id or DEFAULT_MODE,
             base_dir=base_dir,
             agent_config=agent_config,
             agents_md_settings=resolve_agents_md_settings(),

@@ -66,7 +66,6 @@ async def create_task(payload: RunTaskRequest) -> RunTaskResponse:
             model_id=payload.model_id,
             provider=payload.provider,
             agent_id=payload.agent_id,
-            mode=payload.mode,
             stream=payload.stream,
             permission_mode=payload.permission_mode,
             max_steps=payload.max_steps,
