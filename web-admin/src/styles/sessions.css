@@ -639,6 +639,20 @@
   color: var(--danger-text-strong);
 }
 
+/* The one primary action of a titlebar ("new …") keeps the accent fill its text
+   button had, so making it an icon does not demote it to a secondary control. */
+.icon-btn-accent {
+  border-color: var(--accent);
+  background: var(--accent-gradient);
+  color: var(--accent-contrast);
+}
+
+.icon-btn-accent:hover:not(:disabled) {
+  border-color: var(--accent-strong);
+  background: var(--accent-gradient);
+  color: var(--accent-contrast);
+}
+
 /* A copy button reports its own outcome: the tick stays green until the timer puts
    the copy glyph back (see components/CopyIconButton.jsx). */
 .icon-btn.is-copied {

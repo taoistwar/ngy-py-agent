@@ -14,6 +14,7 @@ import {
   runScheduleNow,
   updateSchedule,
 } from "../api"
+import { PlusIcon, RefreshIcon } from "../components/icons"
 import RunningScheduleTasks from "../components/scheduled/RunningScheduleTasks"
 import ScheduleForm from "../components/scheduled/ScheduleForm"
 import ScheduleList from "../components/scheduled/ScheduleList"
@@ -228,24 +229,28 @@ export default function ScheduledTasksPage({
             <div className="schedule-titlebar-actions">
               <button
                 type="button"
-                className="btn btn-compact"
+                className="icon-btn"
+                title={translate("sidebarQuickRefresh")}
+                aria-label={translate("sidebarQuickRefresh")}
                 onClick={() =>
                   refresh().catch((refreshError) =>
                     setError(refreshError?.message || translate("errorLoadFailed"))
                   )
                 }
               >
-                {translate("sidebarQuickRefresh")}
+                <RefreshIcon />
               </button>
               <button
                 type="button"
-                className="btn btn-primary btn-compact"
+                className="icon-btn icon-btn-accent"
+                title={translate("scheduleNew")}
+                aria-label={translate("scheduleNew")}
                 onClick={() => {
                   setError("")
                   setFormMode(FORM_NEW)
                 }}
               >
-                {translate("scheduleNew")}
+                <PlusIcon />
               </button>
             </div>
           ) : null}

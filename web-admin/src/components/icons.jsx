@@ -16,6 +16,16 @@ export function Icon({ children }) {
   )
 }
 
+// "New …": the add glyph, used where a create button is an icon instead of a label.
+export function PlusIcon() {
+  return (
+    <Icon>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </Icon>
+  )
+}
+
 export function RefreshIcon() {
   return (
     <Icon>
@@ -83,6 +93,16 @@ export function SkillIcon() {
       <path d="M10 3l1.7 4.3L16 9l-4.3 1.7L10 15l-1.7-4.3L4 9l4.3-1.7z" />
       <line x1="18" y1="14" x2="18" y2="20" />
       <line x1="15" y1="17" x2="21" y2="17" />
+    </Icon>
+  )
+}
+
+// What the agent remembered: two lobes and the line between them, read as "kept".
+export function MemoryIcon() {
+  return (
+    <Icon>
+      <path d="M12 4a4 4 0 0 0-4 4v1a3 3 0 0 0 0 6v1a4 4 0 0 0 8 0v-1a3 3 0 0 0 0-6V8a4 4 0 0 0-4-4z" />
+      <line x1="12" y1="4" x2="12" y2="20" />
     </Icon>
   )
 }
