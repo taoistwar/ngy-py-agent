@@ -27,6 +27,7 @@ from agent.tools.permissions import (
 )
 from agent.tools.read_ledger import ReadLedger
 from agent.tools.spec import CATEGORY_OTHER, ToolText
+from agent.tools.task_store import TaskBoard
 from agent.tools.todo_store import TodoBoard
 from agent.tools.user_question import STATUS_NO_CLIENT, QuestionResult, UserQuestionBroker
 
@@ -90,6 +91,7 @@ class ToolRegistry:
         should_stop: Optional[Callable[[], bool]] = None,
         checkpoint_store: Optional[Any] = None,
         todo_board: Optional[TodoBoard] = None,
+        task_board: Optional[TaskBoard] = None,
     ):
         self.base_dir = base_dir
         self.max_tokens = max_tokens
@@ -131,6 +133,10 @@ class ToolRegistry:
         # registry is constructed before that identity exists, as with the brokers);
         # ``None`` means the run keeps the plan in memory instead of in the database.
         self.todo_board = todo_board if todo_board is not None else TodoBoard()
+        # The project's task board (``task_*``). Same rule as the todo board: built
+        # by the app layer, which is the one that knows the workspace and the
+        # conversation a claim belongs to.
+        self.task_board = task_board if task_board is not None else TaskBoard()
         # Scratch space for large command output. It is readable but never
         # writable by the file tools (see docs/decisions/0005-exec-tool.md).
         self.output_directory = output_root_path(self.base_dir, self.session_id)
@@ -176,6 +182,7 @@ class ToolRegistry:
             # ``agent_loop`` after this registry is built (ADR 0032).
             run_subagent=self.run_subagent,
             todo_board=self.todo_board,
+            task_board=self.task_board,
         )
 
         for spec in build_all_specs(bindings):

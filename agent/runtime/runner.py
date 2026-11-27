@@ -7,6 +7,7 @@ from typing import Any
 
 from agent.agent_loop import run_react_loop
 from agent.models import EventCategory, TaskEvent, TaskStatus
+from agent.runtime.board import board_for_run
 from agent.runtime.config import (
     build_provider_config,
     resolve_agents_md_settings,
@@ -213,6 +214,9 @@ def _execute_task(
             # Built here because the session id is this layer's knowledge, not the
             # loop's: the tool only ever sees its own board.
             todo_board=TodoBoard(MonitorTodoStore(), request.session_id or "", task_id),
+            # The project's task board: the workspace's, shared by every conversation
+            # in it, with this conversation recorded as the claimant (``task_*``).
+            task_board=board_for_run(request.session_id, task_id),
         )
         if stop_event is not None and stop_event.is_set():
             emit_debug(_sink, task_id, "Task stopped", {"result": result, **current_trace_ids()})

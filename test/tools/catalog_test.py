@@ -26,6 +26,14 @@ EXPECTED_ORDER = (
     # Planning is listed first: it is what the model should reach for before a
     # multi-step task turns into unrelated tool calls.
     "todo_write",
+    # The board is the same idea one level up, and listed in the order a model uses
+    # it: create the nodes, sequence them, read, then claim and finish.
+    "task_create",
+    "task_update",
+    "task_list",
+    "task_get",
+    "task_claim",
+    "task_complete",
     "subagent",
     "code_interpreter",
     "glob",

@@ -23,6 +23,12 @@ from agent.tools.grep import spec as grep
 from agent.tools.read_file import spec as read_file
 from agent.tools.spec import ToolSpec
 from agent.tools.subagent import spec as subagent
+from agent.tools.task_claim import spec as task_claim
+from agent.tools.task_complete import spec as task_complete
+from agent.tools.task_create import spec as task_create
+from agent.tools.task_get import spec as task_get
+from agent.tools.task_list import spec as task_list
+from agent.tools.task_update import spec as task_update
 from agent.tools.todo_write import spec as todo_write
 from agent.tools.vault_http import spec as vault_http
 from agent.tools.web_browser import spec as web_browser
@@ -37,6 +43,16 @@ _BUILDERS: Sequence[Callable[[ToolBindings], ToolSpec]] = (
     # reads the list top down, and ``todo_write`` is what it should reach for before
     # a multi-step task turns into a series of unrelated tool calls.
     todo_write.build_spec,
+    # The task board is the same idea one level up: ``todo_write`` orders the steps of
+    # *this* conversation, the board orders the project's work across conversations.
+    # Their order is create -> sequence -> read -> claim -> finish, which is also the
+    # order a model should use them in, so it is listed in that order.
+    task_create.build_spec,
+    task_update.build_spec,
+    task_list.build_spec,
+    task_get.build_spec,
+    task_claim.build_spec,
+    task_complete.build_spec,
     # Delegation sits next to planning: a multi-step task should first be planned, and
     # then the parts that would flood this context are handed off (ADR 0032). The child
     # tool list is this list minus ``subagent``, so the order informs the subagent too.

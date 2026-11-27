@@ -114,6 +114,11 @@ class TaskDetailResponse(BaseModel):
     # finished, and a follow-up task continues it. Returned here rather than on its
     # own endpoint so the existing task poll refreshes it.
     todos: list[dict[str, Any]] = Field(default_factory=list)
+    # The task board of this task's *workspace* (``task_*``): the project's work
+    # items with their prerequisites, owners and whether each can start. Returned
+    # here for the same reason as ``todos`` - the poll already refreshes it - but
+    # scoped to the workspace, so every conversation of the project sees one board.
+    board: list[dict[str, Any]] = Field(default_factory=list)
     events: list[dict[str, Any]]
 
 

@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
 from agent.tools.read_ledger import ReadLedger
+from agent.tools.task_store import TaskBoard
 from agent.tools.todo_store import TodoBoard
 
 
@@ -52,6 +53,10 @@ class ToolBindings:
     # than a store: it already carries the session and task ids, and ``None`` falls
     # back to an in-memory plan for this run (see ``agent/tools/todo_store.py``).
     todo_board: Optional[TodoBoard] = None
+    # The project's task board (``task_*``): a bigger unit than the todo list - a
+    # work item with prerequisites and an owner, shared by every conversation in the
+    # workspace. ``None`` keeps the board in memory for this run.
+    task_board: Optional[TaskBoard] = None
     # The channel a tool uses to ask the user something and wait for an answer:
     # questions in, a ``user_question.QuestionResult`` out (``None`` = nobody can be
     # asked). Bound as a callable because tools have no task identity and no event

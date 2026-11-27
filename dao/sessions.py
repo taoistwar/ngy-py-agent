@@ -192,6 +192,12 @@ class _SessionMixin:
                 "UPDATE sessions SET workspace_id = NULL WHERE workspace_id = ?",
                 (workspace_id,),
             )
+            # The board belongs to the project: with the project gone it has no
+            # reader left. The prefix is the one ``agent.runtime.board`` writes.
+            self._conn.execute(
+                "DELETE FROM board_tasks WHERE board_id = ?",
+                (f"workspace:{workspace_id}",),
+            )
             cursor = self._conn.execute(
                 "DELETE FROM workspaces WHERE workspace_id = ?",
                 (workspace_id,),

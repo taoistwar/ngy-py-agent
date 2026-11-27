@@ -13,6 +13,7 @@ from pathlib import Path
 
 from dao.agents import _AgentMixin
 from dao.base import TASK_DB_PATH, _TaskStoreBase
+from dao.board_tasks import _BoardTaskMixin
 from dao.forks import _ForkMixin
 from dao.llm import LlmStore
 from dao.schema import _SchemaMixin
@@ -29,6 +30,7 @@ class _SqliteTaskStore(
     _ForkMixin,
     _AgentMixin,
     _SettingsMixin,
+    _BoardTaskMixin,
     _TaskMixin,
     _TodoMixin,
 ):

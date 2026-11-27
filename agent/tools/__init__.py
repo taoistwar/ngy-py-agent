@@ -9,7 +9,9 @@ The package is split so that reading one tool means reading one directory:
   (``exec_command/``, ``write_stdin/``, ``glob/``, ``grep/``, ``web_search/``,
   ``web_fetch/``, ``web_browser/``, ``read_file/``, ``edit_file/``, ``write_file/``,
   ``delete_file/``, ``code_interpreter/``, ``computer_observe/``,
-  ``computer_control/``, ``ask_user_question/``, ``todo_write/``, ``subagent/``).
+  ``computer_control/``, ``ask_user_question/``, ``todo_write/``, ``subagent/``,
+  ``task_create/``, ``task_update/``, ``task_list/``, ``task_get/``, ``task_claim/``,
+  ``task_complete/``).
   ``__init__.py`` holds the package docstring and the public surface, ``spec.py``
   declares the tool to the registry, and the implementation is split by
   responsibility (``description.py``, ``errors.py``, topic modules, ``tool.py``).
@@ -17,7 +19,8 @@ The package is split so that reading one tool means reading one directory:
   ``file_bytes``, ``file_limits``, ``file_patch``, ``file_walk``, ``glob_pattern``,
   ``read_ledger``, ``text_encoding``, ``text_lines``, ``tokenizers``, ``token_budget``,
   ``process_group``, ``process_store``, ``shell_platform``, ``output_store``,
-  ``todo_store``, ``web_urls``) are
+  ``todo_store``, ``task_board``, ``task_board_i18n``, ``task_store``,
+  ``web_urls``) are
   shared infrastructure and stay at the root. ``file_walk`` and ``glob_pattern``
   are shared by ``glob`` and ``grep``, ``file_limits`` by ``read_file`` and
   ``delete_file``, and ``web_urls`` by the URL-reading tools (``web_fetch``,

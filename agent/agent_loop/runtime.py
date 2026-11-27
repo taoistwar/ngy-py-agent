@@ -62,6 +62,7 @@ def _build_runtime(
     task_id: str = "",
     should_stop: Optional[Callable[[], bool]] = None,
     todo_board: Any = None,
+    task_board: Any = None,
 ) -> tuple[str, ToolRegistry, Any, Optional[List[Dict[str, Any]]]]:
     provider_name = canonicalize_provider(provider_name or TOOL_SCHEMA_PROVIDER)
     registry_options = {
@@ -79,6 +80,9 @@ def _build_runtime(
         # The conversation's plan (``todo_write``). The app layer binds the session's
         # board; ``None`` keeps the plan in memory for this run.
         "todo_board": todo_board,
+        # The project's task board (``task_*``); bound by the app layer for the same
+        # reason, and in memory when nobody bound it.
+        "task_board": task_board,
     }
     if not enable_tools:
         registry = ToolRegistry(enabled_tools=[], **registry_options)

@@ -18,6 +18,7 @@
 - [工具：`vault_http`](tool-vault-http.md)：带保险柜密钥的 HTTPS 请求。
 - [工具：`ask_user_question`](tool-ask-user-question.md)
 - [工具：`todo_write`](tool-todo-write.md)：按会话维护的任务清单，前端实时同步。
+- [任务板：`task_create` / `task_update` / `task_list` / `task_get` / `task_claim` / `task_complete`](tool-task-board.md)：项目级任务图，带依赖与认领。
 - [工具：`computer_observe` / `computer_control`](tool-computer.md)
 - [工具黑名单（denylist）](tool-denylist.md)
 

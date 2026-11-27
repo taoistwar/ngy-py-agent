@@ -10,6 +10,12 @@ state: ``agent.tools`` and ``agent.agent_loop`` still must not import ``commons`
 (ADR 0019), while ``agent.runtime``, ``agent.history`` and ``agent.usage`` do (ADR 0025).
 """
 
+from agent.runtime.board import (
+    MonitorBoardStore,
+    board_for_run,
+    board_view,
+    resolve_board_id,
+)
 from agent.runtime.config import (
     agent_runtime_config,
     build_provider_config,
@@ -34,8 +40,11 @@ from agent.runtime.runner import run_task
 from agent.runtime.todos import MonitorTodoStore
 
 __all__ = [
+    "MonitorBoardStore",
     "MonitorTodoStore",
     "agent_runtime_config",
+    "board_for_run",
+    "board_view",
     "build_event",
     "build_provider_config",
     "checkpoint_store_for_task",
@@ -48,6 +57,7 @@ __all__ = [
     "purge_expired_tasks",
     "purge_expired_tasks_with_log",
     "resolve_agents_md_settings",
+    "resolve_board_id",
     "resolve_max_steps",
     "resolve_permission_mode",
     "resolve_session_base_dir",

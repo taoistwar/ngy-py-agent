@@ -147,6 +147,7 @@ def build_tool_registry_from_names(
     should_stop: Optional[Callable[[], bool]] = None,
     checkpoint_store: Any = None,
     todo_board: Any = None,
+    task_board: Any = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry from an explicit tool-name allow list (``None`` = all tools)."""
     options = {
@@ -162,6 +163,8 @@ def build_tool_registry_from_names(
         # The conversation's plan (``todo_write``); ``None`` keeps it in memory for
         # the run.
         "todo_board": todo_board,
+        # The project's task board (``task_*``); same fallback.
+        "task_board": task_board,
     }
     if tool_names is None:
         return ToolRegistry(**options)
@@ -178,6 +181,7 @@ def build_tool_registry(
     should_stop: Optional[Callable[[], bool]] = None,
     checkpoint_store: Any = None,
     todo_board: Any = None,
+    task_board: Any = None,
 ) -> ToolRegistry:
     """Build a ToolRegistry restricted to the tools allowed for ``mode``."""
     return build_tool_registry_from_names(
@@ -190,6 +194,7 @@ def build_tool_registry(
         should_stop=should_stop,
         checkpoint_store=checkpoint_store,
         todo_board=todo_board,
+        task_board=task_board,
     )
 
 

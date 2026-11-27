@@ -85,6 +85,9 @@ def run_react_loop(
     # The conversation's plan (``todo_write``). The app layer binds the session's
     # board; ``None`` keeps the plan in memory for this run.
     todo_board: Any = None,
+    # The project's task board (``task_*``); bound by the app layer, in memory when
+    # nobody bound it.
+    task_board: Any = None,
 ) -> str:
     _, registry, provider, request_tools = _build_runtime(
         provider_name=provider_name,
@@ -96,6 +99,7 @@ def run_react_loop(
         task_id=task_id or "",
         should_stop=should_stop,
         todo_board=todo_board,
+        task_board=task_board,
     )
 
     if permission_broker is not None:

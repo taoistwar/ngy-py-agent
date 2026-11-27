@@ -104,6 +104,24 @@ class _SchemaMixin:
                 )
                 """
             )
+            # The workspace's task board: work items with prerequisites and an owner.
+            # Board tasks are not ``tasks`` (agent runs) - see ``dao/board_tasks.py``.
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS board_tasks (
+                    board_id TEXT NOT NULL,
+                    task_id TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL,
+                    owner TEXT,
+                    blocked_by TEXT NOT NULL DEFAULT '[]',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (board_id, task_id)
+                )
+                """
+            )
             self._ensure_task_columns()
             self._ensure_session_columns()
             self._ensure_agent_columns()
