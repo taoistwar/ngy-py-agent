@@ -161,8 +161,8 @@ class LoopTracingTest(unittest.TestCase):
         self.assertEqual(by_title["Starting ReAct loop"].data["trace_id"], format(task.context.trace_id, "032x"))
         self.assertEqual(by_title["Starting ReAct loop"].data["span_id"], format(task.context.span_id, "016x"))
         self.assertEqual(by_title["LLM request Step 1"].data["span_id"], format(chat.context.span_id, "016x"))
-        self.assertEqual(by_title["Tool call: echo"].data["span_id"], format(tool.context.span_id, "016x"))
-        self.assertEqual(by_title["Tool call: echo"].data["trace_id"], format(task.context.trace_id, "032x"))
+        self.assertEqual(by_title["echo : hi"].data["span_id"], format(tool.context.span_id, "016x"))
+        self.assertEqual(by_title["echo : hi"].data["trace_id"], format(task.context.trace_id, "032x"))
         # The closing event is emitted after the step span ends, so it belongs to the
         # task span; the trace still leads back to the whole call tree.
         self.assertEqual(by_title["ReAct run completed"].data["span_id"], format(task.context.span_id, "016x"))

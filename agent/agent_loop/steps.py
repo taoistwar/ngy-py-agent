@@ -7,6 +7,7 @@ each per step.
 from typing import Any, Dict
 
 from agent.agent_loop.runtime import _emit, _execute_tool
+from agent.agent_loop.tool_titles import tool_title
 from agent.models import (
     EventCategory,
     EventSink,
@@ -41,7 +42,7 @@ def run_tool(
             TaskEvent(
                 task_id=task_id or "",
                 category=EventCategory.TOOL_CALL,
-                title=f"Tool call: {name}",
+                title=tool_title(name, arguments),
                 data={**call_data.model_dump(), **current_trace_ids()},
                 collapsed=True,
             ),
