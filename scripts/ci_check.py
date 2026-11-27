@@ -73,6 +73,7 @@ def main() -> None:
         run(["npm", "install", "--no-audit", "--no-fund"], cwd=WEB_ADMIN)
     run(["npm", "run", "i18n:check"], cwd=WEB_ADMIN)
     run(["npm", "run", "test:text"], cwd=WEB_ADMIN)
+    run(["npm", "run", "test:events"], cwd=WEB_ADMIN)
     run(["npm", "run", "build"], cwd=WEB_ADMIN)
 
     print("\nLocal CI checks passed.")

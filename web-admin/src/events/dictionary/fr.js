@@ -46,6 +46,7 @@ const FIELDS = {
   mode: "Mode",
   stream: "Diffusion",
   session_id: "Session",
+  pid: "ID du processus",
   agent_id: "Agent",
   base_dir: "Dossier de travail",
   max_steps: "Étapes max",
@@ -228,6 +229,11 @@ const TEXT = {
   subagentFailed: "Le sous-agent n'a pas terminé",
   sectionSubagentBrief: "Briefing donné au sous-agent",
   sectionSubagentReport: "Rapport du sous-agent",
+  backgroundFinished: "Commande en arrière-plan terminée : {name}",
+  backgroundFinishedFailed: "Commande en arrière-plan échouée : {name}",
+  backgroundFinishedMany: "{count} commandes en arrière-plan terminées",
+  backgroundFinishedManyFailed: "{count} commandes en arrière-plan terminées, {failed} en échec",
+  backgroundExitUnknown: "inconnu",
 }
 
 export default { fields: FIELDS, values: VALUES, text: TEXT }

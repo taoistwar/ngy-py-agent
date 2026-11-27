@@ -51,7 +51,7 @@ added 212 packages in 8s
 
 - 台账由循环创建（`run_react_loop` 的 `background` 参数，`None` 时自建一份），经 `_build_runtime` → `ToolRegistry` → `ToolBindings.background` 传到 `exec_command`；工具层其余部分不感知它。
 - 子 agent 用的是父 registry（ADR 0032 D2/D4），因此子 agent 启动的后台命令记在父台账里，由父循环通知——不会丢，也不会重复。
-- 前端不加新通道：通知本身是一条 `debug` 事件（`Background command finished`，含 session、pid、退出码、日志路径），在任务日志里可见；状态变化仍由已有的 1 秒轮询呈现。
+- 前端不加新通道：通知本身是一条 `debug` 事件（`Background command finished`，含 session、pid、退出码、日志路径），在任务日志里可见；状态变化仍由已有的 1 秒轮询呈现。日志视图给它一条专门的记录（`web-admin/src/events/friendlyEvent.js::buildBackground`，一条命令一个分块，退出码读不到时标 `unknown` 而不是算成功），而不是按通用 debug 记录渲染——那样读者看到的是 `count`/`commands` 这类原始键名。
 
 ## 后果
 

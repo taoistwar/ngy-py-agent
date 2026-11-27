@@ -46,6 +46,7 @@ const FIELDS = {
   mode: "运行模式",
   stream: "流式输出",
   session_id: "会话标识",
+  pid: "进程 ID",
   agent_id: "智能体标识",
   base_dir: "工作目录",
   max_steps: "最大步数",
@@ -228,6 +229,11 @@ const TEXT = {
   subagentFailed: "子代理未完成",
   sectionSubagentBrief: "交给子代理的简报",
   sectionSubagentReport: "子代理报告",
+  backgroundFinished: "后台命令已完成：{name}",
+  backgroundFinishedFailed: "后台命令失败：{name}",
+  backgroundFinishedMany: "{count} 条后台命令已完成",
+  backgroundFinishedManyFailed: "{count} 条后台命令已完成，其中 {failed} 条失败",
+  backgroundExitUnknown: "未知",
 }
 
 export default { fields: FIELDS, values: VALUES, text: TEXT }

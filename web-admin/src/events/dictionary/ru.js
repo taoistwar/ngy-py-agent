@@ -46,6 +46,7 @@ const FIELDS = {
   mode: "Режим",
   stream: "Потоковая передача",
   session_id: "Сеанс",
+  pid: "ID процесса",
   agent_id: "Агент",
   base_dir: "Рабочая папка",
   max_steps: "Макс. шагов",
@@ -228,6 +229,11 @@ const TEXT = {
   subagentFailed: "Субагент не завершил работу",
   sectionSubagentBrief: "Задание для субагента",
   sectionSubagentReport: "Отчёт субагента",
+  backgroundFinished: "Фоновая команда завершена: {name}",
+  backgroundFinishedFailed: "Фоновая команда завершилась с ошибкой: {name}",
+  backgroundFinishedMany: "Завершено фоновых команд: {count}",
+  backgroundFinishedManyFailed: "Завершено фоновых команд: {count}, с ошибкой: {failed}",
+  backgroundExitUnknown: "неизвестно",
 }
 
 export default { fields: FIELDS, values: VALUES, text: TEXT }

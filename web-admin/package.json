@@ -11,6 +11,7 @@
     "ci-check": "python ../scripts/ci_check.py",
     "i18n:check": "node ./scripts/check-i18n.mjs",
     "test:text": "node ./scripts/test-text-transforms.mjs",
+    "test:events": "node ./scripts/test-event-views.mjs",
     "build": "npm run i18n:check && vite build",
     "preview": "vite preview"
   },

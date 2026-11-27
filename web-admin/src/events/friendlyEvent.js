@@ -753,10 +753,93 @@ const BUILDERS = {
   user_answer: buildUserAnswer,
 }
 
+/** The exit code as a number, or ``null`` when the run could not learn it. */
+function exitCodeOf(item) {
+  if (item?.exit_code === null || item?.exit_code === undefined) return null
+  const code = Number(item.exit_code)
+  return Number.isFinite(code) ? code : null
+}
+
+function buildBackground({ data, dict }) {
+  // The loop batches everything that ended in the same step into one event, so a
+  // single record can describe several commands. Each becomes its own block: "which
+  // one failed" is the only question a reader has, and a JSON blob buries it.
+  const commands = (Array.isArray(data.commands) ? data.commands : []).filter(isPlainObject)
+  if (commands.length === 0) return null
+
+  const failed = commands.filter((item) => {
+    const code = exitCodeOf(item)
+    return code !== null && code !== 0
+  })
+  // A command whose code could not be read is not a success story: nothing here says
+  // it worked, only that the run was not around to see it end.
+  const unknown = commands.some((item) => exitCodeOf(item) === null)
+  const { fields } = describeData(dict, data, { skip: ["commands", "count"], order: ["step"] })
+  const sections = commands.map((item, index) => {
+    const name = firstLineText(item.description || item.command, 60) || dict.text.empty
+    const rows = []
+    if (item.description && item.command) {
+      rows.push({ label: fieldLabel(dict, "command"), value: String(item.command), mono: true })
+    }
+    const code = exitCodeOf(item)
+    rows.push(
+      {
+        label: fieldLabel(dict, "exit_code"),
+        value: code === null ? dict.text.backgroundExitUnknown : String(code),
+        mono: false,
+      },
+      {
+        label: fieldLabel(dict, "pid"),
+        value: item.pid === null || item.pid === undefined ? dict.text.empty : String(item.pid),
+        mono: false,
+      },
+      {
+        label: fieldLabel(dict, "session_id"),
+        value: String(item.session_id || dict.text.empty),
+        mono: true,
+      },
+      {
+        label: fieldLabel(dict, "output"),
+        value: String(item.log_path || dict.text.empty),
+        mono: true,
+      },
+    )
+    return { kind: "entries", title: `${index + 1}. ${name}`, rows }
+  })
+
+  let headline
+  if (commands.length > 1) {
+    headline =
+      failed.length > 0
+        ? fillTemplate(dict.text.backgroundFinishedManyFailed, {
+            count: commands.length,
+            failed: failed.length,
+          })
+        : fillTemplate(dict.text.backgroundFinishedMany, { count: commands.length })
+  } else {
+    const name = firstLineText(commands[0].description || commands[0].command, 60) || dict.text.empty
+    headline = fillTemplate(
+      failed.length > 0 ? dict.text.backgroundFinishedFailed : dict.text.backgroundFinished,
+      { name },
+    )
+  }
+
+  return {
+    tone: failed.length > 0 ? "danger" : unknown ? "info" : "success",
+    headline,
+    fields,
+    sections,
+  }
+}
+
 function buildDebug({ event, data, dict }) {
   const title = String(event?.title || "")
   if (/start task execution/i.test(title)) {
     return buildStartTask({ event, data, dict })
+  }
+  if (/background command finished/i.test(title)) {
+    const view = buildBackground({ data, dict })
+    if (view) return view
   }
   const { fields, sections } = describeData(dict, data)
   return { tone: "info", headline: dict.text.debug, fields, sections }

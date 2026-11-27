@@ -51,6 +51,7 @@ const FIELDS = {
   mode: "Mode",
   stream: "Streaming",
   session_id: "Session",
+  pid: "Process ID",
   agent_id: "Agent",
   base_dir: "Working folder",
   max_steps: "Max steps",
@@ -234,6 +235,11 @@ const TEXT = {
   subagentFailed: "The subagent did not finish",
   sectionSubagentBrief: "Brief given to the subagent",
   sectionSubagentReport: "Subagent report",
+  backgroundFinished: "Background command finished: {name}",
+  backgroundFinishedFailed: "Background command failed: {name}",
+  backgroundFinishedMany: "{count} background commands finished",
+  backgroundFinishedManyFailed: "{count} background commands finished, {failed} failed",
+  backgroundExitUnknown: "unknown",
 }
 
 export default { fields: FIELDS, values: VALUES, text: TEXT }

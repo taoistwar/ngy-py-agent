@@ -46,6 +46,7 @@ const FIELDS = {
   mode: "執行模式",
   stream: "串流輸出",
   session_id: "工作階段識別碼",
+  pid: "處理程序識別碼",
   agent_id: "代理識別碼",
   base_dir: "工作目錄",
   max_steps: "最大步數",
@@ -228,6 +229,11 @@ const TEXT = {
   subagentFailed: "子代理未完成",
   sectionSubagentBrief: "交給子代理的簡報",
   sectionSubagentReport: "子代理報告",
+  backgroundFinished: "背景命令已完成：{name}",
+  backgroundFinishedFailed: "背景命令失敗：{name}",
+  backgroundFinishedMany: "{count} 條背景命令已完成",
+  backgroundFinishedManyFailed: "{count} 條背景命令已完成，其中 {failed} 條失敗",
+  backgroundExitUnknown: "不明",
 }
 
 export default { fields: FIELDS, values: VALUES, text: TEXT }
